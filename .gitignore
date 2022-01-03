@@ -1,0 +1,26 @@
+# Build products
+/build/
+out/
+*.o
+*.a
+*.so
+*.dylib
+*.elf
+*.exe
+*.dSYM/
+
+# Local evidence and private engineering ledger
+.agent-local/
+
+# Tool and editor state
+.DS_Store
+.vscode/
+.idea/
+compile_commands.json
+
+# Crash/fuzz artifacts
+core
+*.core
+fuzz/corpus-local/
+fuzz/crashes/
+fuzz/coverage/
