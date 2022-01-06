@@ -1,0 +1,13 @@
+flowchart LR
+  source[C source] --> pp[pp.c macro and include state]
+  pp --> lex[lex.c token stream]
+  lex --> parse[parser.c AST]
+  parse --> sema[sema.c typed scopes]
+  sema --> ir[ir.c CFG IR]
+  ir --> verify[ir_verify.c]
+  verify --> opt[opt.c constant folding]
+  opt --> alloc[regalloc.c intervals]
+  alloc --> x86[x86_64.c direct bytes]
+  x86 --> elf[elf64.c ELF64 relocatable]
+  ir --> interp[ir_interp.c independent evaluator]
+  lex --> inspect[inspect.c local report]

@@ -189,7 +189,7 @@ static CinderExpr *parse_assignment(CinderAst *ast) {
         CinderToken *operator_token = &ast->tokens->tokens.data[ast->cursor++];
         CinderExpr *right = parse_assignment(ast);
         CinderExpr *assignment = new_expr(ast, EX_ASSIGN, operator_token->loc);
-        assignment->as.assign.target = left; assignment->as.assign.value = right; assignment->as.unary.op = operator_token->kind;
+        assignment->as.assign.target = left; assignment->as.assign.value = right; assignment->as.assign.op = (int)operator_token->kind;
         return assignment;
     }
     return left;

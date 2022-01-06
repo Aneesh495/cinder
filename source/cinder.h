@@ -326,7 +326,7 @@ struct CinderExpr {
         char *name;
         struct { int op; CinderExpr *left; CinderExpr *right; } binary;
         struct { int op; CinderExpr *value; } unary;
-        struct { CinderExpr *target; CinderExpr *value; } assign;
+        struct { CinderExpr *target; CinderExpr *value; int op; } assign;
         struct { CinderExpr *callee; CINDER_VEC_TYPE(CinderExpr *) args; } call;
         struct { CinderExpr *condition; CinderExpr *yes; CinderExpr *no; } conditional;
         struct { CinderType *cast_type; CinderExpr *value; } cast;
@@ -598,7 +598,9 @@ typedef struct {
     bool dump_mir;
     bool dump_regalloc;
     bool verify_each;
+    bool interpret;
     bool debug;
+    const char *explorer;
     int optimization;
 } CinderOptions;
 

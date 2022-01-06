@@ -2,18 +2,75 @@
   "schema": 1,
   "profile": "c17-core",
   "families": [
-    {"id":"C01","name":"translation-units-and-includes","status":"planned"},
-    {"id":"C02","name":"object-and-function-macros","status":"planned"},
-    {"id":"C04","name":"integer-types-and-literals","status":"planned"},
-    {"id":"C07","name":"pointer-types-and-qualifiers","status":"planned"},
-    {"id":"C09","name":"function-declarators","status":"planned"},
-    {"id":"C10","name":"typedef-names","status":"planned"},
-    {"id":"C17","name":"lvalues-and-rvalues","status":"planned"},
-    {"id":"C22","name":"arithmetic-and-bitwise-operators","status":"planned"},
-    {"id":"C31","name":"if-else","status":"planned"},
-    {"id":"C32","name":"loops","status":"planned"},
-    {"id":"C36","name":"calls-and-recursion","status":"planned"},
-    {"id":"C47","name":"separate-compilation","status":"planned"},
-    {"id":"C48","name":"debug-and-reproducible-output","status":"planned"}
+    {
+      "id": "C01",
+      "name": "translation-units-and-includes",
+      "status": "partial"
+    },
+    {
+      "id": "C02",
+      "name": "object-and-function-macros",
+      "status": "partial"
+    },
+    {
+      "id": "C03",
+      "name": "conditional-preprocessing",
+      "status": "partial"
+    },
+    {
+      "id": "C04",
+      "name": "integer-types-and-literals",
+      "status": "partial"
+    },
+    {
+      "id": "C07",
+      "name": "pointer-types-and-qualifiers",
+      "status": "partial"
+    },
+    {
+      "id": "C09",
+      "name": "function-declarators",
+      "status": "partial"
+    },
+    {
+      "id": "C10",
+      "name": "typedef-names",
+      "status": "planned"
+    },
+    {
+      "id": "C17",
+      "name": "lvalues-and-rvalues",
+      "status": "partial"
+    },
+    {
+      "id": "C22",
+      "name": "arithmetic-and-bitwise-operators",
+      "status": "partial"
+    },
+    {
+      "id": "C31",
+      "name": "if-else",
+      "status": "partial"
+    },
+    {
+      "id": "C32",
+      "name": "loops",
+      "status": "partial"
+    },
+    {
+      "id": "C36",
+      "name": "calls-and-recursion",
+      "status": "partial"
+    },
+    {
+      "id": "C47",
+      "name": "separate-compilation",
+      "status": "planned"
+    },
+    {
+      "id": "C48",
+      "name": "debug-and-reproducible-output",
+      "status": "partial"
+    }
   ]
 }

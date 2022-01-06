@@ -204,6 +204,7 @@ static void macro_define(CinderPP *pp, const char *text) {
         if (*p == ')') ++p;
     }
     p = skip_space(p);
+    if (*p == '=') p = skip_space(p + 1);
     macro.replacement = cinder_strndup(p, strlen(p));
     for (size_t i = 0U; i < pp->macros.len; ++i) {
         if (strcmp(pp->macros.data[i].name, macro.name) == 0) {
@@ -217,15 +218,19 @@ static void macro_define(CinderPP *pp, const char *text) {
 
 static bool pp_condition(CinderPP *pp, const char *text) {
     const char *p = skip_space(text);
+    const char *end = NULL;
     if (strncmp(p, "defined", 7U) == 0 && !isalnum((unsigned char)p[7]) && p[7] != '_') {
         p = skip_space(p + 7);
         if (*p == '(') ++p;
-        const char *end = NULL;
         if (identifier_at(p, &end)) return macro_find(pp, p, (size_t)(end - p)) != NULL;
     }
-    char *end = NULL;
-    long value = strtol(p, &end, 0);
-    return end != p && value != 0L;
+    if (identifier_at(p, &end)) {
+        CinderMacro *macro = macro_find(pp, p, (size_t)(end - p));
+        if (macro != NULL && !macro->function_like) return pp_condition(pp, macro->replacement);
+    }
+    char *end_number = NULL;
+    long value = strtol(p, &end_number, 0);
+    return end_number != p && value != 0L;
 }
 
 static bool read_include(CinderPP *pp, const char *current_path, const char *spec, char **resolved) {
