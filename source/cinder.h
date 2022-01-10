@@ -503,6 +503,22 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
 int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags);
 void cinder_dump_ir(const CinderIRModule *module, FILE *out);
 
+typedef struct {
+    size_t block_count;
+    CinderBlockId *rpo;
+    size_t rpo_count;
+    CinderBlockId *idom;
+    bool *reachable;
+    bool *loop_header;
+    size_t *rpo_index;
+} CinderCFGAnalysis;
+
+void cinder_cfg_init(CinderCFGAnalysis *analysis);
+void cinder_cfg_destroy(CinderCFGAnalysis *analysis);
+int cinder_analyze_cfg(const CinderIRFunction *function, CinderCFGAnalysis *analysis, CinderDiagnostics *diags);
+void cinder_dump_cfg(const CinderIRFunction *function, const CinderCFGAnalysis *analysis, FILE *out);
+unsigned cinder_forward_local_memory(CinderIRFunction *function);
+unsigned cinder_remove_dead_ir(CinderIRFunction *function);
 /* ---------- interpreter and optimization ---------- */
 typedef struct {
     bool valid;
@@ -515,6 +531,8 @@ typedef struct {
     unsigned instructions_changed;
     unsigned constants_folded;
     unsigned blocks_removed;
+    unsigned memory_forwarded;
+    unsigned dead_instructions_removed;
 } CinderOptStats;
 int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags);
 

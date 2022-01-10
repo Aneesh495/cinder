@@ -25,7 +25,7 @@ static bool fold(CinderIROp op, int64_t left, int64_t right, int64_t *out) {
 
 int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags) {
     (void)diags;
-    stats->functions_changed = 0U; stats->instructions_changed = 0U; stats->constants_folded = 0U; stats->blocks_removed = 0U;
+    stats->functions_changed = 0U; stats->instructions_changed = 0U; stats->constants_folded = 0U; stats->blocks_removed = 0U; stats->memory_forwarded = 0U; stats->dead_instructions_removed = 0U;
     if (level <= 0) return 0;
     for (size_t f = 0U; f < module->functions.len; ++f) {
         CinderIRFunction *function = &module->functions.data[f];
@@ -47,6 +47,10 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
             }
         }
         if (changed_function) stats->functions_changed++;
+        stats->memory_forwarded += cinder_forward_local_memory(function);
+        stats->dead_instructions_removed += cinder_remove_dead_ir(function);
+        stats->instructions_changed += stats->dead_instructions_removed;
+        if (stats->memory_forwarded != 0U || stats->dead_instructions_removed != 0U) stats->functions_changed++;
         free(known); free(constant);
     }
     return 0;

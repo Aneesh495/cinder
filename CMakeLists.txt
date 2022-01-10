@@ -22,6 +22,7 @@ set(CINDER_SOURCES
   source/sema.c
   source/ir.c
   source/ir_verify.c
+  source/analysis.c
   source/ir_interp.c
   source/opt.c
   source/mir.c
