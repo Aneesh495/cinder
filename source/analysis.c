@@ -149,3 +149,54 @@ unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
     }
     return removed;
 }
+
+static bool block_has_phi_for_slot(const CinderIRBlock *block, int slot) {
+    for (size_t i = 0U; i < block->instructions.len; ++i) if (block->instructions.data[i].op == IR_PHI && block->instructions.data[i].slot == slot) return true;
+    return false;
+}
+
+int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags) {
+    (void)diags;
+    int inserted = 0;
+    if (function->local_count == 0U) return 0;
+    for (size_t b = 0U; b < function->blocks.len; ++b) {
+        CinderIRBlock *block = &function->blocks.data[b];
+        if (block->predecessors.len < 2U) continue;
+        for (size_t slot = 0U; slot < function->local_count; ++slot) {
+            if (block_has_phi_for_slot(block, (int)slot)) continue;
+            CinderValueId *incoming = cinder_alloc(block->predecessors.len * sizeof(*incoming));
+            bool complete = true;
+            for (size_t p = 0U; p < block->predecessors.len; ++p) {
+                CinderBlockId predecessor = block->predecessors.data[p];
+                incoming[p] = CINDER_INVALID_VALUE;
+                if (predecessor >= function->blocks.len) { complete = false; break; }
+                CinderIRBlock *pred_block = &function->blocks.data[predecessor];
+                for (size_t i = 0U; i < pred_block->instructions.len; ++i) {
+                    CinderIRInst *inst = &pred_block->instructions.data[i];
+                    if (inst->op == IR_LOCAL_STORE && inst->slot == (int)slot) incoming[p] = inst->left;
+                }
+                if (incoming[p] == CINDER_INVALID_VALUE) complete = false;
+            }
+            if (!complete) { free(incoming); continue; }
+            CinderIRInst phi;
+            memset(&phi, 0, sizeof(phi));
+            phi.op = IR_PHI; phi.dst = (CinderValueId)function->value_count++; phi.left = CINDER_INVALID_VALUE; phi.right = CINDER_INVALID_VALUE; phi.slot = (int)slot;
+            phi.args.data = NULL; phi.args.len = 0U; phi.args.cap = 0U; phi.phi_blocks.data = NULL; phi.phi_blocks.len = 0U; phi.phi_blocks.cap = 0U;
+            for (size_t p = 0U; p < block->predecessors.len; ++p) { cinder_vec_push((CinderVec *)&phi.args, &incoming[p]); cinder_vec_push((CinderVec *)&phi.phi_blocks, &block->predecessors.data[p]); }
+            CinderIRInst *old = block->instructions.data;
+            CinderIRInst *new_data = cinder_alloc((block->instructions.len + 1U) * sizeof(*new_data));
+            new_data[0] = phi;
+            memcpy(new_data + 1U, old, block->instructions.len * sizeof(*old));
+            free(old); block->instructions.data = new_data; block->instructions.len++;
+            CinderValueId value = phi.dst;
+            bool current = true;
+            for (size_t i = 1U; i < block->instructions.len; ++i) {
+                CinderIRInst *inst = &block->instructions.data[i];
+                if (inst->op == IR_LOCAL_STORE && inst->slot == (int)slot) current = false;
+                else if (current && inst->op == IR_LOCAL_LOAD && inst->slot == (int)slot) { inst->op = IR_COPY; inst->left = value; inst->right = CINDER_INVALID_VALUE; inst->slot = -1; }
+            }
+            free(incoming); inserted++;
+        }
+    }
+    return inserted;
+}

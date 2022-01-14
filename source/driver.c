@@ -56,6 +56,7 @@ int cinder_driver_run(const CinderOptions *options) {
     if (options->syntax_only) { result = 0; goto done_sema; }
     cinder_ir_init(&module, &types);
     if (cinder_lower_ir(&module, &ast, &diags) != 0) goto done_ir;
+    for (size_t f = 0U; f < module.functions.len; ++f) if (cinder_insert_join_phis(&module.functions.data[f], &diags) < 0) goto done_ir;
     if (options->verify_each && cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) cinder_dump_ir(&module, stdout);
     CinderOptStats stats;
@@ -68,7 +69,7 @@ int cinder_driver_run(const CinderOptions *options) {
     FILE *assembly = NULL;
     if (options->emit_assembly) { assembly = options->output == NULL || strcmp(options->output, "-") == 0 ? stdout : fopen(options->output, "w"); if (assembly == NULL) { cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "cannot open assembly output '%s': %s", options->output, strerror(errno)); goto done_machine; } }
     for (size_t f = 0U; f < module.functions.len; ++f) {
-        CinderAllocation allocation; cinder_alloc_init(&allocation, &module.functions.data[f]); if (cinder_allocate(&allocation, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
+        CinderAllocation allocation; cinder_alloc_init(&allocation, &module.functions.data[f]); if (cinder_allocate(&allocation, &diags) != 0 || cinder_verify_allocation(&allocation, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
         if (options->dump_regalloc) cinder_dump_regalloc(&allocation, stdout);
         if (cinder_lower_x86(&module.functions.data[f], &allocation, &machine, options->emit_assembly, assembly, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
         cinder_alloc_destroy(&allocation);

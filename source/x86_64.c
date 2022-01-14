@@ -98,6 +98,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->slot)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
                     store_value(object, function, inst->dst); break;
                 case IR_LOCAL_LOAD: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value(object, function, inst->dst); break;
+                case IR_PHI: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value(object, function, inst->dst); break;
                 case IR_LOCAL_STORE: load_value(object, function, inst->left); emit_mov_mem_rax(object, local_offset(inst->slot)); break;
                 case IR_COPY: load_value(object, function, inst->left); store_value(object, function, inst->dst); break;
                 case IR_NEG: load_value(object, function, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value(object, function, inst->dst); break;
