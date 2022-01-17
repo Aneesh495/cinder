@@ -41,7 +41,7 @@ The current native implementation is a correctness-oriented scalar slice. It doe
 
 ## Acceptance status
 
-`make acceptance` records pass, unverified, and unmet outcomes from actual raw artifacts. The current manifest intentionally reports the following unverified or unmet gates: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full differential/IR/rewrite/ABI/allocation/object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, and the private 10,000-line production threshold. `make verify` rejects this manifest rather than converting missing workloads into passes.
+Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes.
 
 ## Next action
 
