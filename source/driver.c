@@ -37,7 +37,10 @@ void cinder_print_help(FILE *out) {
 
 void cinder_print_version(FILE *out) { fprintf(out, "cindercc %s (C17-core, ELF64 x86-64 backend)\n", CINDER_VERSION); }
 
+static int cinder_driver_run_multi(const CinderOptions *options);
+
 int cinder_driver_run(const CinderOptions *options) {
+    if (options->input_count > 1U) return cinder_driver_run_multi(options);
     CinderSourceManager sources; CinderDiagnostics diags; CinderTokenStream tokens; CinderTypeContext types; CinderAst ast; CinderSema sema; CinderIRModule module; CinderMachineObject machine;
     cinder_sources_init(&sources); cinder_diags_init(&diags); cinder_tokens_init(&tokens); cinder_types_init(&types);
     bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->dump_mir || options->dump_regalloc || options->interpret || options->explorer != NULL);
@@ -66,6 +69,7 @@ int cinder_driver_run(const CinderOptions *options) {
     if (options->interpret) { CinderInterpResult interpretation = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags); if (!interpretation.valid) goto done_ir; fprintf(stdout, "interpret main => %lld\n", (long long)interpretation.value); result = 0; if (options->explorer == NULL && !options->dump_regalloc) goto done_ir; }
     if (inspection_only && !options->dump_regalloc && options->explorer == NULL) { result = 0; goto done_ir; }
     cinder_machine_init(&machine);
+    if (cinder_lower_globals(&module, &machine, &diags) != 0) goto done_machine;
     FILE *assembly = NULL;
     if (options->emit_assembly) { assembly = options->output == NULL || strcmp(options->output, "-") == 0 ? stdout : fopen(options->output, "w"); if (assembly == NULL) { cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "cannot open assembly output '%s': %s", options->output, strerror(errno)); goto done_machine; } }
     for (size_t f = 0U; f < module.functions.len; ++f) {
@@ -106,4 +110,86 @@ done:
     if (diags.errors != 0U) cinder_diag_print(&diags, &sources, stderr);
     bool ok = result == 0 && diags.errors == 0U;
     cinder_tokens_destroy(&tokens); cinder_types_destroy(&types); cinder_diags_destroy(&diags); cinder_sources_destroy(&sources); return ok ? 0 : 1;
+}
+
+
+static int write_linked_many(char *const *objects, size_t object_count, const char *output) {
+#if defined(__linux__)
+    size_t argc = object_count + 4U;
+    char **args = cinder_alloc(argc * sizeof(*args));
+    size_t index = 0U;
+    args[index++] = (char *)"cc";
+    for (size_t i = 0U; i < object_count; ++i) args[index++] = objects[i];
+    args[index++] = (char *)"-o";
+    args[index++] = (char *)(output == NULL ? "a.out" : output);
+    args[index] = NULL;
+    pid_t child = fork();
+    if (child < 0) { free(args); return 1; }
+    if (child == 0) { execvp(args[0], args); _exit(127); }
+    int status = 0;
+    int result = waitpid(child, &status, 0) < 0 ? 1 : (WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : 1);
+    free(args);
+    return result;
+#else
+    (void)objects; (void)object_count; (void)output;
+    return 2;
+#endif
+}
+
+static const char *default_assembly_name(const char *input) {
+    static char path[4096];
+    const char *slash = strrchr(input, '/');
+    const char *base = slash == NULL ? input : slash + 1;
+    size_t length = strlen(base);
+    if (length > 2U && strcmp(base + length - 2U, ".c") == 0) length -= 2U;
+    if (length + 3U >= sizeof(path)) return "cinder.s";
+    memcpy(path, base, length); memcpy(path + length, ".s", 3U); return path;
+}
+
+static int cinder_driver_run_multi(const CinderOptions *options) {
+    if (options->input_count < 2U) return 1;
+    if (options->explorer != NULL || options->interpret) { fprintf(stderr, "cindercc: --explorer and --interpret require one translation unit\n"); return 1; }
+    if (options->preprocess_only && options->output != NULL) { fprintf(stderr, "cindercc: -E with multiple inputs cannot use one output path\n"); return 1; }
+    if (options->emit_assembly && options->output != NULL) { fprintf(stderr, "cindercc: -S with multiple inputs requires one output per translation unit\n"); return 1; }
+    if (options->emit_object && options->output != NULL) { fprintf(stderr, "cindercc: -c with multiple inputs requires one output per translation unit\n"); return 1; }
+    if (options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->dump_mir || options->dump_regalloc) {
+        for (size_t i = 0U; i < options->input_count; ++i) {
+            CinderOptions child = *options;
+            child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U;
+            if (cinder_driver_run(&child) != 0) return 1;
+        }
+        return 0;
+    }
+    if (options->emit_assembly) {
+        for (size_t i = 0U; i < options->input_count; ++i) {
+            CinderOptions child = *options;
+            child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U; child.output = default_assembly_name(options->inputs[i]);
+            if (cinder_driver_run(&child) != 0) return 1;
+        }
+        return 0;
+    }
+    if (options->emit_object) {
+        for (size_t i = 0U; i < options->input_count; ++i) {
+            CinderOptions child = *options;
+            child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U; child.output = default_object_name(options->inputs[i]); child.emit_object = true;
+            if (cinder_driver_run(&child) != 0) return 1;
+        }
+        return 0;
+    }
+    CINDER_VEC_TYPE(char *) objects = {NULL, 0U, 0U};
+    for (size_t i = 0U; i < options->input_count; ++i) {
+        char temporary[4096];
+        int written = snprintf(temporary, sizeof(temporary), "/tmp/cinder-multi-%ld-%zu.o", (long)getpid(), i);
+        if (written <= 0 || (size_t)written >= sizeof(temporary)) { free(objects.data); return 1; }
+        char *path = cinder_strndup(temporary, (size_t)written);
+        cinder_vec_push((CinderVec *)&objects, &path);
+        CinderOptions child = *options;
+        child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U; child.output = path; child.emit_object = true;
+        if (cinder_driver_run(&child) != 0) { for (size_t j = 0U; j < objects.len; ++j) { unlink(objects.data[j]); free(objects.data[j]); } free(objects.data); return 1; }
+    }
+    int result = write_linked_many(objects.data, objects.len, options->output);
+    if (result == 2) fprintf(stderr, "cindercc: Linux x86-64 linking is unavailable on this host; use -c or -S for cross-target output\n");
+    for (size_t i = 0U; i < objects.len; ++i) { unlink(objects.data[i]); free(objects.data[i]); }
+    free(objects.data);
+    return result == 0 ? 0 : 1;
 }

@@ -8,6 +8,11 @@ static const CinderIRFunction *find_function(const CinderIRModule *module, const
     return NULL;
 }
 
+static const CinderIRGlobal *find_global(const CinderIRModule *module, const char *name) {
+    for (size_t i = 0U; i < module->globals.len; ++i) if (strcmp(module->globals.data[i].name, name) == 0) return &module->globals.data[i];
+    return NULL;
+}
+
 static bool eval_binary(CinderIROp op, int64_t left, int64_t right, int64_t *result) {
     switch (op) {
         case IR_ADD: *result = left + right; return true;
@@ -50,6 +55,8 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
             int64_t value = 0;
             switch (inst->op) {
                 case IR_CONST: values[inst->dst] = inst->integer; break;
+                case IR_GLOBAL_LOAD: { const CinderIRGlobal *global = find_global(module, inst->callee); if (global == NULL) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter cannot find global '%s'", inst->callee); free(values); free(locals); return failure; } values[inst->dst] = global->integer; break; }
+                case IR_GLOBAL_STORE: cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter does not mutate global '%s'", inst->callee); free(values); free(locals); return failure;
                 case IR_ARG: values[inst->dst] = inst->slot >= 0 && (size_t)inst->slot < arg_count ? args[inst->slot] : 0; break;
                 case IR_LOCAL_LOAD: values[inst->dst] = locals[inst->slot]; break;
                 case IR_LOCAL_STORE: locals[inst->slot] = values[inst->left]; break;

@@ -15,6 +15,8 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRInst *inst = &block->instructions.data[i];
                 if (!valid_value(inst->dst, function->value_count) || !valid_value(inst->left, function->value_count) || !valid_value(inst->right, function->value_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR value out of range in '%s'", function->name);
                 for (size_t a = 0U; a < inst->args.len; ++a) if (!valid_value(inst->args.data[a], function->value_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR call argument out of range in '%s'", function->name);
+                if ((inst->op == IR_GLOBAL_LOAD || inst->op == IR_GLOBAL_STORE) && inst->callee == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR global operation has no symbol in '%s'", function->name);
+                if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot out of range in '%s'", function->name);
                 if (inst->op == IR_PHI) {
                     if (inst->phi_blocks.len != inst->args.len) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi incoming edge/value count differs in '%s'", function->name);
                     for (size_t p = 0U; p < inst->phi_blocks.len; ++p) {

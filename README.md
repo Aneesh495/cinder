@@ -11,6 +11,8 @@ make bootstrap
 make build
 make test
 make test-frontend
+make test-globals
+make test-multi
 ```
 
 Compile a small translation unit to an ELF object without invoking an assembler:

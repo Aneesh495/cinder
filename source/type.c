@@ -131,3 +131,33 @@ const char *cinder_type_name(const CinderType *type) {
     }
     return "<unknown type>";
 }
+
+
+static size_t type_align_up(size_t value, size_t align) {
+    if (align == 0U) return value;
+    size_t mask = align - 1U;
+    return value > SIZE_MAX - mask ? SIZE_MAX : (value + mask) & ~mask;
+}
+
+int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, CinderLoc loc) {
+    if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION)) return 1;
+    size_t size = 0U;
+    size_t align = 1U;
+    for (size_t i = 0U; i < type->fields.len; ++i) {
+        CinderField *field = &type->fields.data[i];
+        if (field->type == NULL || !field->type->complete) { cinder_diag(diags, CINDER_ERROR, loc, "incomplete field '%s' in aggregate", field->name); continue; }
+        if (field->type->align > align) align = field->type->align;
+        if (type->kind == TYPE_UNION) field->offset = 0U;
+        else {
+            size = type_align_up(size, field->type->align);
+            field->offset = size;
+            if (field->type->size > SIZE_MAX - size) { cinder_diag(diags, CINDER_ERROR, loc, "aggregate layout size overflow"); size = SIZE_MAX; }
+            else size += field->type->size;
+        }
+        if (type->kind == TYPE_UNION && field->type->size > size) size = field->type->size;
+    }
+    type->align = align;
+    type->size = type_align_up(size, align);
+    type->complete = diags->errors == 0U;
+    return diags->errors == 0U ? 0 : 1;
+}

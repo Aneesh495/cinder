@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define R_X86_64_PLT32 4
+#define R_X86_64_PC32 2
 
 typedef struct {
     size_t offset;
@@ -65,9 +66,9 @@ static void emit_binary(CinderMachineObject *object, const CinderIRFunction *fun
 
 static unsigned abi_register(unsigned index) { static const unsigned regs[] = {7U, 6U, 2U, 1U, 8U, 9U}; return index < CINDER_ARRAY_LEN(regs) ? regs[index] : 0U; }
 
-void cinder_machine_init(CinderMachineObject *object) { object->text.data = NULL; object->text.len = 0U; object->text.cap = 0U; object->fixups.data = NULL; object->fixups.len = 0U; object->fixups.cap = 0U; object->defined_symbols.data = NULL; object->defined_symbols.len = 0U; object->defined_symbols.cap = 0U; object->symbol_offsets.data = NULL; object->symbol_offsets.len = 0U; object->symbol_offsets.cap = 0U; object->frame_size = 0U; }
+void cinder_machine_init(CinderMachineObject *object) { object->text.data = NULL; object->text.len = 0U; object->text.cap = 0U; object->data.data = NULL; object->data.len = 0U; object->data.cap = 0U; object->rodata.data = NULL; object->rodata.len = 0U; object->rodata.cap = 0U; object->bss_size = 0U; object->fixups.data = NULL; object->fixups.len = 0U; object->fixups.cap = 0U; object->defined_symbols.data = NULL; object->defined_symbols.len = 0U; object->defined_symbols.cap = 0U; object->symbol_offsets.data = NULL; object->symbol_offsets.len = 0U; object->symbol_offsets.cap = 0U; object->data_symbols.data = NULL; object->data_symbols.len = 0U; object->data_symbols.cap = 0U; object->frame_size = 0U; }
 
-void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); }
+void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); }
 
 static void asm_line(FILE *out, const char *format, ...) {
     if (out == NULL) return;
@@ -94,6 +95,8 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
             const CinderIRInst *inst = &block->instructions.data[i];
             switch (inst->op) {
                 case IR_CONST: emit_mov_rax_imm(object, inst->integer); store_value(object, function, inst->dst); break;
+                case IR_GLOBAL_LOAD: emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } store_value(object, function, inst->dst); break;
+                case IR_GLOBAL_STORE: load_value(object, function, inst->left); emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } break;
                 case IR_ARG:
                     if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->slot)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
                     store_value(object, function, inst->dst); break;
@@ -128,4 +131,59 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         asm_line(asm_out, ".size %s, .-%s", function->name, function->name);
     }
     return 0;
+}
+
+
+enum { CINDER_DATA_SECTION = 1U, CINDER_RODATA_SECTION = 2U, CINDER_BSS_SECTION = 3U };
+
+static size_t data_align_up(size_t value, size_t align) {
+    if (align <= 1U) return value;
+    size_t mask = align - 1U;
+    return value > SIZE_MAX - mask ? SIZE_MAX : (value + mask) & ~mask;
+}
+
+static void bytes_align(CinderBytes *bytes, size_t align) {
+    size_t target = data_align_up(bytes->len, align);
+    while (bytes->len < target) cinder_bytes_put8(bytes, 0U);
+}
+
+static void append_integer(CinderBytes *bytes, int64_t value, size_t size) {
+    if (size == 1U) cinder_bytes_put8(bytes, (uint8_t)value);
+    else if (size <= 4U) cinder_bytes_put32(bytes, (uint32_t)value);
+    else cinder_bytes_put64(bytes, (uint64_t)value);
+}
+
+int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *object, CinderDiagnostics *diags) {
+    for (size_t i = 0U; i < module->globals.len; ++i) {
+        const CinderIRGlobal *global = &module->globals.data[i];
+        if (global->is_extern) continue;
+        if (global->type == NULL || !global->type->complete) { cinder_diag(diags, CINDER_ERROR, global->loc, "cannot emit incomplete global '%s'", global->name); continue; }
+        CinderDataSymbol symbol;
+        symbol.name = cinder_strndup(global->name, strlen(global->name));
+        symbol.global = true;
+        if (global->bytes != NULL) {
+            bytes_align(&object->rodata, global->type->align);
+            symbol.section_kind = CINDER_RODATA_SECTION;
+            symbol.offset = object->rodata.len;
+            size_t total = global->type->size;
+            for (size_t b = 0U; b < global->byte_count && b < total; ++b) cinder_bytes_put8(&object->rodata, (uint8_t)global->bytes[b]);
+            while (object->rodata.len < symbol.offset + total) cinder_bytes_put8(&object->rodata, 0U);
+            symbol.size = total;
+        } else if (global->has_initializer) {
+            bytes_align(&object->data, global->type->align);
+            symbol.section_kind = CINDER_DATA_SECTION;
+            symbol.offset = object->data.len;
+            append_integer(&object->data, global->integer, global->type->size);
+            while (object->data.len < symbol.offset + global->type->size) cinder_bytes_put8(&object->data, 0U);
+            symbol.size = global->type->size;
+        } else {
+            object->bss_size = data_align_up(object->bss_size, global->type->align);
+            symbol.section_kind = CINDER_BSS_SECTION;
+            symbol.offset = object->bss_size;
+            object->bss_size += global->type->size;
+            symbol.size = global->type->size;
+        }
+        cinder_vec_push((CinderVec *)&object->data_symbols, &symbol);
+    }
+    return diags->errors == 0U ? 0 : 1;
 }

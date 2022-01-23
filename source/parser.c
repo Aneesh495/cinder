@@ -22,6 +22,38 @@ static bool is_type_start(CinderTokenKind kind) {
     return kind == TOK_KW_VOID || kind == TOK_KW_CHAR || kind == TOK_KW_SHORT || kind == TOK_KW_INT || kind == TOK_KW_LONG || kind == TOK_KW_SIGNED || kind == TOK_KW_UNSIGNED || kind == TOK_KW_FLOAT || kind == TOK_KW_DOUBLE || kind == TOK_KW__BOOL || kind == TOK_KW_STRUCT || kind == TOK_KW_UNION || kind == TOK_KW_ENUM;
 }
 
+static CinderType *parse_type_specifier(CinderAst *ast);
+static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, CinderDecl **function_decl);
+
+static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
+    CinderType *type = cinder_type_new(ast->types, is_union ? TYPE_UNION : TYPE_STRUCT);
+    CinderToken *keyword = &ast->tokens->tokens.data[ast->cursor - 1U];
+    type->tag = NULL;
+    if (is(ast, TOK_IDENTIFIER)) {
+        CinderToken *tag = &ast->tokens->tokens.data[ast->cursor++];
+        type->tag = cinder_arena_strndup(&ast->arena, tag->text, tag->length);
+    }
+    if (!take(ast, '{')) return type;
+    while (!is(ast, TOK_EOF) && !is(ast, '}')) {
+        CinderType *field_base = parse_type_specifier(ast);
+        char *field_name = NULL;
+        CinderLoc field_loc = peek(ast)->loc;
+        CinderType *field_type = parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
+        CinderField field;
+        field.name = field_name;
+        field.type = field_type;
+        field.offset = 0U;
+        field.bit_offset = 0U;
+        field.bit_width = 0U;
+        cinder_vec_push((CinderVec *)&type->fields, &field);
+        (void)expect(ast, ';', "';'");
+    }
+    (void)expect(ast, '}', "'}'");
+    (void)keyword;
+    (void)cinder_type_layout_aggregate(type, ast->diags, type->tag == NULL ? cinder_loc(CINDER_NO_FILE, 0U, 0U) : peek(ast)->loc);
+    return type;
+}
+
 static CinderType *parse_type_specifier(CinderAst *ast) {
     CinderTypeContext *types = ast->types;
     CinderTokenKind kind = peek(ast)->kind;
@@ -29,8 +61,8 @@ static CinderType *parse_type_specifier(CinderAst *ast) {
     if (unsig) kind = peek(ast)->kind;
     CinderType *type = NULL;
     if (take(ast, TOK_KW_VOID)) type = types->void_type;
-    else if (take(ast, TOK_KW_CHAR)) type = unsig ? types->char_type : types->char_type;
-    else if (take(ast, TOK_KW_SHORT)) type = unsig ? types->short_type : types->short_type;
+    else if (take(ast, TOK_KW_CHAR)) type = types->char_type;
+    else if (take(ast, TOK_KW_SHORT)) type = types->short_type;
     else if (take(ast, TOK_KW_INT)) type = unsig ? types->uint_type : types->int_type;
     else if (take(ast, TOK_KW_LONG)) {
         if (take(ast, TOK_KW_LONG)) type = unsig ? types->ullong_type : types->llong_type;
@@ -41,8 +73,10 @@ static CinderType *parse_type_specifier(CinderAst *ast) {
     } else if (take(ast, TOK_KW_FLOAT)) type = types->float_type;
     else if (take(ast, TOK_KW_DOUBLE)) type = types->double_type;
     else if (take(ast, TOK_KW__BOOL)) type = types->bool_type;
-    else if (kind == TOK_KW_STRUCT || kind == TOK_KW_UNION || kind == TOK_KW_ENUM) {
-        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "struct, union, and enum declarations are reserved for the aggregate profile increment");
+    else if (take(ast, TOK_KW_STRUCT)) type = parse_aggregate_specifier(ast, false);
+    else if (take(ast, TOK_KW_UNION)) type = parse_aggregate_specifier(ast, true);
+    else if (kind == TOK_KW_ENUM) {
+        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "enum layout is not yet implemented");
         ast->cursor++;
         type = types->error_type;
     } else {
@@ -84,6 +118,12 @@ static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **nam
             CinderDecl *ignored = NULL;
             (void)ignored;
         }
+    }
+    while (take(ast, '[')) {
+        size_t length = 0U;
+        if (is(ast, TOK_NUMBER)) length = (size_t)peek(ast)->integer, ast->cursor++;
+        (void)expect(ast, ']', "']'");
+        base = cinder_type_array(ast->types, base, length);
     }
     return base;
 }
@@ -265,6 +305,7 @@ int cinder_parse(CinderAst *ast) {
         }
         CinderLoc loc = peek(ast)->loc;
         CinderType *base = parse_type_specifier(ast);
+        if ((base->kind == TYPE_STRUCT || base->kind == TYPE_UNION) && is(ast, ';')) { ast->cursor++; continue; }
         char *name = NULL; CinderLoc name_loc;
         CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
         CinderDecl *decl = new_decl(ast, type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);

@@ -275,7 +275,7 @@ CinderType *cinder_type_function(CinderTypeContext *types, CinderType *ret, cons
 bool cinder_type_equal(const CinderType *a, const CinderType *b);
 bool cinder_type_compatible(const CinderType *a, const CinderType *b);
 const char *cinder_type_name(const CinderType *type);
-
+int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, CinderLoc loc);
 /* ---------- AST ---------- */
 typedef struct CinderExpr CinderExpr;
 typedef struct CinderStmt CinderStmt;
@@ -409,6 +409,8 @@ typedef uint32_t CinderBlockId;
 typedef enum {
     IR_NOP,
     IR_CONST,
+    IR_GLOBAL_LOAD,
+    IR_GLOBAL_STORE,
     IR_LOCAL_LOAD,
     IR_LOCAL_STORE,
     IR_ARG,
@@ -493,7 +495,20 @@ typedef struct {
 } CinderIRFunction;
 
 typedef struct {
+    char *name;
+    CinderType *type;
+    int64_t integer;
+    char *bytes;
+    size_t byte_count;
+    bool read_only;
+    bool is_extern;
+    bool has_initializer;
+    CinderLoc loc;
+} CinderIRGlobal;
+
+typedef struct {
     CINDER_VEC_TYPE(CinderIRFunction) functions;
+    CINDER_VEC_TYPE(CinderIRGlobal) globals;
     CinderArena arena;
     CinderTypeContext *types;
 } CinderIRModule;
@@ -582,10 +597,22 @@ typedef struct {
 } CinderFixup;
 
 typedef struct {
+    char *name;
+    unsigned section_kind;
+    size_t offset;
+    size_t size;
+    bool global;
+} CinderDataSymbol;
+
+typedef struct {
     CinderBytes text;
+    CinderBytes data;
+    CinderBytes rodata;
+    size_t bss_size;
     CINDER_VEC_TYPE(CinderFixup) fixups;
     CINDER_VEC_TYPE(char *) defined_symbols;
     CINDER_VEC_TYPE(size_t) symbol_offsets;
+    CINDER_VEC_TYPE(CinderDataSymbol) data_symbols;
     size_t frame_size;
 } CinderMachineObject;
 
@@ -598,12 +625,15 @@ void cinder_bytes_append(CinderBytes *bytes, const unsigned char *data, size_t l
 
 void cinder_machine_init(CinderMachineObject *object);
 void cinder_machine_destroy(CinderMachineObject *object);
+int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *object, CinderDiagnostics *diags);
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags);
 int cinder_write_elf64(const CinderMachineObject *object, const char *path, CinderDiagnostics *diags);
 
 /* ---------- driver and inspection ---------- */
 typedef struct {
     const char *input;
+    const char *const *inputs;
+    size_t input_count;
     const char *output;
     const char *const *include_dirs;
     size_t include_count;
