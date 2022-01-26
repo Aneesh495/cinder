@@ -1,6 +1,6 @@
 # Cinder IR and verification
 
-Cinder's IR is an owned representation in `source/ir.c`, not an LLVM textual dialect. Values have stable numeric IDs, blocks have explicit terminators, and local memory is represented by `local.load` and `local.store` operations. Calls carry a symbol name and ordered argument IDs. CFG predecessor/successor lists are maintained as edges are created.
+`source/ir.c` owns both function CFGs and constant global declarations. Global integer loads are explicit `global.load` operations keyed by symbol name; global stores are explicit effectful operations. The ELF boundary materializes those globals into target sections and relocation-bearing symbols. String-backed global arrays are stored as object data rather than being collapsed into host pointers.
 
 `source/ir_verify.c` checks function entry blocks, value ranges, local-slot ranges, call operands, terminator values, and branch targets. The driver can run it at each boundary with `-fverify-each`. A verifier failure is fatal and is never converted into a native success artifact.
 

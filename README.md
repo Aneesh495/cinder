@@ -39,6 +39,8 @@ build/cindercc -S examples/hello.c -o hello.s
 
 The supported profile is documented in [`docs/LANGUAGE.md`](docs/LANGUAGE.md). It covers the scalar integer subset, pointers, arrays, functions, control flow, macros, constant expressions, and a growing aggregate model. Unsupported constructs are diagnosed rather than silently discarded. The initial contract excludes long double, complex, atomics, thread-local execution, VLAs, GNU inline assembly/vector extensions, C++, and unimplemented ABI classes.
 
+Aggregate layout and constant global storage are now part of the implemented slice. The compiler parses inline struct/union definitions, emits target-sized `.data`, `.rodata`, and `.bss` sections, records data symbols, and accepts multiple input paths for separate object emission. See [`docs/AGGREGATES.md`](docs/AGGREGATES.md) and [`docs/MULTI_TU.md`](docs/MULTI_TU.md).
+
 The implementation is organized by representation boundary: source/diagnostics, tokens/preprocessing, types/parser/sema, HIR/SSA IR, analysis/optimization, MIR/register allocation, x86-64 encoding, ELF64 objects, driver, and inspection. Design contracts and limitations live under [`docs/`](docs/), while acceptance output is generated under the ignored `.agent-local/` directory.
 
 ## Current status

@@ -13,6 +13,8 @@ file "$evidence/hello.o" > "$evidence/object.file"
 "$ccbin" --emit-ir -O2 "$root/examples/hello.c" > "$evidence/hello.ir"
 "$ccbin" --dump-tokens "$root/examples/hello.c" > "$evidence/hello.tokens"
 "$ccbin" --interpret -O2 "$root/examples/hello.c" > "$evidence/interpreter.txt"
+tests/run_globals.sh "$ccbin" > "$evidence/globals.txt"
+tests/run_multi.sh "$ccbin" > "$evidence/multi.txt"
 python3 "$root/tools/source_census.py" --root "$root" --output "$root/.agent-local/source-census.json" > "$evidence/census.summary"
 python3 - "$evidence" "$root" <<'PY'
 import hashlib

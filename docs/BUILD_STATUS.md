@@ -8,7 +8,7 @@ Updated: 2026-10-02
 - Authenticated GitHub account: `Aneesh495`.
 - Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 - The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published checkpoint before this final status update: `9206e71`.
+- Latest published implementation checkpoint: `037d92a`.
 
 ## Implemented behavior
 
@@ -16,10 +16,11 @@ Updated: 2026-10-02
 - Original preprocessing for object/function macros, `-D`, conditional branches, relative includes, `#error`, and bounded rescanning.
 - Longest-match lexer for the implemented C token families with integer literal validation.
 - Recursive-descent declarations/statements, precedence expressions, scalar target types, nested scopes, lvalue checks, call/return checks, and loop-context diagnostics.
-- Typed CFG-like IR with local memory operations, explicit join phis with incoming edges, terminators, verifier, independent bounded interpreter, constant folding, effect-aware dead-code elimination, allocation traces/checker, direct x86-64 scalar encoding, ELF64 relocatable output, CLI inspection paths, and a local HTML explorer summary.
+- Typed CFG-like IR with local memory operations, explicit join phis with incoming edges, global loads/stores, terminators, verifier, independent bounded interpreter, constant folding, effect-aware dead-code elimination, allocation traces/checker, direct x86-64 scalar encoding, ELF64 relocatable output, CLI inspection paths, and a local HTML explorer summary.
 - CFG analysis computes reachable reverse postorder, iterative immediate dominators, and conservative back-edge loop headers. `-O1/-O2` forwards same-block local loads, removes unused pure integer instructions, and reports transformation counters while retaining effectful operations.
+- Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 
-The current native implementation is a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate/SSE/variadic ABI support, DWARF, PIC, full object data sections, or self-hosting.
+The current native implementation is still a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate expression/ABI classification, float/SSE/variadic ABI support, DWARF, PIC, or self-hosting.
 
 ## Commands and results
 
@@ -28,6 +29,8 @@ The current native implementation is a correctness-oriented scalar slice. It doe
 | `make build` | pass on macOS arm64 with Apple Clang/CMake | `build/cindercc` |
 | `make test` | pass, CTest smoke | CTest output |
 | `make test-frontend` | pass, include/macro/`-D`/interpreter/negative diagnostics | `tests/run_frontend.sh` |
+| `make test-globals` | pass, aggregate layout, global data, ELF sections, interpreter | `tests/run_globals.sh` |
+| `make test-multi` | pass, separate multi-input ELF objects and unavailable-host link diagnostic | `tests/run_multi.sh` |
 | `make test-preprocessor` | pass | `tests/run_preprocessor.sh` |
 | `make test-ir` | pass, dominators, loop headers, nonvacuous forwarding/dead-code/phi counters, verifier and allocation dump | `tests/run_ir.sh` |
 | `make test-abi` | pass for the declared scalar encoder/stack-frame smoke; cross-toolchain ABI gate unverified | `tests/run_abi.sh` |
@@ -39,7 +42,7 @@ The current native implementation is a correctness-oriented scalar slice. It doe
 | `make demo` | pass, object/IR/token artifacts generated | `.agent-local/demo/` |
 | `make acceptance` | pass, raw smoke evidence and incomplete gate registry generated | `.agent-local/evidence/ACCEPTANCE.json` |
 | `make verify` | expected nonzero, incomplete required gates are rejected | terminal output |
-| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, 25 source files and 3,188 substantive production lines | ignored private ledger |
+| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, 25 source files and 3,561 substantive production lines | ignored private ledger |
 | deterministic object check | pass, repeated `phi.c` objects had identical SHA-256 bytes | terminal output |
 | altered evidence check | pass, verifier rejected appended evidence bytes | terminal output |
 | `build/cindercc --interpret examples/hello.c` | pass, independent result `42` | terminal output |
@@ -47,8 +50,8 @@ The current native implementation is a correctness-oriented scalar slice. It doe
 
 ## Acceptance status
 
-Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full differential/IR/rewrite/ABI/allocation/object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full differential/IR/rewrite/ABI/allocation/object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, float/variadic support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
 
 ## Next action
 
-A Linux x86-64 environment is required for native execution, mixed-toolchain ABI checks, and self-hosting. The next implementation increment is phi-aware out-of-SSA parallel-copy lowering and broader aggregate layout coverage.
+A Linux x86-64 environment is required for native execution, mixed-toolchain ABI checks, and self-hosting. The next implementation increment is float/SSE value representation or phi-aware out-of-SSA parallel-copy lowering, with new native or explicitly unavailable evidence.
