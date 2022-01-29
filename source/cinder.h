@@ -580,6 +580,17 @@ void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function)
 void cinder_alloc_destroy(CinderAllocation *allocation);
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
+typedef struct {
+    CinderValueId source;
+    CinderValueId destination;
+} CinderParallelCopy;
+typedef struct {
+    CINDER_VEC_TYPE(CinderParallelCopy) moves;
+    unsigned temporary_count;
+} CinderParallelCopyPlan;
+void cinder_parallel_copy_init(CinderParallelCopyPlan *plan);
+void cinder_parallel_copy_destroy(CinderParallelCopyPlan *plan);
+int cinder_resolve_parallel_copies(const CinderValueId *sources, const CinderValueId *destinations, size_t count, CinderParallelCopyPlan *plan, CinderDiagnostics *diags);
 void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out);
 
 /* ---------- x86-64 machine output ---------- */
