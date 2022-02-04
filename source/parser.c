@@ -133,7 +133,9 @@ static CinderExpr *parse_expression(CinderAst *ast);
 static CinderExpr *parse_primary(CinderAst *ast) {
     CinderToken *token = peek(ast);
     if (take(ast, TOK_NUMBER)) {
-        CinderExpr *expr = new_expr(ast, EX_INT, token->loc); expr->as.integer = token->integer; return expr;
+        CinderExpr *expr = new_expr(ast, token->is_floating ? EX_FLOAT : EX_INT, token->loc);
+        if (token->is_floating) expr->as.floating = token->floating; else expr->as.integer = token->integer;
+        return expr;
     }
     if (take(ast, TOK_CHAR)) {
         CinderExpr *expr = new_expr(ast, EX_CHAR, token->loc); expr->as.integer = token->length >= 3U ? (unsigned char)token->text[1] : 0; return expr;

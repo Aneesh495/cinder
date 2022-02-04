@@ -108,6 +108,10 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc);
         inst->dst = new_value(context->function); inst->integer = expr->as.integer; return inst->dst;
     }
+    if (expr->kind == EX_FLOAT) {
+        CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_FCONST, expr->loc);
+        inst->dst = new_value(context->function); inst->floating = expr->as.floating; return inst->dst;
+    }
     if (expr->kind == EX_NAME) {
         int slot = find_local(context, expr->as.name);
         if (slot >= 0) {
@@ -145,11 +149,16 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
             return add->dst;
         }
         CinderValueId value = lower_expr(context, expr->as.unary.value);
-        CinderIROp ir_op = op == '-' ? IR_NEG : (op == '~' ? IR_BIT_NOT : IR_COPY);
+        CinderIROp ir_op = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE) && op == '-' ? IR_FNEG : (op == '-' ? IR_NEG : (op == '~' ? IR_BIT_NOT : IR_COPY));
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, ir_op, expr->loc); inst->dst = new_value(context->function); inst->left = value; return inst->dst;
     }
     if (expr->kind == EX_BINARY) {
         CinderValueId left = lower_expr(context, expr->as.binary.left); CinderValueId right = lower_expr(context, expr->as.binary.right);
+        if (expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE)) {
+            CinderIROp fp_op = IR_FADD;
+            switch (expr->as.binary.op) { case '+': fp_op = IR_FADD; break; case '-': fp_op = IR_FSUB; break; case '*': fp_op = IR_FMUL; break; case '/': fp_op = IR_FDIV; break; case TOK_EQEQ: fp_op = IR_FCMP_EQ; break; case TOK_NEQ: fp_op = IR_FCMP_NE; break; case '<': fp_op = IR_FCMP_LT; break; case TOK_LE: fp_op = IR_FCMP_LE; break; case '>': fp_op = IR_FCMP_GT; break; case TOK_GE: fp_op = IR_FCMP_GE; break; default: break; }
+            CinderIRInst *inst = add_inst_ptr(context->function, context->current, fp_op, expr->loc); inst->dst = new_value(context->function); inst->left = left; inst->right = right; return inst->dst;
+        }
         CinderIROp op = IR_ADD;
         switch (expr->as.binary.op) {
             case '+': op = IR_ADD; break; case '-': op = IR_SUB; break; case '*': op = IR_MUL; break; case '/': op = IR_DIV_S; break; case '%': op = IR_MOD_S; break;
@@ -290,7 +299,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
 }
 
 static const char *op_name(CinderIROp op) {
-    static const char *names[] = {"nop","const","global.load","global.store","local.load","local.store","arg","copy","add","sub","mul","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi"};
+    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi"};
     return op < CINDER_ARRAY_LEN(names) ? names[op] : "unknown";
 }
 

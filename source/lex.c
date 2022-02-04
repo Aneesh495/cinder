@@ -65,6 +65,8 @@ static void push_token(CinderTokenStream *tokens, CinderTokenKind kind, const ch
     token.length = length;
     token.loc = loc;
     token.integer = integer;
+    token.is_floating = false;
+    token.floating = 0.0;
     cinder_vec_push((CinderVec *)&tokens->tokens, &token);
 }
 
@@ -114,12 +116,26 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
         if (isdigit(c) != 0) {
             ++i;
             while (i < length && (isalnum((unsigned char)text[i]) != 0 || text[i] == '.' || text[i] == '_')) ++i;
-            bool ok = false;
-            int64_t value = parse_integer(text + start, i - start, &ok);
-            if (!ok) {
-                cinder_diag(diags, CINDER_ERROR, cinder_loc(file, start, i - start), "invalid integer constant");
+            bool floating = false;
+            for (size_t n = start; n < i; ++n) if (text[n] == '.' || text[n] == 'e' || text[n] == 'E') floating = true;
+            if (floating) {
+                char *copy = cinder_strndup(text + start, i - start);
+                char *end = NULL;
+                errno = 0;
+                double value = strtod(copy, &end);
+                bool ok = errno == 0 && end != copy;
+                if (ok && end != NULL && (*end == 'f' || *end == 'F')) ++end;
+                if (!ok || end == NULL || *end != '\0') cinder_diag(diags, CINDER_ERROR, cinder_loc(file, start, i - start), "invalid floating constant");
+                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_loc(file, start, i - start), 0);
+                tokens->tokens.data[tokens->tokens.len - 1U].is_floating = true;
+                tokens->tokens.data[tokens->tokens.len - 1U].floating = value;
+                free(copy);
+            } else {
+                bool ok = false;
+                int64_t value = parse_integer(text + start, i - start, &ok);
+                if (!ok) cinder_diag(diags, CINDER_ERROR, cinder_loc(file, start, i - start), "invalid integer constant");
+                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_loc(file, start, i - start), value);
             }
-            push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_loc(file, start, i - start), value);
             continue;
         }
         if (c == '"' || c == '\'') {
