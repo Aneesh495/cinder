@@ -15,6 +15,8 @@ make test-globals
 make test-multi
 make test-parallel-copy
 make test-float
+make test-generated
+make test-apps
 ```
 
 Compile a small translation unit to an ELF object without invoking an assembler:
