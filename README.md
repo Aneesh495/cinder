@@ -15,6 +15,7 @@ make test-globals
 make test-multi
 make test-parallel-copy
 make test-float
+make test-varargs
 make test-generated
 make test-apps
 ```

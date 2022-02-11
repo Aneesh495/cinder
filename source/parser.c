@@ -95,13 +95,14 @@ static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **nam
     CinderToken *identifier = &ast->tokens->tokens.data[ast->cursor++];
     *name = cinder_arena_strndup(&ast->arena, identifier->text, identifier->length);
     *name_loc = identifier->loc;
+    bool variadic = false;
     if (take(ast, '(')) {
         CinderParamVec params = {NULL, 0U, 0U};
         if (!is(ast, ')')) {
             if (is(ast, TOK_KW_VOID) && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ')') {
                 ast->cursor++;
             } else while (true) {
-                if (take(ast, TOK_ELLIPSIS)) break;
+                if (take(ast, TOK_ELLIPSIS)) { variadic = true; break; }
                 CinderType *param_base = parse_type_specifier(ast);
                 char *param_name = NULL;
                 CinderLoc param_loc;
@@ -113,6 +114,7 @@ static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **nam
         }
         (void)expect(ast, ')', "')'");
         base = cinder_type_function(ast->types, base, &params);
+        base->variadic = variadic;
         free(params.data);
         if (function_decl != NULL) {
             CinderDecl *ignored = NULL;
@@ -163,6 +165,13 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             CinderExpr *call = new_expr(ast, EX_CALL, expr->loc);
             call->as.call.callee = expr;
             call->as.call.args.data = NULL; call->as.call.args.len = 0U; call->as.call.args.cap = 0U;
+            if (expr->kind == EX_NAME && strcmp(expr->as.name, "va_arg") == 0) {
+                CinderExpr *list = parse_expression(ast);
+                (void)expect(ast, ',', "','");
+                CinderType *argument_type = parse_type_specifier(ast);
+                (void)expect(ast, ')', "')'");
+                CinderExpr *va = new_expr(ast, EX_VA_ARG, expr->loc); va->as.va_arg.list = list; va->as.va_arg.type = argument_type; expr = va; continue;
+            }
             if (!is(ast, ')')) {
                 do {
                     CinderExpr *arg = parse_expression(ast);

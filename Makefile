@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-parallel-copy test-float test-generated test-apps test-abi test-object test-debug fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-parallel-copy test-float test-varargs test-generated test-apps test-abi test-object test-debug fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -37,6 +37,9 @@ test-parallel-copy: build
 
 test-float: build
 	@tests/run_float.sh $(BUILD_DIR)/cindercc
+
+test-varargs: build
+	@tests/run_varargs.sh $(BUILD_DIR)/cindercc
 
 test-generated: build
 	@python3 tools/run_defined_cases.py $(BUILD_DIR)/cindercc --count 1200 --output .agent-local/generated-summary.json

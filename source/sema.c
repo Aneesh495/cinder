@@ -110,13 +110,16 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             if (!value_compatible(target, value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment types are incompatible");
             expr->type = target; return target;
         }
+        case EX_VA_ARG: (void)sema_expr(sema, expr->as.va_arg.list, scope); expr->type = expr->as.va_arg.type; return expr->type;
         case EX_CALL: {
+            if (expr->as.call.callee->kind == EX_NAME && (strcmp(expr->as.call.callee->as.name, "va_start") == 0 || strcmp(expr->as.call.callee->as.name, "va_end") == 0)) { for (size_t i = 0U; i < expr->as.call.args.len; ++i) (void)sema_expr(sema, expr->as.call.args.data[i], scope); expr->type = sema->types->void_type; return expr->type; }
             CinderType *callee = sema_expr(sema, expr->as.call.callee, scope);
             if (callee->kind != TYPE_FUNCTION) { if (callee->kind == TYPE_POINTER && callee->base->kind == TYPE_FUNCTION) callee = callee->base; else cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "called object is not a function"); }
             if (callee->kind == TYPE_FUNCTION) {
                 for (size_t i = 0U; i < expr->as.call.args.len; ++i) {
                     CinderType *arg = sema_expr(sema, expr->as.call.args.data[i], scope);
                     if (i < callee->params.len && !value_compatible(callee->params.data[i].type, arg)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "argument %zu has incompatible type", i + 1U);
+                    else if (i >= callee->params.len && !callee->variadic) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "too many arguments for non-variadic function");
                 }
                 expr->type = callee->return_type;
             } else expr->type = sema->types->error_type;
