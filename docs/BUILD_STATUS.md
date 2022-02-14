@@ -8,7 +8,7 @@ Updated: 2026-10-02
 - Authenticated GitHub account: `Aneesh495`.
 - Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 - The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published implementation checkpoint before this workload increment: `7338aed`.
+- Latest published implementation checkpoint before this final validation update: `e37b019`.
 
 ## Implemented behavior
 
@@ -47,7 +47,7 @@ The current native implementation is still a correctness-oriented scalar slice. 
 | `make demo` | pass, object/IR/token artifacts generated | `.agent-local/demo/` |
 | `make acceptance` | pass, raw smoke evidence and incomplete gate registry generated | `.agent-local/evidence/ACCEPTANCE.json` |
 | `make verify` | expected nonzero, incomplete required gates are rejected | terminal output |
-| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, updated private source count recorded in ignored ledger | `.agent-local/source-census.json` |
+| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, 25 source files and 3,804 substantive production lines | `.agent-local/source-census.json` |
 | deterministic object check | pass, repeated `phi.c` objects had identical SHA-256 bytes | terminal output |
 | altered evidence check | pass, verifier rejected appended evidence bytes | terminal output |
 
