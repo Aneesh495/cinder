@@ -422,6 +422,7 @@ typedef enum {
     IR_LOCAL_LOAD,
     IR_LOCAL_STORE,
     IR_ARG,
+    IR_FARG,
     IR_VA_ARG,
     IR_COPY,
     IR_ADD,
@@ -481,7 +482,9 @@ typedef struct {
     int slot;
     int operator_code;
     char *callee;
+    bool floating_result;
     CINDER_VEC_TYPE(CinderValueId) args;
+    CINDER_VEC_TYPE(bool) arg_floats;
     CINDER_VEC_TYPE(CinderBlockId) phi_blocks;
     CinderLoc loc;
 } CinderIRInst;
@@ -512,6 +515,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderIRBlock) blocks;
     size_t value_count;
     size_t local_count;
+    size_t float_param_count;
     CinderAst *ast;
 } CinderIRFunction;
 

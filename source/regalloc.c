@@ -15,7 +15,7 @@ void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function)
 void cinder_alloc_destroy(CinderAllocation *allocation) { free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; }
 
 static bool value_is_float(const CinderIRFunction *function, CinderValueId value) {
-    for (size_t b = 0U; b < function->blocks.len; ++b) for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) { const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i]; if (inst->dst == value) return inst->op == IR_FCONST || inst->op == IR_FADD || inst->op == IR_FSUB || inst->op == IR_FMUL || inst->op == IR_FDIV || inst->op == IR_FNEG; }
+    for (size_t b = 0U; b < function->blocks.len; ++b) for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) { const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i]; if (inst->dst == value) return inst->op == IR_FCONST || inst->op == IR_FARG || inst->op == IR_FADD || inst->op == IR_FSUB || inst->op == IR_FMUL || inst->op == IR_FDIV || inst->op == IR_FNEG || (inst->op == IR_CALL && inst->floating_result); }
     return false;
 }
 
