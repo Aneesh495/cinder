@@ -18,6 +18,7 @@ make test-float
 make test-varargs
 make test-generated
 make test-apps
+make test-native-linux
 ```
 
 Compile a small translation unit to an ELF object without invoking an assembler:
