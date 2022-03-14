@@ -17,7 +17,11 @@ if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
     "$tmp/multi"
     status=$?
     set -e
-    test "$status" -eq 9
+    if [ "$status" -ne 9 ]; then
+        printf 'multi-TU native result=%s, expected=9\n' "$status" >&2
+        file "$tmp/multi" >&2 || true
+        exit 1
+    fi
 else
     if "$ccbin" "$root/examples/tu_a.c" "$root/examples/tu_b.c" -o "$tmp/multi" >"$tmp/link.out" 2>"$tmp/link.err"; then
         exit 1
