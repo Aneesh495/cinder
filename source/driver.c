@@ -84,7 +84,7 @@ int cinder_driver_run(const CinderOptions *options) {
     if (inspection_only) { result = 0; goto done_machine; }
     if (options->emit_assembly) { if (assembly != stdout) fclose(assembly); assembly = NULL; result = 0; goto done_machine; }
     const char *object_path = options->output == NULL ? default_object_name(options->input) : options->output;
-    if (options->emit_object || options->output != NULL) {
+    if (options->emit_object) {
         if (cinder_write_elf64(&machine, object_path, &diags) != 0) goto done_machine;
         result = 0;
     } else {
