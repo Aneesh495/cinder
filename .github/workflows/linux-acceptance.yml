@@ -18,7 +18,7 @@ jobs:
       - name: Build
         run: make build
       - name: Frontend and object checks
-        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object
+        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
       - name: Native Linux execution
         run: tests/run_native_linux.sh build/cindercc
       - name: Sanitizer build

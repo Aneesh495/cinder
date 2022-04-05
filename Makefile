@@ -41,6 +41,9 @@ test-float: build
 test-varargs: build
 	@tests/run_varargs.sh $(BUILD_DIR)/cindercc
 
+test-apps: build
+	@tests/run_apps.sh $(BUILD_DIR)/cindercc
+
 test-generated: build
 	@python3 tools/run_defined_cases.py $(BUILD_DIR)/cindercc --count 1200 --output .agent-local/generated-summary.json
 
@@ -52,6 +55,9 @@ test-abi: build
 
 test-object: build
 	@tests/run_object.sh $(BUILD_DIR)/cindercc
+
+test-output: build
+	@python3 tests/run_output.py $(BUILD_DIR)/cindercc
 
 test-debug: build
 	@tests/run_debug.sh $(BUILD_DIR)/cindercc

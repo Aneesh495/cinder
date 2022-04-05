@@ -1,3 +1,5 @@
+#define _DARWIN_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
 #include "cinder.h"
 
 #include <errno.h>
@@ -18,16 +20,32 @@ static const char *default_object_name(const char *input) {
     memcpy(path, base, length); memcpy(path + length, ".o", 3U); return path;
 }
 
-static int write_linked(const char *object_path, const char *output) {
-#if defined(__linux__)
-    pid_t child = fork();
-    if (child < 0) return 1;
-    if (child == 0) { char *const args[] = {(char *)"cc", (char *)object_path, (char *)"-o", (char *)output, NULL}; execvp(args[0], args); _exit(127); }
-    int status = 0; if (waitpid(child, &status, 0) < 0) return 1; return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : 1;
-#else
-    (void)object_path; (void)output;
-    return 2;
-#endif
+static int write_linked_many(char *const *objects, size_t object_count, const char *output, CinderDiagnostics *diags);
+
+static char *owned_object_path(CinderDiagnostics *diags) {
+    const char *base = getenv("TMPDIR");
+    if (base == NULL || *base == '\0') base = "/tmp";
+    size_t length = strlen(base);
+    const char suffix[] = "/cinder-XXXXXX";
+    if (length > SIZE_MAX - sizeof(suffix) - sizeof("/unit.o")) return NULL;
+    char *path = cinder_alloc(length + sizeof(suffix) + sizeof("/unit.o"));
+    memcpy(path, base, length);
+    memcpy(path + length, suffix, sizeof(suffix));
+    if (mkdtemp(path) == NULL) {
+        cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "cannot create owned temporary directory: %s", strerror(errno));
+        free(path);
+        return NULL;
+    }
+    strcat(path, "/unit.o");
+    return path;
+}
+
+static void discard_object(char *path) {
+    if (path == NULL) return;
+    unlink(path);
+    char *slash = strrchr(path, '/');
+    if (slash != NULL) { *slash = '\0'; rmdir(path); }
+    free(path);
 }
 
 void cinder_print_help(FILE *out) {
@@ -45,8 +63,22 @@ int cinder_driver_run(const CinderOptions *options) {
     cinder_sources_init(&sources); cinder_diags_init(&diags); cinder_tokens_init(&tokens); cinder_types_init(&types);
     bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->dump_mir || options->dump_regalloc || options->interpret || options->explorer != NULL);
     int result = 1;
+    CinderOutput assembly_output = {0};
     if (cinder_preprocess(&sources, options->input, options->include_dirs, options->include_count, options->defines, options->define_count, &diags) != 0) goto done;
-    if (options->preprocess_only) { fputs(sources.preprocessed == NULL ? "" : sources.preprocessed, stdout); result = 0; goto done; }
+    if (options->preprocess_only) {
+        const char *text = sources.preprocessed == NULL ? "" : sources.preprocessed;
+        if (options->output == NULL || strcmp(options->output, "-") == 0) {
+            result = fputs(text, stdout) < 0 || fflush(stdout) != 0 ? 1 : 0;
+        } else {
+            CinderOutput output;
+            if (cinder_output_begin(&output, options->output, &diags) != 0) goto done;
+            if (fputs(text, output.stream) < 0) {
+                cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "cannot write preprocessed output");
+                cinder_output_abort(&output);
+            } else result = cinder_output_commit(&output, &diags);
+        }
+        goto done;
+    }
     if (cinder_lex(&sources, &tokens, &diags) != 0) goto done;
     if (options->dump_tokens) cinder_dump_tokens(&tokens, &sources, stdout);
     if (inspection_only && !options->dump_ast && !options->dump_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
@@ -71,8 +103,15 @@ int cinder_driver_run(const CinderOptions *options) {
     cinder_machine_init(&machine);
     if (cinder_lower_globals(&module, &machine, &diags) != 0) goto done_machine;
     FILE *assembly = NULL;
-    if (options->emit_assembly) { assembly = options->output == NULL || strcmp(options->output, "-") == 0 ? stdout : fopen(options->output, "w"); if (assembly == NULL) { cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "cannot open assembly output '%s': %s", options->output, strerror(errno)); goto done_machine; } }
+    if (options->emit_assembly) {
+        if (options->output == NULL || strcmp(options->output, "-") == 0) assembly = stdout;
+        else {
+            if (cinder_output_begin(&assembly_output, options->output, &diags) != 0) goto done_machine;
+            assembly = assembly_output.stream;
+        }
+    }
     for (size_t f = 0U; f < module.functions.len; ++f) {
+        if (cinder_mir_boundary(&module.functions.data[f], &diags) != 0) goto done_assembly;
         CinderAllocation allocation; cinder_alloc_init(&allocation, &module.functions.data[f]); if (cinder_allocate(&allocation, &diags) != 0 || cinder_verify_allocation(&allocation, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
         if (options->dump_regalloc) cinder_dump_regalloc(&allocation, stdout);
         if (cinder_lower_x86(&module.functions.data[f], &allocation, &machine, options->emit_assembly, assembly, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
@@ -82,23 +121,24 @@ int cinder_driver_run(const CinderOptions *options) {
         if (cinder_write_explorer(options->explorer, &tokens, &ast, &module, &machine, &diags) != 0) goto done_machine;
     }
     if (inspection_only) { result = 0; goto done_machine; }
-    if (options->emit_assembly) { if (assembly != stdout) fclose(assembly); assembly = NULL; result = 0; goto done_machine; }
+    if (options->emit_assembly) { result = assembly == stdout ? (fflush(stdout) != 0 ? 1 : 0) : cinder_output_commit(&assembly_output, &diags); assembly = NULL; goto done_machine; }
     const char *object_path = options->output == NULL ? default_object_name(options->input) : options->output;
     if (options->emit_object) {
         if (cinder_write_elf64(&machine, object_path, &diags) != 0) goto done_machine;
         result = 0;
     } else {
-        char temporary[4096]; int written = snprintf(temporary, sizeof(temporary), "/tmp/cinder-%ld.o", (long)getpid());
-        if (written <= 0 || (size_t)written >= sizeof(temporary) || cinder_write_elf64(&machine, temporary, &diags) != 0) goto done_machine;
-#if defined(__linux__)
-        const char *binary = options->output == NULL ? "a.out" : options->output; result = write_linked(temporary, binary); unlink(temporary);
-#else
-        cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "Linux x86-64 linking is unavailable on this host; use -c or -S for cross-target output"); result = 1; unlink(temporary);
-#endif
+        char *temporary = owned_object_path(&diags);
+        if (temporary == NULL) goto done_machine;
+        if (cinder_write_elf64(&machine, temporary, &diags) == 0) {
+            char *objects[] = {temporary};
+            result = write_linked_many(objects, 1U, options->output, &diags);
+        }
+        discard_object(temporary);
     }
 done_assembly:
-    if (assembly != NULL && assembly != stdout) fclose(assembly);
+    cinder_output_abort(&assembly_output);
 done_machine:
+    cinder_output_abort(&assembly_output);
     cinder_machine_destroy(&machine);
 done_ir:
     cinder_ir_destroy(&module);
@@ -113,26 +153,37 @@ done:
 }
 
 
-static int write_linked_many(char *const *objects, size_t object_count, const char *output) {
+static int write_linked_many(char *const *objects, size_t object_count, const char *output, CinderDiagnostics *diags) {
 #if defined(__linux__)
-    size_t argc = object_count + 4U;
-    char **args = cinder_alloc(argc * sizeof(*args));
+    CinderOutput publication;
+    const char *destination = output == NULL ? "a.out" : output;
+    if (cinder_output_begin(&publication, destination, diags) != 0) return 1;
+    if (cinder_output_seal(&publication, diags) != 0) { cinder_output_abort(&publication); return 1; }
+    if (object_count > SIZE_MAX / sizeof(char *) - 5U) { cinder_output_abort(&publication); return 1; }
+    char **args = cinder_alloc((object_count + 5U) * sizeof(*args));
     size_t index = 0U;
     args[index++] = (char *)"cc";
+    args[index++] = (char *)"-no-pie";
     for (size_t i = 0U; i < object_count; ++i) args[index++] = objects[i];
     args[index++] = (char *)"-o";
-    args[index++] = (char *)(output == NULL ? "a.out" : output);
+    args[index++] = publication.temporary;
     args[index] = NULL;
     pid_t child = fork();
-    if (child < 0) { free(args); return 1; }
     if (child == 0) { execvp(args[0], args); _exit(127); }
     int status = 0;
-    int result = waitpid(child, &status, 0) < 0 ? 1 : (WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : 1);
+    pid_t waited = -1;
+    if (child >= 0) do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
     free(args);
-    return result;
+    if (child < 0 || waited < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "system linker failed for '%s'", destination);
+        cinder_output_abort(&publication);
+        return 1;
+    }
+    return cinder_output_commit(&publication, diags);
 #else
     (void)objects; (void)object_count; (void)output;
-    return 2;
+    cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "Linux x86-64 linking is unavailable on this host; use -c or -S for cross-target output");
+    return 1;
 #endif
 }
 
@@ -176,20 +227,23 @@ static int cinder_driver_run_multi(const CinderOptions *options) {
         }
         return 0;
     }
+    CinderDiagnostics diags; cinder_diags_init(&diags);
     CINDER_VEC_TYPE(char *) objects = {NULL, 0U, 0U};
     for (size_t i = 0U; i < options->input_count; ++i) {
-        char temporary[4096];
-        int written = snprintf(temporary, sizeof(temporary), "/tmp/cinder-multi-%ld-%zu.o", (long)getpid(), i);
-        if (written <= 0 || (size_t)written >= sizeof(temporary)) { free(objects.data); return 1; }
-        char *path = cinder_strndup(temporary, (size_t)written);
+        char *path = owned_object_path(&diags);
+        if (path == NULL) {
+            for (size_t j = 0U; j < objects.len; ++j) discard_object(objects.data[j]);
+            free(objects.data); cinder_diags_destroy(&diags); return 1;
+        }
         cinder_vec_push((CinderVec *)&objects, &path);
         CinderOptions child = *options;
         child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U; child.output = path; child.emit_object = true;
-        if (cinder_driver_run(&child) != 0) { for (size_t j = 0U; j < objects.len; ++j) { unlink(objects.data[j]); free(objects.data[j]); } free(objects.data); return 1; }
+        if (cinder_driver_run(&child) != 0) { for (size_t j = 0U; j < objects.len; ++j) { discard_object(objects.data[j]); } free(objects.data); cinder_diags_destroy(&diags); return 1; }
     }
-    int result = write_linked_many(objects.data, objects.len, options->output);
-    if (result == 2) fprintf(stderr, "cindercc: Linux x86-64 linking is unavailable on this host; use -c or -S for cross-target output\n");
-    for (size_t i = 0U; i < objects.len; ++i) { unlink(objects.data[i]); free(objects.data[i]); }
+    int result = write_linked_many(objects.data, objects.len, options->output, &diags);
+    for (size_t i = 0U; i < diags.items.len; ++i) fprintf(stderr, "cindercc: %s\n", diags.items.data[i].message);
+    cinder_diags_destroy(&diags);
+    for (size_t i = 0U; i < objects.len; ++i) { discard_object(objects.data[i]); }
     free(objects.data);
     return result == 0 ? 0 : 1;
 }

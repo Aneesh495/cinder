@@ -13,6 +13,7 @@ set(CINDER_SOURCES
   source/buffer.c
   source/source.c
   source/diag.c
+  source/output.c
   source/token.c
   source/lex.c
   source/pp.c
@@ -36,7 +37,7 @@ set(CINDER_SOURCES
 add_executable(cindercc ${CINDER_SOURCES})
 target_include_directories(cindercc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
 target_compile_definitions(cindercc PRIVATE CINDER_VERSION=\"0.1.0\")
-target_compile_options(cindercc PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Werror=implicit-function-declaration)
+target_compile_options(cindercc PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Werror)
 if(CINDER_SANITIZE)
   target_compile_options(cindercc PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_link_options(cindercc PRIVATE -fsanitize=address,undefined)

@@ -30,18 +30,6 @@ static CinderValueId new_value(CinderIRFunction *function) {
     return (CinderValueId)function->value_count++;
 }
 
-static CinderIRInst add_inst(CinderIRFunction *function, CinderBlockId block_id, CinderIROp op, CinderLoc loc) {
-    CinderIRInst inst;
-    memset(&inst, 0, sizeof(inst));
-    inst.op = op; inst.dst = CINDER_INVALID_VALUE; inst.left = CINDER_INVALID_VALUE; inst.right = CINDER_INVALID_VALUE; inst.slot = -1; inst.loc = loc;
-    inst.args.data = NULL; inst.args.len = 0U; inst.args.cap = 0U;
-    inst.arg_floats.data = NULL; inst.arg_floats.len = 0U; inst.arg_floats.cap = 0U;
-    inst.phi_blocks.data = NULL; inst.phi_blocks.len = 0U; inst.phi_blocks.cap = 0U;
-    CinderIRBlock *block = block_at(function, block_id);
-    cinder_vec_push((CinderVec *)&block->instructions, &inst);
-    return inst;
-}
-
 static CinderIRInst *add_inst_ptr(CinderIRFunction *function, CinderBlockId block_id, CinderIROp op, CinderLoc loc) {
     CinderIRBlock *block = block_at(function, block_id);
     CinderIRInst inst;

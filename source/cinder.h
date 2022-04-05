@@ -103,6 +103,16 @@ void cinder_diags_destroy(CinderDiagnostics *diags);
 void cinder_diag(CinderDiagnostics *diags, CinderSeverity severity, CinderLoc loc, const char *fmt, ...);
 void cinder_diag_print(CinderDiagnostics *diags, CinderSourceManager *sources, FILE *out);
 
+typedef struct {
+    const char *destination;
+    char *temporary;
+    FILE *stream;
+} CinderOutput;
+int cinder_output_begin(CinderOutput *output, const char *path, CinderDiagnostics *diags);
+int cinder_output_seal(CinderOutput *output, CinderDiagnostics *diags);
+int cinder_output_commit(CinderOutput *output, CinderDiagnostics *diags);
+void cinder_output_abort(CinderOutput *output);
+
 /* ---------- preprocessing and tokens ---------- */
 typedef enum {
     TOK_EOF = 256,
@@ -619,6 +629,7 @@ void cinder_parallel_copy_init(CinderParallelCopyPlan *plan);
 void cinder_parallel_copy_destroy(CinderParallelCopyPlan *plan);
 int cinder_resolve_parallel_copies(const CinderValueId *sources, const CinderValueId *destinations, size_t count, CinderParallelCopyPlan *plan, CinderDiagnostics *diags);
 void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out);
+int cinder_mir_boundary(const CinderIRFunction *function, CinderDiagnostics *diags);
 
 /* ---------- x86-64 machine output ---------- */
 typedef struct {

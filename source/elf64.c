@@ -197,11 +197,15 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     header.e_type = 1U; header.e_machine = 62U; header.e_version = 1U; header.e_shoff = section_table_offset; header.e_ehsize = sizeof(ElfHeader); header.e_shentsize = sizeof(SectionHeader); header.e_shnum = CINDER_ARRAY_LEN(sections); header.e_shstrndx = 9U;
     write_at(&file, 0U, &header, sizeof(header));
 
-    FILE *output = fopen(path, "wb");
-    if (output == NULL) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "cannot create ELF object '%s': %s", path, strerror(errno)); goto failure; }
-    size_t written = fwrite(file.data, 1U, file.len, output);
-    int close_result = fclose(output);
-    if (written != file.len || close_result != 0) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "short write while publishing ELF object '%s'", path); goto failure; }
+    CinderOutput output;
+    if (cinder_output_begin(&output, path, diags) != 0) goto failure;
+    size_t written = fwrite(file.data, 1U, file.len, output.stream);
+    if (written != file.len) {
+        cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "short write while publishing ELF object '%s'", path);
+        cinder_output_abort(&output);
+        goto failure;
+    }
+    if (cinder_output_commit(&output, diags) != 0) goto failure;
     free(file.data); free(symbytes.data); free(strtab.data); free(shstrtab.data); free(relabytes.data); free(function_indices.data); free(data_indices.data); free(undefined_indices.data); for (size_t i = 0U; i < undefined.len; ++i) free(undefined.data[i]); free(undefined.data);
     return diags->errors == 0U ? 0 : 1;
 
