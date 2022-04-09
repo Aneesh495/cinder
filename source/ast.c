@@ -105,7 +105,10 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
         case EX_ASSIGN: fputs("assign\n", out); dump_expr(expr->as.assign.target, out, depth + 1U); dump_expr(expr->as.assign.value, out, depth + 1U); break;
         case EX_CALL:
             fprintf(out, "call : %s\n", cinder_type_name(expr->type)); dump_expr(expr->as.call.callee, out, depth + 1U);
-            for (size_t i = 0U; i < expr->as.call.args.len; ++i) dump_expr(expr->as.call.args.data[i], out, depth + 2U); break;
+            for (size_t i = 0U; i < expr->as.call.args.len; ++i) {
+                dump_expr(expr->as.call.args.data[i], out, depth + 2U);
+            }
+            break;
         case EX_VA_ARG: fprintf(out, "va_arg : %s\n", cinder_type_name(expr->as.va_arg.type)); dump_expr(expr->as.va_arg.list, out, depth + 1U); break;
         case EX_CONDITIONAL: fputs("conditional\n", out); dump_expr(expr->as.conditional.condition, out, depth + 1U); dump_expr(expr->as.conditional.yes, out, depth + 1U); dump_expr(expr->as.conditional.no, out, depth + 1U); break;
         case EX_CAST: fprintf(out, "cast %s\n", cinder_type_name(expr->as.cast.cast_type)); dump_expr(expr->as.cast.value, out, depth + 1U); break;
