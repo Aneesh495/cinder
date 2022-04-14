@@ -106,7 +106,7 @@ void cinder_dump_tokens(const CinderTokenStream *tokens, CinderSourceManager *so
         const CinderToken *token = &tokens->tokens.data[i];
         CinderLoc loc = token->loc;
         cinder_loc_linecol(sources, &loc);
-        fprintf(out, "%s:%u:%u: %-12s ", cinder_source_name(sources, loc.file), loc.line, loc.column, cinder_token_name(token->kind));
+        fprintf(out, "%s:%u:%u: %-12s ", cinder_loc_name(sources, loc), loc.line, loc.column, cinder_token_name(token->kind));
         if (token->kind >= 0 && token->kind < TOK_EOF) {
             fprintf(out, "'%c'", (char)token->kind);
         } else {

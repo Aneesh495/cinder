@@ -24,6 +24,7 @@ void cinder_diags_destroy(CinderDiagnostics *diags) {
 }
 
 void cinder_diag(CinderDiagnostics *diags, CinderSeverity severity, CinderLoc loc, const char *fmt, ...) {
+    if (fmt == NULL) fmt = "internal diagnostic format is missing";
     va_list args;
     va_start(args, fmt);
     va_list copy;
@@ -63,6 +64,15 @@ void cinder_diag_print(CinderDiagnostics *diags, CinderSourceManager *sources, F
         CinderDiagnostic *item = &diags->items.data[i];
         CinderLoc loc = item->loc;
         cinder_loc_linecol(sources, &loc);
-        fprintf(out, "%s:%u:%u: %s: %s\n", cinder_source_name(sources, loc.file), loc.line, loc.column, severity_name(item->severity), item->message);
+        fprintf(out, "%s:%u:%u: %s: %s\n", cinder_loc_name(sources, loc), loc.line, loc.column, severity_name(item->severity), item->message);
+        for (size_t p = 0U; p < sources->spans.len; ++p) {
+            const CinderSourceSpan *span = &sources->spans.data[p];
+            if (span->expansion.file == item->loc.file && span->expansion.offset == item->loc.offset && span->definition.file != CINDER_NO_FILE) {
+                CinderLoc definition = span->definition;
+                cinder_loc_linecol(sources, &definition);
+                fprintf(out, "%s:%u:%u: note: expanded from macro defined here\n", cinder_loc_name(sources, definition), definition.line, definition.column);
+                break;
+            }
+        }
     }
 }

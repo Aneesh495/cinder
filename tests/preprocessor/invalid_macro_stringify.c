@@ -1,0 +1,1 @@
+#define S(a) #other

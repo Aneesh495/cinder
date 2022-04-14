@@ -1,0 +1,13 @@
+flowchart LR
+    FILE[Immutable file bytes] --> SPLICE[Splice escaped newlines]
+    SPLICE --> TOKENS[Preprocessing tokens and physical ranges]
+    TOKENS --> DIRECTIVES[Per-file conditional state]
+    DIRECTIVES --> INCLUDE[Canonical include identities]
+    INCLUDE --> TOKENS
+    DIRECTIVES --> MACROS[Per-TU macro table]
+    MACROS --> ARGS[Raw arguments and argument prescan]
+    ARGS --> REPLACE[Substitution, stringification, placemarkers, pasting]
+    REPLACE --> HIDE[Hide sets and replacement rescanning]
+    HIDE --> SPANS[Rendered text with spelling and expansion spans]
+    SPANS --> LEX[Semantic tokens mapped to original sources]
+    LEX --> DIAG[Invocation diagnostic and definition note]

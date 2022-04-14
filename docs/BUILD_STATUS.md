@@ -60,10 +60,10 @@ The Linux workflow has now independently passed native x86-64 hello/globals exec
 The continuation checkout starts from `499914d`. The existing checks do not
 establish final compiler acceptance. `make test-apps` had no recipe and did no
 work. `make selfhost` only printed a version. `test-debug` only accepted `-g`.
-The machine boundary is a stub and its allocation locations are not consumed
-by the encoder. The preprocessor expands identifiers in literals, has no
-stringification or token pasting, and does not evaluate full conditional
-expressions. Required language and evidence families remain incomplete.
+The machine boundary is a stub. Allocation locations reach the encoder, but
+the allocator does not compute full CFG liveness or allocate SSE registers. The baseline preprocessor expanded identifiers in literals and lacked
+stringification, token pasting, and full conditional expressions. These
+preprocessor defects are repaired by the continuation increment below. Required language and evidence families remain incomplete.
 
 Current repair: strict warning-free host builds, removal of dead IR code,
 real application-target execution, atomic object/assembly/preprocessing output,
@@ -71,6 +71,23 @@ owned linking intermediates, and explicit non-PIE Linux linking. See
 `ADRs/0003-atomic-artifact-publication.md` and `diagrams/publication.mmd`.
 Validation: `make test-output` and the existing local behavior suite. Native
 Linux validation runs in the GitHub workflow after publication.
+
+## Token preprocessing increment
+
+Implemented: preprocessing tokens, immutable token hide sets, argument
+prescan, suffix rescanning, stringification, token pasting and placemarkers,
+variadic arguments, translation-phase splicing/comments, full conditional
+expressions with short-circuit evaluation, canonical includes, pragma-once,
+`_Pragma`, `#line`, target macros, deterministic source-date settings, and
+source spans linking semantic tokens to expansion/spelling/definition ranges.
+`make test-preprocessor` now runs 71 individually authored token/negative
+cases against the host C17 preprocessor and source-location checks. The
+existing smoke, frontend, object, globals, multi-TU, IR, float, varargs,
+application, and output-publication checks pass locally. Full nested macro
+backtraces, dependency output, and prefix mapping remain open.
+
+Strict Linux validation for `637406d` caught a GCC misleading-indentation
+warning in AST inspection. It was corrected and pushed as `237fb19`.
 
 ## Next action
 

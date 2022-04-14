@@ -56,6 +56,7 @@ void cinder_bytes_patch32(CinderBytes *bytes, size_t offset, uint32_t value) {
 }
 
 void cinder_bytes_append(CinderBytes *bytes, const unsigned char *data, size_t length) {
+    if (length == 0U) return;
     cinder_bytes_reserve(bytes, length);
     memcpy(bytes->data + bytes->len, data, length);
     bytes->len += length;
