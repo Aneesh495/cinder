@@ -1,0 +1,162 @@
+[
+  {
+    "source": "logical_and_skip.c",
+    "exit": 7
+  },
+  {
+    "source": "logical_or_skip.c",
+    "exit": 8
+  },
+  {
+    "source": "logical_and_normalize.c",
+    "exit": 1
+  },
+  {
+    "source": "logical_or_normalize.c",
+    "exit": 1
+  },
+  {
+    "source": "logical_nested.c",
+    "exit": 1
+  },
+  {
+    "source": "logical_nested_effects.c",
+    "exit": 10
+  },
+  {
+    "source": "logical_skipped_division.c",
+    "exit": 1
+  },
+  {
+    "source": "conditional_yes.c",
+    "exit": 14
+  },
+  {
+    "source": "conditional_no.c",
+    "exit": 38
+  },
+  {
+    "source": "conditional_nested.c",
+    "exit": 7
+  },
+  {
+    "source": "conditional_loop.c",
+    "exit": 5
+  },
+  {
+    "source": "conditional_return.c",
+    "exit": 11
+  },
+  {
+    "source": "for_step.c",
+    "exit": 10
+  },
+  {
+    "source": "for_continue.c",
+    "exit": 8
+  },
+  {
+    "source": "for_break.c",
+    "exit": 3
+  },
+  {
+    "source": "for_empty_condition.c",
+    "exit": 7
+  },
+  {
+    "source": "for_external_init.c",
+    "exit": 14
+  },
+  {
+    "source": "for_nested.c",
+    "exit": 12
+  },
+  {
+    "source": "do_once.c",
+    "exit": 8
+  },
+  {
+    "source": "do_continue.c",
+    "exit": 12
+  },
+  {
+    "source": "do_break.c",
+    "exit": 4
+  },
+  {
+    "source": "do_nested_while.c",
+    "exit": 12
+  },
+  {
+    "source": "while_continue.c",
+    "exit": 12
+  },
+  {
+    "source": "while_condition_effect.c",
+    "exit": 5
+  },
+  {
+    "source": "postfix_increment.c",
+    "exit": 15
+  },
+  {
+    "source": "postfix_decrement.c",
+    "exit": 13
+  },
+  {
+    "source": "prefix_increment.c",
+    "exit": 16
+  },
+  {
+    "source": "prefix_decrement.c",
+    "exit": 12
+  },
+  {
+    "source": "compound_add.c",
+    "exit": 20
+  },
+  {
+    "source": "compound_subtract.c",
+    "exit": 4
+  },
+  {
+    "source": "compound_multiply.c",
+    "exit": 21
+  },
+  {
+    "source": "compound_divide.c",
+    "exit": 7
+  },
+  {
+    "source": "compound_remainder.c",
+    "exit": 1
+  },
+  {
+    "source": "compound_bits.c",
+    "exit": 13
+  },
+  {
+    "source": "compound_shifts.c",
+    "exit": 14
+  },
+  {
+    "source": "comma_sequence.c",
+    "exit": 7
+  },
+  {
+    "source": "comma_for_step.c",
+    "exit": 8
+  },
+  {
+    "source": "logical_not.c",
+    "exit": 2
+  },
+  {
+    "source": "argument_comma.c",
+    "exit": 12
+  },
+  {
+    "source": "recursive_control.c",
+    "exit": 28
+  }
+]

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static CinderToken *peek(CinderAst *ast) { return &ast->tokens->tokens.data[ast->cursor]; }
+static CinderToken *peek(CinderAst *ast) { size_t i = ast->cursor < ast->tokens->tokens.len ? ast->cursor : ast->tokens->tokens.len - 1U; return &ast->tokens->tokens.data[i]; }
 static CinderToken *previous(CinderAst *ast) { return &ast->tokens->tokens.data[ast->cursor - 1U]; }
 static bool is(CinderAst *ast, CinderTokenKind kind) { return peek(ast)->kind == kind; }
 static bool take(CinderAst *ast, CinderTokenKind kind) { if (!is(ast, kind)) return false; ast->cursor++; return true; }
@@ -131,6 +131,7 @@ static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **nam
 }
 
 static CinderExpr *parse_expression(CinderAst *ast);
+static CinderExpr *parse_assignment(CinderAst *ast);
 
 static CinderExpr *parse_primary(CinderAst *ast) {
     CinderToken *token = peek(ast);
@@ -166,7 +167,7 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             call->as.call.callee = expr;
             call->as.call.args.data = NULL; call->as.call.args.len = 0U; call->as.call.args.cap = 0U;
             if (expr->kind == EX_NAME && strcmp(expr->as.name, "va_arg") == 0) {
-                CinderExpr *list = parse_expression(ast);
+                CinderExpr *list = parse_assignment(ast);
                 (void)expect(ast, ',', "','");
                 CinderType *argument_type = parse_type_specifier(ast);
                 (void)expect(ast, ')', "')'");
@@ -174,16 +175,16 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             }
             if (!is(ast, ')')) {
                 do {
-                    CinderExpr *arg = parse_expression(ast);
+                    CinderExpr *arg = parse_assignment(ast);
                     cinder_vec_push((CinderVec *)&call->as.call.args, &arg);
                 } while (take(ast, ','));
             }
             (void)expect(ast, ')', "')'");
             expr = call;
         } else if (take(ast, TOK_PLUSPLUS)) {
-            CinderExpr *unary = new_expr(ast, EX_UNARY, expr->loc); unary->as.unary.op = TOK_PLUSPLUS; unary->as.unary.value = expr; expr = unary;
+            CinderExpr *unary = new_expr(ast, EX_UNARY, expr->loc); unary->as.unary.op = TOK_PLUSPLUS; unary->as.unary.value = expr; unary->as.unary.postfix = true; expr = unary;
         } else if (take(ast, TOK_MINUSMINUS)) {
-            CinderExpr *unary = new_expr(ast, EX_UNARY, expr->loc); unary->as.unary.op = TOK_MINUSMINUS; unary->as.unary.value = expr; expr = unary;
+            CinderExpr *unary = new_expr(ast, EX_UNARY, expr->loc); unary->as.unary.op = TOK_MINUSMINUS; unary->as.unary.value = expr; unary->as.unary.postfix = true; expr = unary;
         } else break;
     }
     return expr;
@@ -233,10 +234,21 @@ static CinderExpr *parse_binary(CinderAst *ast, int minimum) {
     return left;
 }
 
+static CinderExpr *parse_conditional(CinderAst *ast) {
+    CinderExpr *condition = parse_binary(ast, 1);
+    if (!take(ast, '?')) return condition;
+    CinderExpr *expr = new_expr(ast, EX_CONDITIONAL, condition->loc);
+    expr->as.conditional.condition = condition;
+    expr->as.conditional.yes = parse_expression(ast);
+    (void)expect(ast, ':', "':'");
+    expr->as.conditional.no = parse_conditional(ast);
+    return expr;
+}
+
 static CinderExpr *parse_assignment(CinderAst *ast) {
-    CinderExpr *left = parse_binary(ast, 1);
+    CinderExpr *left = parse_conditional(ast);
     CinderTokenKind kind = peek(ast)->kind;
-    if (kind == '=' || kind == TOK_PLUSEQ || kind == TOK_MINUSEQ || kind == TOK_STAREQ || kind == TOK_SLASHEQ) {
+    if (kind == '=' || kind == TOK_PLUSEQ || kind == TOK_MINUSEQ || kind == TOK_STAREQ || kind == TOK_SLASHEQ || kind == TOK_PERCENTEQ || kind == TOK_ANDEQ || kind == TOK_OREQ || kind == TOK_XOREQ || kind == TOK_LSHIFT_EQ || kind == TOK_RSHIFT_EQ) {
         CinderToken *operator_token = &ast->tokens->tokens.data[ast->cursor++];
         CinderExpr *right = parse_assignment(ast);
         CinderExpr *assignment = new_expr(ast, EX_ASSIGN, operator_token->loc);
@@ -246,7 +258,17 @@ static CinderExpr *parse_assignment(CinderAst *ast) {
     return left;
 }
 
-static CinderExpr *parse_expression(CinderAst *ast) { return parse_assignment(ast); }
+static CinderExpr *parse_expression(CinderAst *ast) {
+    CinderExpr *expr = parse_assignment(ast);
+    while (take(ast, ',')) {
+        CinderExpr *comma = new_expr(ast, EX_BINARY, previous(ast)->loc);
+        comma->as.binary.op = ',';
+        comma->as.binary.left = expr;
+        comma->as.binary.right = parse_assignment(ast);
+        expr = comma;
+    }
+    return expr;
+}
 
 static CinderStmt *parse_statement(CinderAst *ast);
 
@@ -269,7 +291,7 @@ static CinderDecl *parse_local_decl(CinderAst *ast) {
     char *name = NULL; CinderLoc name_loc;
     CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
     CinderDecl *decl = new_decl(ast, DECL_VAR, loc); decl->name = name; decl->loc = name_loc; decl->type = type;
-    if (take(ast, '=')) decl->initializer = parse_expression(ast);
+    if (take(ast, '=')) decl->initializer = parse_assignment(ast);
     (void)expect(ast, ';', "';'");
     return decl;
 }
@@ -291,6 +313,16 @@ static CinderStmt *parse_statement(CinderAst *ast) {
     }
     if (take(ast, TOK_KW_WHILE)) {
         CinderStmt *stmt = new_stmt(ast, ST_WHILE, token->loc); (void)expect(ast, '(', "'('"); stmt->as.loop.condition = parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.loop.body = parse_statement(ast); return stmt;
+    }
+    if (take(ast, TOK_KW_DO)) {
+        CinderStmt *stmt = new_stmt(ast, ST_DO, token->loc);
+        stmt->as.loop.body = parse_statement(ast);
+        (void)expect(ast, TOK_KW_WHILE, "'while'");
+        (void)expect(ast, '(', "'('");
+        stmt->as.loop.condition = parse_expression(ast);
+        (void)expect(ast, ')', "')'");
+        (void)expect(ast, ';', "';'");
+        return stmt;
     }
     if (take(ast, TOK_KW_FOR)) {
         CinderStmt *stmt = new_stmt(ast, ST_FOR, token->loc); (void)expect(ast, '(', "'('");
@@ -328,7 +360,7 @@ int cinder_parse(CinderAst *ast) {
             if (is(ast, '{')) { decl->is_definition = true; decl->body = parse_compound(ast); }
             else (void)expect(ast, ';', "';'");
         } else {
-            if (take(ast, '=')) decl->initializer = parse_expression(ast);
+            if (take(ast, '=')) decl->initializer = parse_assignment(ast);
             (void)expect(ast, ';', "';'");
         }
         cinder_vec_push((CinderVec *)&ast->declarations, &decl);

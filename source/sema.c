@@ -68,11 +68,22 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
         case ST_DO:
             if (!numeric_type(sema_expr(sema, stmt->as.loop.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "loop condition must be scalar");
             sema_stmt(sema, stmt->as.loop.body, scope, return_type, loop_depth + 1U); break;
-        case ST_FOR:
-            if (stmt->as.for_stmt.init != NULL) sema_stmt(sema, stmt->as.for_stmt.init, scope, return_type, loop_depth);
-            if (stmt->as.for_stmt.condition != NULL && !numeric_type(sema_expr(sema, stmt->as.for_stmt.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "for condition must be scalar");
-            if (stmt->as.for_stmt.step != NULL) (void)sema_expr(sema, stmt->as.for_stmt.step, scope);
-            sema_stmt(sema, stmt->as.for_stmt.body, scope, return_type, loop_depth + 1U); break;
+        case ST_FOR: {
+            CinderScope child = {{NULL, 0U, 0U}, scope};
+            if (stmt->as.for_stmt.init != NULL) {
+                if (stmt->as.for_stmt.init->kind == ST_DECL) {
+                    CinderDecl *decl = stmt->as.for_stmt.init->as.decl;
+                    scope_add(&child, decl->name, decl->type, decl, false);
+                    if (decl->initializer != NULL) (void)sema_expr(sema, decl->initializer, &child);
+                } else sema_stmt(sema, stmt->as.for_stmt.init, &child, return_type, loop_depth);
+            }
+            if (stmt->as.for_stmt.condition != NULL && !numeric_type(sema_expr(sema, stmt->as.for_stmt.condition, &child))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "for condition must be scalar");
+            if (stmt->as.for_stmt.step != NULL) (void)sema_expr(sema, stmt->as.for_stmt.step, &child);
+            sema_stmt(sema, stmt->as.for_stmt.body, &child, return_type, loop_depth + 1U);
+            for (size_t i = 0U; i < child.symbols.len; ++i) free(child.symbols.data[i].name);
+            free(child.symbols.data);
+            break;
+        }
         case ST_BREAK:
         case ST_CONTINUE:
             if (loop_depth == 0U) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "break/continue is only valid inside a loop");
@@ -95,6 +106,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         }
         case EX_BINARY: {
             CinderType *left = sema_expr(sema, expr->as.binary.left, scope); CinderType *right = sema_expr(sema, expr->as.binary.right, scope);
+            if (expr->as.binary.op == ',') { expr->type = right; return right; }
             if (!numeric_type(left) || !numeric_type(right)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "operator requires arithmetic operands");
             expr->type = floating_type(left) || floating_type(right) ? sema->types->double_type : (cinder_type_compatible(left, right) ? left : sema->types->int_type); return expr->type;
         }

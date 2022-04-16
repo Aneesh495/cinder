@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-parallel-copy test-float test-varargs test-generated test-apps test-native-linux test-abi test-object test-debug fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-control test-parallel-copy test-float test-varargs test-generated test-apps test-native-linux test-abi test-object test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -32,6 +32,9 @@ test-preprocessor: build
 
 test-ir: build
 	@tests/run_ir.sh $(BUILD_DIR)/cindercc
+
+test-control: build
+	@python3 tests/test_control.py $(BUILD_DIR)/cindercc
 
 test-parallel-copy: build
 	@tests/run_parallel_copy.sh $(BUILD_DIR)/cindercc

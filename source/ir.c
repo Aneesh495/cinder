@@ -98,6 +98,112 @@ static CinderValueId lower_call(LowerContext *context, CinderExpr *expr) {
     return inst->dst;
 }
 
+static CinderBlockId create_block(LowerContext *context, const char *name) {
+    CinderIRBlock block = make_block(context->function, name);
+    CinderBlockId id = block.id;
+    cinder_vec_push((CinderVec *)&context->function->blocks, &block);
+    return id;
+}
+
+static CinderValueId emit_constant(LowerContext *context, int64_t value, CinderLoc loc) {
+    CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, loc);
+    inst->dst = new_value(context->function);
+    inst->integer = value;
+    return inst->dst;
+}
+
+static CinderValueId emit_operation(LowerContext *context, CinderIROp op, CinderValueId left, CinderValueId right, CinderLoc loc) {
+    CinderIRInst *inst = add_inst_ptr(context->function, context->current, op, loc);
+    inst->dst = new_value(context->function);
+    inst->left = left;
+    inst->right = right;
+    return inst->dst;
+}
+
+static void branch_to(LowerContext *context, CinderValueId condition, CinderBlockId yes, CinderBlockId no, CinderLoc loc) {
+    CinderIRBlock *block = block_at(context->function, context->current);
+    block->terminator.kind = TERM_BRANCH;
+    block->terminator.condition = condition;
+    block->terminator.yes = yes;
+    block->terminator.no = no;
+    block->terminator.loc = loc;
+    set_successor(context->function, context->current, yes);
+    set_successor(context->function, context->current, no);
+}
+
+static void ensure_block_jump(LowerContext *context, CinderBlockId target, CinderLoc loc);
+
+static CinderValueId lower_truth(LowerContext *context, CinderExpr *expr) {
+    CinderValueId value = lower_expr(context, expr);
+    CinderValueId zero;
+    bool floating = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
+    if (floating) {
+        CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_FCONST, expr->loc);
+        inst->dst = new_value(context->function);
+        inst->floating = 0.0;
+        zero = inst->dst;
+    } else zero = emit_constant(context, 0, expr->loc);
+    return emit_operation(context, floating ? IR_FCMP_NE : IR_CMP_NE, value, zero, expr->loc);
+}
+
+static void store_slot(LowerContext *context, int slot, CinderValueId value, CinderLoc loc) {
+    CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, loc);
+    store->left = value;
+    store->slot = slot;
+}
+
+static void store_name(LowerContext *context, CinderExpr *target, CinderValueId value, CinderLoc loc) {
+    if (target->kind != EX_NAME) {
+        cinder_diag(context->diags, CINDER_ERROR, loc, "address-based lvalue lowering is not implemented");
+        return;
+    }
+    int slot = find_local(context, target->as.name);
+    if (slot >= 0) store_slot(context, slot, value, loc);
+    else if (find_global_decl(context->function, target->as.name) != NULL) {
+        CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_GLOBAL_STORE, loc);
+        store->left = value;
+        store->callee = cinder_strndup(target->as.name, strlen(target->as.name));
+    } else cinder_diag(context->diags, CINDER_ERROR, loc, "unknown assignment storage");
+}
+
+static CinderValueId lower_choice(LowerContext *context, CinderExpr *condition, CinderExpr *yes, CinderExpr *no, bool logical, bool conjunction, CinderLoc loc) {
+    int slot = (int)context->function->local_count++;
+    CinderValueId test = lower_truth(context, condition);
+    CinderBlockId yes_block = create_block(context, "choice.yes");
+    CinderBlockId no_block = create_block(context, "choice.no");
+    CinderBlockId merge = create_block(context, "choice.merge");
+    branch_to(context, test, yes_block, no_block, loc);
+    context->current = yes_block;
+    CinderValueId yes_value = logical ? (conjunction ? lower_truth(context, yes) : emit_constant(context, 1, loc)) : lower_expr(context, yes);
+    store_slot(context, slot, yes_value, loc);
+    ensure_block_jump(context, merge, loc);
+    context->current = no_block;
+    CinderValueId no_value = logical ? (conjunction ? emit_constant(context, 0, loc) : lower_truth(context, no)) : lower_expr(context, no);
+    store_slot(context, slot, no_value, loc);
+    ensure_block_jump(context, merge, loc);
+    context->current = merge;
+    CinderIRInst *load = add_inst_ptr(context->function, merge, IR_LOCAL_LOAD, loc);
+    load->dst = new_value(context->function);
+    load->slot = slot;
+    return load->dst;
+}
+
+static CinderIROp compound_operation(int op, bool floating, bool unsig) {
+    switch (op) {
+        case TOK_PLUSEQ: return floating ? IR_FADD : IR_ADD;
+        case TOK_MINUSEQ: return floating ? IR_FSUB : IR_SUB;
+        case TOK_STAREQ: return floating ? IR_FMUL : IR_MUL;
+        case TOK_SLASHEQ: return floating ? IR_FDIV : (unsig ? IR_DIV_U : IR_DIV_S);
+        case TOK_PERCENTEQ: return unsig ? IR_MOD_U : IR_MOD_S;
+        case TOK_ANDEQ: return IR_BIT_AND;
+        case TOK_OREQ: return IR_BIT_OR;
+        case TOK_XOREQ: return IR_BIT_XOR;
+        case TOK_LSHIFT_EQ: return IR_SHL;
+        case TOK_RSHIFT_EQ: return unsig ? IR_SHR_U : IR_SHR_S;
+        default: return IR_COPY;
+    }
+}
+
 static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
     if (expr == NULL) return CINDER_INVALID_VALUE;
     if (expr->kind == EX_INT || expr->kind == EX_CHAR) {
@@ -121,18 +227,17 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_VA_ARG, expr->loc); inst->dst = new_value(context->function); inst->slot = (int)(context->function->params.len + context->va_index++); return inst->dst;
     }
     if (expr->kind == EX_CALL) return lower_call(context, expr);
+    if (expr->kind == EX_CONDITIONAL) return lower_choice(context, expr->as.conditional.condition, expr->as.conditional.yes, expr->as.conditional.no, false, false, expr->loc);
     if (expr->kind == EX_ASSIGN) {
+        CinderValueId previous = CINDER_INVALID_VALUE;
+        if (expr->as.assign.op != '=') previous = lower_expr(context, expr->as.assign.target);
         CinderValueId value = lower_expr(context, expr->as.assign.value);
-        if (expr->as.assign.target->kind == EX_NAME) {
-            int slot = find_local(context, expr->as.assign.target->as.name);
-            if (slot >= 0) {
-                CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, expr->loc);
-                store->left = value; store->slot = slot;
-            } else if (find_global_decl(context->function, expr->as.assign.target->as.name) != NULL) {
-                CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_GLOBAL_STORE, expr->loc);
-                store->left = value; store->callee = cinder_strndup(expr->as.assign.target->as.name, strlen(expr->as.assign.target->as.name));
-            }
+        if (expr->as.assign.op != '=') {
+            bool floating = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
+            bool unsig = expr->type != NULL && expr->type->is_unsigned;
+            value = emit_operation(context, compound_operation(expr->as.assign.op, floating, unsig), previous, value, expr->loc);
         }
+        store_name(context, expr->as.assign.target, value, expr->loc);
         return value;
     }
     if (expr->kind == EX_UNARY) {
@@ -142,17 +247,28 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
             CinderValueId one_value = new_value(context->function);
             CinderIRInst *one = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); one->dst = one_value; one->integer = 1;
             CinderIRInst *add = add_inst_ptr(context->function, context->current, op == TOK_PLUSPLUS ? IR_ADD : IR_SUB, expr->loc); add->dst = new_value(context->function); add->left = old; add->right = one_value; add->loc = expr->loc;
-            if (expr->as.unary.value->kind == EX_NAME) {
-                int slot = find_local(context, expr->as.unary.value->as.name);
-                if (slot >= 0) { CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, expr->loc); store->left = add->dst; store->slot = slot; }
-            }
-            return add->dst;
+            CinderValueId updated = add->dst;
+            store_name(context, expr->as.unary.value, updated, expr->loc);
+            return expr->as.unary.postfix ? old : updated;
+        }
+        if (op == '!') {
+            CinderValueId truth = lower_truth(context, expr->as.unary.value);
+            CinderValueId zero = emit_constant(context, 0, expr->loc);
+            return emit_operation(context, IR_CMP_EQ, truth, zero, expr->loc);
+        }
+        if (op == '&' || op == '*') {
+            cinder_diag(context->diags, CINDER_ERROR, expr->loc, "pointer address lowering is not implemented");
+            return CINDER_INVALID_VALUE;
         }
         CinderValueId value = lower_expr(context, expr->as.unary.value);
         CinderIROp ir_op = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE) && op == '-' ? IR_FNEG : (op == '-' ? IR_NEG : (op == '~' ? IR_BIT_NOT : IR_COPY));
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, ir_op, expr->loc); inst->dst = new_value(context->function); inst->left = value; return inst->dst;
     }
     if (expr->kind == EX_BINARY) {
+        int operator_code = expr->as.binary.op;
+        if (operator_code == TOK_ANDAND || operator_code == TOK_OROR)
+            return lower_choice(context, expr->as.binary.left, expr->as.binary.right, expr->as.binary.right, true, operator_code == TOK_ANDAND, expr->loc);
+        if (operator_code == ',') { (void)lower_expr(context, expr->as.binary.left); return lower_expr(context, expr->as.binary.right); }
         CinderValueId left = lower_expr(context, expr->as.binary.left); CinderValueId right = lower_expr(context, expr->as.binary.right);
         if (expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE)) {
             CinderIROp fp_op = IR_FADD;
@@ -171,6 +287,7 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
     if (expr->kind == EX_SIZEOF) {
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); inst->dst = new_value(context->function); inst->integer = expr->as.unary.value->type == NULL ? 0 : (int64_t)expr->as.unary.value->type->size; return inst->dst;
     }
+    cinder_diag(context->diags, CINDER_ERROR, expr->loc, "expression lowering is not implemented for this source construct");
     return CINDER_INVALID_VALUE;
 }
 
@@ -193,17 +310,21 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             break;
         }
         case ST_RETURN: {
+            CinderValueId value = stmt->as.ret.value == NULL ? CINDER_INVALID_VALUE : lower_expr(context, stmt->as.ret.value);
             CinderIRBlock *block = block_at(context->function, context->current);
-            block->terminator.kind = TERM_RETURN; block->terminator.value = stmt->as.ret.value == NULL ? CINDER_INVALID_VALUE : lower_expr(context, stmt->as.ret.value); block->terminator.loc = stmt->loc; break;
+            block->terminator.kind = TERM_RETURN; block->terminator.value = value; block->terminator.loc = stmt->loc; break;
         }
-        case ST_BLOCK:
+        case ST_BLOCK: {
+            size_t scope_mark = context->locals.len;
             for (size_t i = 0U; i < stmt->as.block.items.len; ++i) {
                 lower_stmt(context, stmt->as.block.items.data[i]);
                 if (block_at(context->function, context->current)->terminator.kind != TERM_UNREACHABLE) break;
             }
+            context->locals.len = scope_mark;
             break;
+        }
         case ST_IF: {
-            CinderValueId condition = lower_expr(context, stmt->as.if_stmt.condition);
+            CinderValueId condition = lower_truth(context, stmt->as.if_stmt.condition);
             CinderBlockId then_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock then_block = make_block(context->function, "then"); cinder_vec_push((CinderVec *)&context->function->blocks, &then_block);
             CinderBlockId else_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock else_block = make_block(context->function, "else"); cinder_vec_push((CinderVec *)&context->function->blocks, &else_block);
             CinderBlockId merge_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock merge_block = make_block(context->function, "merge"); cinder_vec_push((CinderVec *)&context->function->blocks, &merge_block);
@@ -212,23 +333,41 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             context->current = else_id; lower_stmt(context, stmt->as.if_stmt.else_branch); ensure_block_jump(context, merge_id, stmt->loc);
             context->current = merge_id; break;
         }
-        case ST_WHILE: {
-            CinderBlockId cond_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock cond = make_block(context->function, "loop.cond"); cinder_vec_push((CinderVec *)&context->function->blocks, &cond);
-            CinderBlockId body_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock body = make_block(context->function, "loop.body"); cinder_vec_push((CinderVec *)&context->function->blocks, &body);
-            CinderBlockId after_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock after = make_block(context->function, "loop.after"); cinder_vec_push((CinderVec *)&context->function->blocks, &after);
-            ensure_block_jump(context, cond_id, stmt->loc); context->current = cond_id; CinderValueId condition = lower_expr(context, stmt->as.loop.condition); CinderIRBlock *condition_block = block_at(context->function, cond_id); condition_block->terminator.kind = TERM_BRANCH; condition_block->terminator.condition = condition; condition_block->terminator.yes = body_id; condition_block->terminator.no = after_id; condition_block->terminator.loc = stmt->loc; set_successor(context->function, cond_id, body_id); set_successor(context->function, cond_id, after_id);
-            cinder_vec_push((CinderVec *)&context->break_blocks, &after_id); cinder_vec_push((CinderVec *)&context->continue_blocks, &cond_id); context->current = body_id; lower_stmt(context, stmt->as.loop.body); ensure_block_jump(context, cond_id, stmt->loc); context->break_blocks.len--; context->continue_blocks.len--; context->current = after_id; break;
-        }
+        case ST_WHILE:
+        case ST_DO:
         case ST_FOR: {
-            lower_stmt(context, stmt->as.for_stmt.init);
-            CinderStmt fake; memset(&fake, 0, sizeof(fake)); fake.kind = ST_WHILE; fake.loc = stmt->loc; fake.as.loop.condition = stmt->as.for_stmt.condition; fake.as.loop.body = stmt->as.for_stmt.body;
-            lower_stmt(context, &fake);
-            (void)stmt->as.for_stmt.step;
+            bool for_loop = stmt->kind == ST_FOR;
+            bool do_loop = stmt->kind == ST_DO;
+            size_t scope_mark = context->locals.len;
+            if (for_loop) lower_stmt(context, stmt->as.for_stmt.init);
+            CinderExpr *condition = for_loop ? stmt->as.for_stmt.condition : stmt->as.loop.condition;
+            CinderStmt *body = for_loop ? stmt->as.for_stmt.body : stmt->as.loop.body;
+            CinderBlockId cond_id = create_block(context, "loop.cond");
+            CinderBlockId body_id = create_block(context, "loop.body");
+            CinderBlockId step_id = for_loop ? create_block(context, "loop.step") : cond_id;
+            CinderBlockId after_id = create_block(context, "loop.after");
+            ensure_block_jump(context, do_loop ? body_id : cond_id, stmt->loc);
+            context->current = cond_id;
+            CinderValueId test = condition == NULL ? emit_constant(context, 1, stmt->loc) : lower_truth(context, condition);
+            branch_to(context, test, body_id, after_id, stmt->loc);
+            cinder_vec_push((CinderVec *)&context->break_blocks, &after_id);
+            cinder_vec_push((CinderVec *)&context->continue_blocks, &step_id);
+            context->current = body_id;
+            lower_stmt(context, body);
+            ensure_block_jump(context, step_id, stmt->loc);
+            if (for_loop) {
+                context->current = step_id;
+                (void)lower_expr(context, stmt->as.for_stmt.step);
+                ensure_block_jump(context, cond_id, stmt->loc);
+            }
+            --context->break_blocks.len;
+            --context->continue_blocks.len;
+            context->locals.len = scope_mark;
+            context->current = after_id;
             break;
         }
         case ST_BREAK: if (context->break_blocks.len > 0U) { CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->break_blocks.data[context->break_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
         case ST_CONTINUE: if (context->continue_blocks.len > 0U) { CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->continue_blocks.data[context->continue_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
-        case ST_DO: break;
     }
 }
 

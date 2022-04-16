@@ -187,7 +187,7 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
             CinderIRInst *new_data = cinder_alloc((block->instructions.len + 1U) * sizeof(*new_data));
             new_data[0] = phi;
             memcpy(new_data + 1U, old, block->instructions.len * sizeof(*old));
-            free(old); block->instructions.data = new_data; block->instructions.len++;
+            free(old); block->instructions.data = new_data; block->instructions.len++; block->instructions.cap = block->instructions.len;
             CinderValueId value = phi.dst;
             bool current = true;
             for (size_t i = 1U; i < block->instructions.len; ++i) {
