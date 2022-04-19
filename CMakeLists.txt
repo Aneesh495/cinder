@@ -31,6 +31,8 @@ set(CINDER_SOURCES
   source/opt.c
   source/mir.c
   source/regalloc.c
+  source/liveness.c
+  source/alloc_check.c
   source/x86_64.c
   source/elf64.c
   source/driver.c

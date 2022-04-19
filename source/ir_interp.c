@@ -81,7 +81,10 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
                     size_t incoming = SIZE_MAX;
                     for (size_t p = 0U; p < inst->phi_blocks.len; ++p) if (inst->phi_blocks.data[p] == previous_block) incoming = p;
                     if (incoming == SIZE_MAX || incoming >= inst->args.len) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter reached a phi without a matching predecessor"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; }
-                    values[inst->dst] = values[inst->args.data[incoming]];
+                    CinderValueId source = inst->args.data[incoming];
+                    value_is_float[inst->dst] = value_is_float[source];
+                    if (value_is_float[source]) float_values[inst->dst] = float_values[source];
+                    else values[inst->dst] = values[source];
                     break;
                 }
                 case IR_FNEG: float_values[inst->dst] = -float_values[inst->left]; value_is_float[inst->dst] = true; break;

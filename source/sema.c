@@ -108,12 +108,14 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             CinderType *left = sema_expr(sema, expr->as.binary.left, scope); CinderType *right = sema_expr(sema, expr->as.binary.right, scope);
             if (expr->as.binary.op == ',') { expr->type = right; return right; }
             if (!numeric_type(left) || !numeric_type(right)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "operator requires arithmetic operands");
-            expr->type = floating_type(left) || floating_type(right) ? sema->types->double_type : (cinder_type_compatible(left, right) ? left : sema->types->int_type); return expr->type;
+            int op = expr->as.binary.op;
+            bool comparison = op == TOK_EQEQ || op == TOK_NEQ || op == '<' || op == '>' || op == TOK_LE || op == TOK_GE || op == TOK_ANDAND || op == TOK_OROR;
+            expr->type = comparison ? sema->types->int_type : floating_type(left) || floating_type(right) ? sema->types->double_type : (cinder_type_compatible(left, right) ? left : sema->types->int_type); return expr->type;
         }
         case EX_UNARY: {
             CinderType *value = sema_expr(sema, expr->as.unary.value, scope);
             if ((expr->as.unary.op == '&' || expr->as.unary.op == TOK_PLUSPLUS || expr->as.unary.op == TOK_MINUSMINUS) && !expr->as.unary.value->is_lvalue) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "unary operator requires an assignable lvalue");
-            if (expr->as.unary.op == '&') expr->type = cinder_type_pointer(sema->types, value); else if (expr->as.unary.op == '*') { if (value->kind != TYPE_POINTER) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "cannot dereference a non-pointer"); expr->type = value->kind == TYPE_POINTER ? value->base : sema->types->error_type; expr->is_lvalue = true; } else expr->type = value;
+            if (expr->as.unary.op == '&') expr->type = cinder_type_pointer(sema->types, value); else if (expr->as.unary.op == '*') { if (value->kind != TYPE_POINTER) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "cannot dereference a non-pointer"); expr->type = value->kind == TYPE_POINTER ? value->base : sema->types->error_type; expr->is_lvalue = true; } else expr->type = expr->as.unary.op == '!' ? sema->types->int_type : value;
             return expr->type;
         }
         case EX_ASSIGN: {

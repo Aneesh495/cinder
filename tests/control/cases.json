@@ -158,5 +158,53 @@
   {
     "source": "recursive_control.c",
     "exit": 28
+  },
+  {
+    "source": "integer_eight_arguments.c",
+    "exit": 0
+  },
+  {
+    "source": "float_three_arguments.c",
+    "exit": 0
+  },
+  {
+    "source": "float_ten_arguments.c",
+    "exit": 0
+  },
+  {
+    "source": "mixed_argument_registers.c",
+    "exit": 0
+  },
+  {
+    "source": "float_across_call.c",
+    "exit": 0
+  },
+  {
+    "source": "float_local_phi.c",
+    "exit": 0
+  },
+  {
+    "source": "float_conditional.c",
+    "exit": 0
+  },
+  {
+    "source": "float_negative_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "float_nan_ordering.c",
+    "exit": 0
+  },
+  {
+    "source": "float_nan_truth.c",
+    "exit": 0
+  },
+  {
+    "source": "float_comparison_composition.c",
+    "exit": 17
+  },
+  {
+    "source": "live_integer_call.c",
+    "exit": 0
   }
 ]

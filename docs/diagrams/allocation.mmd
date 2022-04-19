@@ -1,0 +1,10 @@
+flowchart LR
+    CFG[Typed CFG] --> Sets[Use and def sets]
+    Sets --> Live[Fixed point liveness]
+    Live --> Intervals[Conservative intervals]
+    Intervals --> Scan[Linear scan]
+    Scan --> Physical[Registers and spill slots]
+    Physical --> Encoder[Machine encoding]
+    CFG --> Backward[Independent backward transfer]
+    Physical --> Check[Interference and clobber checks]
+    Backward --> Check

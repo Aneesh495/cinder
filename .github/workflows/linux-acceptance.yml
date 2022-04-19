@@ -18,7 +18,7 @@ jobs:
       - name: Build
         run: make build
       - name: Frontend and object checks
-        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-control test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
+        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-control test-allocation test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
       - name: Native Linux execution
         run: tests/run_native_linux.sh build/cindercc
       - name: Sanitizer build
@@ -34,5 +34,6 @@ jobs:
             .agent-local/evidence
             .agent-local/generated-summary.json
             .agent-local/control
+            .agent-local/allocation
             build
           if-no-files-found: ignore
