@@ -35,6 +35,7 @@ set(CINDER_SOURCES
   source/alloc_check.c
   source/x86_64.c
   source/elf64.c
+  source/assembly.c
   source/driver.c
   source/inspect.c
 )

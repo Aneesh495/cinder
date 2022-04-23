@@ -63,6 +63,9 @@ test-abi: build
 test-object: build
 	@tests/run_object.sh $(BUILD_DIR)/cindercc
 
+test-object-campaign: build
+	@python3 tests/test_objects.py $(BUILD_DIR)/cindercc --count 1000
+
 test-output: build
 	@python3 tests/run_output.py $(BUILD_DIR)/cindercc
 

@@ -3,11 +3,25 @@
 #include <limits.h>
 #include <stdlib.h>
 
-static bool fold(CinderIROp op, int64_t left, int64_t right, int64_t *out) {
+static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t *out) {
+    CinderIROp op = inst->op;
+    bool unsig = inst->type != NULL && inst->type->is_unsigned;
     switch (op) {
-        case IR_ADD: *out = left + right; return true;
-        case IR_SUB: *out = left - right; return true;
-        case IR_MUL: *out = left * right; return true;
+        case IR_ADD:
+            if (!unsig && ((right > 0 && left > INT64_MAX - right) || (right < 0 && left < INT64_MIN - right))) return false;
+            *out = (int64_t)((uint64_t)left + (uint64_t)right); return true;
+        case IR_SUB:
+            if (!unsig && ((right < 0 && left > INT64_MAX + right) || (right > 0 && left < INT64_MIN + right))) return false;
+            *out = (int64_t)((uint64_t)left - (uint64_t)right); return true;
+        case IR_MUL:
+            if (!unsig && left != 0 && right != 0) {
+                if (left > 0) {
+                    if ((right > 0 && left > INT64_MAX / right) || (right < 0 && right < INT64_MIN / left)) return false;
+                } else {
+                    if ((right > 0 && left < INT64_MIN / right) || (right < 0 && left < INT64_MAX / right)) return false;
+                }
+            }
+            *out = (int64_t)((uint64_t)left * (uint64_t)right); return true;
         case IR_BIT_AND: *out = left & right; return true;
         case IR_BIT_OR: *out = left | right; return true;
         case IR_BIT_XOR: *out = left ^ right; return true;
@@ -41,16 +55,17 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
                 if (inst->op == IR_COPY && known[inst->left]) { inst->op = IR_CONST; inst->integer = constant[inst->left]; inst->left = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = inst->integer; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
                 if (inst->right != CINDER_INVALID_VALUE && known[inst->left] && known[inst->right]) {
                     int64_t result = 0;
-                    if (fold(inst->op, constant[inst->left], constant[inst->right], &result)) { inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
+                    if (fold(inst, constant[inst->left], constant[inst->right], &result)) { inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
                 }
                 if (inst->dst != CINDER_INVALID_VALUE) known[inst->dst] = false;
             }
         }
-        if (changed_function) stats->functions_changed++;
-        stats->memory_forwarded += cinder_forward_local_memory(function);
-        stats->dead_instructions_removed += cinder_remove_dead_ir(function);
-        stats->instructions_changed += stats->dead_instructions_removed;
-        if (stats->memory_forwarded != 0U || stats->dead_instructions_removed != 0U) stats->functions_changed++;
+        unsigned forwarded = cinder_forward_local_memory(function);
+        unsigned dead = cinder_remove_dead_ir(function);
+        stats->memory_forwarded += forwarded;
+        stats->dead_instructions_removed += dead;
+        stats->instructions_changed += forwarded + dead;
+        if (changed_function || forwarded != 0U || dead != 0U) stats->functions_changed++;
         free(known); free(constant);
     }
     return 0;
