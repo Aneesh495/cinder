@@ -214,6 +214,9 @@ typedef struct {
     int64_t integer;
     bool is_floating;
     double floating;
+    bool number_unsigned;
+    unsigned number_rank;
+    bool number_float32;
 } CinderToken;
 
 typedef struct {
@@ -226,6 +229,7 @@ void cinder_tokens_init(CinderTokenStream *tokens);
 void cinder_tokens_destroy(CinderTokenStream *tokens);
 int cinder_preprocess(CinderSourceManager *sources, const char *path, const char *const *include_dirs, size_t include_count, const char *const *defines, size_t define_count, CinderDiagnostics *diags);
 int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDiagnostics *diags);
+int cinder_parse_number(CinderToken *token, CinderDiagnostics *diags);
 const char *cinder_token_name(CinderTokenKind kind);
 void cinder_dump_tokens(const CinderTokenStream *tokens, CinderSourceManager *sources, FILE *out);
 

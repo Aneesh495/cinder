@@ -1,76 +1,684 @@
 {
-  "schema": 1,
+  "schema": 2,
   "profile": "c17-core",
   "families": [
     {
       "id": "C01",
-      "name": "translation-units-and-includes",
-      "status": "partial"
+      "name": "Translation units and includes",
+      "required_boundary": "Actual multi-file preprocessing and linkage",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C02",
-      "name": "object-and-function-macros",
-      "status": "partial"
+      "name": "Object/function/variadic macros",
+      "required_boundary": "Expansion order, recursion control, #, and ##",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C03",
-      "name": "conditional-preprocessing",
-      "status": "partial"
+      "name": "Conditional preprocessing",
+      "required_boundary": "Short-circuit evaluation and inactive branches",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C04",
-      "name": "integer-types-and-literals",
-      "status": "partial"
+      "name": "Integer types and literals",
+      "required_boundary": "Ranks, signedness, suffixes, range diagnostics",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/literal_decimal_rank.c",
+        "tests/control/literal_unsigned_max.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [
+        "tests/numeric/invalid-00.c",
+        "tests/numeric/invalid-01.c",
+        "tests/numeric/invalid-02.c",
+        "tests/numeric/invalid-03.c",
+        "tests/numeric/invalid-04.c",
+        "tests/numeric/invalid-05.c",
+        "tests/numeric/invalid-06.c",
+        "tests/numeric/invalid-07.c",
+        "tests/numeric/invalid-08.c",
+        "tests/numeric/invalid-09.c",
+        "tests/numeric/invalid-10.c",
+        "tests/numeric/invalid-11.c",
+        "tests/numeric/invalid-12.c",
+        "tests/numeric/invalid-13.c",
+        "tests/numeric/invalid-14.c",
+        "tests/numeric/invalid-15.c",
+        "tests/numeric/invalid-16.c"
+      ],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C05",
+      "name": "Float/double",
+      "required_boundary": "Literal conversion, arithmetic, comparisons, NaN cases",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/float_nan_ordering.c",
+        "tests/control/float_negative_zero.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C06",
+      "name": "Character/string literals",
+      "required_boundary": "Escapes, concatenation, array type and storage",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C07",
-      "name": "pointer-types-and-qualifiers",
-      "status": "partial"
+      "name": "Pointer types and qualifiers",
+      "required_boundary": "Conversion rules, null constants, compatible types",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C08",
+      "name": "Array declarations",
+      "required_boundary": "Bounds, decay exceptions, incomplete arrays",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C09",
-      "name": "function-declarators",
-      "status": "partial"
+      "name": "Function declarators",
+      "required_boundary": "Function pointers and nested pointer/array binding",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C10",
-      "name": "typedef-names",
-      "status": "planned"
+      "name": "Typedef names",
+      "required_boundary": "Namespace/scope and shadowing",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C11",
+      "name": "Structures",
+      "required_boundary": "Field access, alignment, padding, copy, passing/returning",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C12",
+      "name": "Unions",
+      "required_boundary": "Layout and supported legal access semantics",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C13",
+      "name": "Bitfields",
+      "required_boundary": "Width, signedness, storage units, zero-width boundaries",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C14",
+      "name": "Enumerations",
+      "required_boundary": "Constant values, references, representation policy",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C15",
+      "name": "Storage duration/linkage",
+      "required_boundary": "automatic/static/extern, tentative definitions",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C16",
+      "name": "Const/volatile/restrict",
+      "required_boundary": "Qualified types and conservative optimization semantics",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C17",
-      "name": "lvalues-and-rvalues",
-      "status": "partial"
+      "name": "Lvalues/rvalues",
+      "required_boundary": "Addressability, modification rules, and conversions",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C18",
+      "name": "Integer promotions",
+      "required_boundary": "Small types, enum/bitfield policy, mixed ranks",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C19",
+      "name": "Arithmetic conversions",
+      "required_boundary": "Signed/unsigned mixes and float conversions",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C20",
+      "name": "Assignment/compound assignment",
+      "required_boundary": "Single lvalue evaluation and correct result",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/compound_remainder.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C21",
+      "name": "Increment/decrement",
+      "required_boundary": "Prefix/postfix effects and sequencing",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/postfix_increment.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C22",
-      "name": "arithmetic-and-bitwise-operators",
-      "status": "partial"
+      "name": "Arithmetic/bitwise operators",
+      "required_boundary": "Width, shift/division boundaries, unsigned wrap",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C23",
+      "name": "Short-circuit operators",
+      "required_boundary": "Observable side effects and CFG lowering",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/logical_nested_effects.c",
+        "tests/control/logical_skipped_division.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C24",
+      "name": "Conditional expression",
+      "required_boundary": "Type rules and selected-branch evaluation",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/conditional_nested.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C25",
+      "name": "Comma/casts",
+      "required_boundary": "Sequencing, explicit conversion, invalid-cast diagnostics",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/comma_sequence.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C26",
+      "name": "sizeof/alignment",
+      "required_boundary": "Unevaluated operands and target layout",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C27",
+      "name": "Initializers",
+      "required_boundary": "Scalar, nested aggregate, string, and zero filling",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C28",
+      "name": "Designated initializers",
+      "required_boundary": "Field/index designators, overrides, bounds",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C29",
+      "name": "Compound literals",
+      "required_boundary": "Scope/lifetime and aggregate addresses",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C30",
+      "name": "Static initialization",
+      "required_boundary": "Constant expressions, addresses, and relocations",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C31",
-      "name": "if-else",
-      "status": "partial"
+      "name": "If/else",
+      "required_boundary": "Correct branch effects and return paths",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/conditional_return.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C32",
-      "name": "loops",
-      "status": "partial"
+      "name": "For/while/do loops",
+      "required_boundary": "Continue targets, nesting, and scoped declarations",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/for_continue.c",
+        "tests/control/do_continue.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C33",
+      "name": "Switch/case/default",
+      "required_boundary": "Duplicate labels, fallthrough, dispatch",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C34",
+      "name": "Break/continue",
+      "required_boundary": "Legal contexts and target resolution",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/for_break.c",
+        "tests/control/while_continue.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C35",
+      "name": "Labels/goto",
+      "required_boundary": "Scope, duplicate/undefined labels, CFG",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C36",
-      "name": "calls-and-recursion",
-      "status": "partial"
+      "name": "Calls and recursion",
+      "required_boundary": "Direct/indirect calls, argument conversions, stack frames",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/recursive_control.c",
+        "tests/control/integer_eight_arguments.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C37",
+      "name": "Variadic calls/functions",
+      "required_boundary": "Default promotions and supported va_* behavior",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C38",
+      "name": "Return values",
+      "required_boundary": "Integer/SSE, small aggregate, and indirect large aggregate",
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/float_across_call.c"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C39",
+      "name": "Static/extern functions",
+      "required_boundary": "Visibility and separate compilation",
+      "status": "partial",
+      "valid_cases": [
+        "tests/test_objects.py"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C40",
+      "name": "Flexible array members",
+      "required_boundary": "Legal placement, size, and accessed allocated storage",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C41",
+      "name": "_Bool",
+      "required_boundary": "Normalization and conversions through memory/ABI",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C42",
+      "name": "_Static_assert",
+      "required_boundary": "Constant evaluation and useful failures",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C43",
+      "name": "_Generic",
+      "required_boundary": "Type selection and unevaluated branches",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C44",
+      "name": "_Alignof/_Alignas",
+      "required_boundary": "Valid constraints and actual layout impact",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C45",
+      "name": "_Noreturn",
+      "required_boundary": "Declaration semantics and control-flow diagnostics",
+      "status": "planned",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
+    },
+    {
+      "id": "C46",
+      "name": "Standard-style diagnostics",
+      "required_boundary": "Constraint violations and nonzero compile outcome",
+      "status": "partial",
+      "valid_cases": [],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C47",
-      "name": "separate-compilation",
-      "status": "planned"
+      "name": "Separate compilation",
+      "required_boundary": "Mixed-toolchain objects and real system linking",
+      "status": "partial",
+      "valid_cases": [
+        "tests/test_objects.py"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     },
     {
       "id": "C48",
-      "name": "debug-and-reproducible-output",
-      "status": "partial"
+      "name": "Debug/reproducible output",
+      "required_boundary": "Source mapping, native debugger checks, deterministic objects",
+      "status": "partial",
+      "valid_cases": [
+        "tests/test_objects.py"
+      ],
+      "boundary_cases": [],
+      "negative_cases": [],
+      "native_evidence": [],
+      "open_requirements": [
+        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ]
     }
   ]
 }

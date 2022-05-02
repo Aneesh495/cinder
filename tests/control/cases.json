@@ -206,5 +206,57 @@
   {
     "source": "live_integer_call.c",
     "exit": 0
+  },
+  {
+    "source": "literal_decimal_rank.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_hex_rank.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_long_suffix.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_unsigned_max.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_hex_e_digits.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_float_exponent.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_hex_float.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_leading_decimal.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_float32_rank.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_float32_round.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_octal.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_unsigned_suffixes.c",
+    "exit": 0
+  },
+  {
+    "source": "literal_float_direct_round.c",
+    "exit": 0
   }
 ]

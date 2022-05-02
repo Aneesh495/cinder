@@ -36,6 +36,12 @@ test-ir: build
 test-control: build
 	@python3 tests/test_control.py $(BUILD_DIR)/cindercc
 
+test-numeric: build
+	@python3 tests/test_numeric.py $(BUILD_DIR)/cindercc
+
+test-storage:
+	@tests/run_storage.sh
+
 test-allocation: build
 	@tests/run_allocation.sh
 

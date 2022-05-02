@@ -133,7 +133,11 @@ void *cinder_arena_alloc(CinderArena *arena, size_t size, size_t align) {
             return result;
         }
     }
-    size_t capacity = arena->block_size > actual ? arena->block_size : actual;
+    if (align == 0U || (align & (align - 1U)) != 0U) {
+        fprintf(stderr, "cinder: invalid arena alignment\n"); abort();
+    }
+    size_t required = checked_add(actual, align - 1U);
+    size_t capacity = arena->block_size > required ? arena->block_size : required;
     size_t total = checked_add(sizeof(CinderArenaBlock), capacity);
     block = cinder_alloc(total);
     block->next = NULL;

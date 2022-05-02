@@ -36,30 +36,8 @@ static bool is_ident_continue(unsigned char c) {
     return is_ident_start(c) || (c >= (unsigned char)'0' && c <= (unsigned char)'9');
 }
 
-static int64_t parse_integer(const char *text, size_t length, bool *ok) {
-    char *copy = cinder_strndup(text, length);
-    char *end = NULL;
-    errno = 0;
-    unsigned long long value = strtoull(copy, &end, 0);
-    *ok = errno == 0 && end != copy;
-    if (end != NULL) {
-        while (*end != '\0') {
-            if (*end != 'u' && *end != 'U' && *end != 'l' && *end != 'L') {
-                *ok = false;
-                break;
-            }
-            ++end;
-        }
-    }
-    free(copy);
-    if (!*ok || value > (unsigned long long)INT64_MAX) {
-        return 0;
-    }
-    return (int64_t)value;
-}
-
 static void push_token(CinderTokenStream *tokens, CinderTokenKind kind, const char *text, size_t length, CinderLoc loc, int64_t integer) {
-    CinderToken token;
+    CinderToken token; memset(&token, 0, sizeof(token));
     token.kind = kind;
     token.text = text;
     token.length = length;
@@ -112,29 +90,16 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
             push_token(tokens, kind, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), 0);
             continue;
         }
-        if (isdigit(c) != 0) {
+        if (isdigit(c) != 0 || (c == '.' && i + 1U < length && isdigit((unsigned char)text[i + 1U]) != 0)) {
             ++i;
-            while (i < length && (isalnum((unsigned char)text[i]) != 0 || text[i] == '.' || text[i] == '_')) ++i;
-            bool floating = false;
-            for (size_t n = start; n < i; ++n) if (text[n] == '.' || text[n] == 'e' || text[n] == 'E') floating = true;
-            if (floating) {
-                char *copy = cinder_strndup(text + start, i - start);
-                char *end = NULL;
-                errno = 0;
-                double value = strtod(copy, &end);
-                bool ok = errno == 0 && end != copy;
-                if (ok && end != NULL && (*end == 'f' || *end == 'F')) ++end;
-                if (!ok || end == NULL || *end != '\0') cinder_diag(diags, CINDER_ERROR, cinder_preprocessed_loc(sources, start, i - start), "invalid floating constant");
-                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), 0);
-                tokens->tokens.data[tokens->tokens.len - 1U].is_floating = true;
-                tokens->tokens.data[tokens->tokens.len - 1U].floating = value;
-                free(copy);
-            } else {
-                bool ok = false;
-                int64_t value = parse_integer(text + start, i - start, &ok);
-                if (!ok) cinder_diag(diags, CINDER_ERROR, cinder_preprocessed_loc(sources, start, i - start), "invalid integer constant");
-                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), value);
+            while (i < length) {
+                unsigned char next = (unsigned char)text[i];
+                if (isalnum(next) != 0 || next == '.' || next == '_') { ++i; continue; }
+                if ((next == '+' || next == '-') && i > start && (text[i - 1U] == 'e' || text[i - 1U] == 'E' || text[i - 1U] == 'p' || text[i - 1U] == 'P')) { ++i; continue; }
+                break;
             }
+            push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), 0);
+            (void)cinder_parse_number(&tokens->tokens.data[tokens->tokens.len - 1U], diags);
             continue;
         }
         if (c == '"' || c == '\'') {
