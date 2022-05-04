@@ -1,0 +1,1 @@
+int f(char a); int f(signed char a) { return a; }

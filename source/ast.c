@@ -20,7 +20,7 @@ static void free_expr(CinderExpr *expr) {
     if (expr->kind == EX_BINARY) {
         free_expr(expr->as.binary.left);
         free_expr(expr->as.binary.right);
-    } else if (expr->kind == EX_UNARY || expr->kind == EX_SIZEOF) {
+    } else if (expr->kind == EX_UNARY || expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) {
         free_expr(expr->as.unary.value);
     } else if (expr->kind == EX_ASSIGN) {
         free_expr(expr->as.assign.target);
@@ -112,7 +112,7 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
         case EX_VA_ARG: fprintf(out, "va_arg : %s\n", cinder_type_name(expr->as.va_arg.type)); dump_expr(expr->as.va_arg.list, out, depth + 1U); break;
         case EX_CONDITIONAL: fputs("conditional\n", out); dump_expr(expr->as.conditional.condition, out, depth + 1U); dump_expr(expr->as.conditional.yes, out, depth + 1U); dump_expr(expr->as.conditional.no, out, depth + 1U); break;
         case EX_CAST: fprintf(out, "cast %s\n", cinder_type_name(expr->as.cast.cast_type)); dump_expr(expr->as.cast.value, out, depth + 1U); break;
-        case EX_SIZEOF: fputs("sizeof\n", out); dump_expr(expr->as.unary.value, out, depth + 1U); break;
+        case EX_ALIGNOF: case EX_SIZEOF: fputs("sizeof\n", out); dump_expr(expr->as.unary.value, out, depth + 1U); break;
     }
 }
 

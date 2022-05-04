@@ -36,6 +36,9 @@ test-ir: build
 test-control: build
 	@python3 tests/test_control.py $(BUILD_DIR)/cindercc
 
+test-constraints: build
+	@python3 tests/test_constraints.py $(BUILD_DIR)/cindercc
+
 test-numeric: build
 	@python3 tests/test_numeric.py $(BUILD_DIR)/cindercc
 

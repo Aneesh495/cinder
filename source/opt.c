@@ -55,7 +55,13 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
                 if (inst->op == IR_COPY && known[inst->left]) { inst->op = IR_CONST; inst->integer = constant[inst->left]; inst->left = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = inst->integer; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
                 if (inst->right != CINDER_INVALID_VALUE && known[inst->left] && known[inst->right]) {
                     int64_t result = 0;
-                    if (fold(inst, constant[inst->left], constant[inst->right], &result)) { inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
+                    if (fold(inst, constant[inst->left], constant[inst->right], &result)) {
+                        if (inst->type->size < 8U) {
+                            unsigned width = (unsigned)(inst->type->size * 8U);
+                            if (inst->type->is_unsigned) result = (int64_t)((uint64_t)result & ((UINT64_C(1) << width) - 1U));
+                            else if (result < -(INT64_C(1) << (width - 1U)) || result >= (INT64_C(1) << (width - 1U))) continue;
+                        }
+                        inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
                 }
                 if (inst->dst != CINDER_INVALID_VALUE) known[inst->dst] = false;
             }

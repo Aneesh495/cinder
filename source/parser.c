@@ -19,7 +19,7 @@ static CinderStmt *new_stmt(CinderAst *ast, CinderStmtKind kind, CinderLoc loc) 
 static CinderDecl *new_decl(CinderAst *ast, CinderDeclKind kind, CinderLoc loc) { CinderDecl *decl = node_alloc(ast, sizeof(*decl)); memset(decl, 0, sizeof(*decl)); decl->kind = kind; decl->loc = loc; decl->params.data = NULL; decl->params.len = 0U; decl->params.cap = 0U; return decl; }
 
 static bool is_type_start(CinderTokenKind kind) {
-    return kind == TOK_KW_VOID || kind == TOK_KW_CHAR || kind == TOK_KW_SHORT || kind == TOK_KW_INT || kind == TOK_KW_LONG || kind == TOK_KW_SIGNED || kind == TOK_KW_UNSIGNED || kind == TOK_KW_FLOAT || kind == TOK_KW_DOUBLE || kind == TOK_KW__BOOL || kind == TOK_KW_STRUCT || kind == TOK_KW_UNION || kind == TOK_KW_ENUM;
+    return kind == TOK_KW_CONST || kind == TOK_KW_VOLATILE || kind == TOK_KW_RESTRICT || kind == TOK_KW_VOID || kind == TOK_KW_CHAR || kind == TOK_KW_SHORT || kind == TOK_KW_INT || kind == TOK_KW_LONG || kind == TOK_KW_SIGNED || kind == TOK_KW_UNSIGNED || kind == TOK_KW_FLOAT || kind == TOK_KW_DOUBLE || kind == TOK_KW__BOOL || kind == TOK_KW_STRUCT || kind == TOK_KW_UNION || kind == TOK_KW_ENUM;
 }
 
 static CinderType *parse_type_specifier(CinderAst *ast);
@@ -56,38 +56,81 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
 
 static CinderType *parse_type_specifier(CinderAst *ast) {
     CinderTypeContext *types = ast->types;
-    CinderTokenKind kind = peek(ast)->kind;
-    bool unsig = take(ast, TOK_KW_UNSIGNED);
-    if (unsig) kind = peek(ast)->kind;
-    CinderType *type = NULL;
-    if (take(ast, TOK_KW_VOID)) type = types->void_type;
-    else if (take(ast, TOK_KW_CHAR)) type = types->char_type;
-    else if (take(ast, TOK_KW_SHORT)) type = types->short_type;
-    else if (take(ast, TOK_KW_INT)) type = unsig ? types->uint_type : types->int_type;
-    else if (take(ast, TOK_KW_LONG)) {
-        if (take(ast, TOK_KW_LONG)) type = unsig ? types->ullong_type : types->llong_type;
-        else type = unsig ? types->ulong_type : types->long_type;
-    } else if (take(ast, TOK_KW_SIGNED)) {
-        if (take(ast, TOK_KW_CHAR)) type = types->char_type;
-        else type = types->int_type;
-    } else if (take(ast, TOK_KW_FLOAT)) type = types->float_type;
-    else if (take(ast, TOK_KW_DOUBLE)) type = types->double_type;
-    else if (take(ast, TOK_KW__BOOL)) type = types->bool_type;
-    else if (take(ast, TOK_KW_STRUCT)) type = parse_aggregate_specifier(ast, false);
-    else if (take(ast, TOK_KW_UNION)) type = parse_aggregate_specifier(ast, true);
-    else if (kind == TOK_KW_ENUM) {
-        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "enum layout is not yet implemented");
-        ast->cursor++;
-        type = types->error_type;
-    } else {
-        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected a type specifier");
-        type = types->error_type;
+    unsigned qualifiers = 0U, longs = 0U;
+    int sign = 0;
+    bool short_spec = false, int_spec = false;
+    CinderTokenKind scalar = 0;
+    CinderType *aggregate = NULL;
+    bool consumed = false;
+    while (true) {
+        CinderTokenKind kind = peek(ast)->kind;
+        if (kind == TOK_KW_CONST || kind == TOK_KW_VOLATILE || kind == TOK_KW_RESTRICT) {
+            qualifiers |= kind == TOK_KW_CONST ? 1U : kind == TOK_KW_VOLATILE ? 2U : 4U;
+            ++ast->cursor;
+        } else if (kind == TOK_KW_SIGNED || kind == TOK_KW_UNSIGNED) {
+            if (sign != 0) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "duplicate or conflicting signedness specifier");
+            sign = kind == TOK_KW_UNSIGNED ? 1 : -1; ++ast->cursor;
+        } else if (kind == TOK_KW_LONG) { ++longs; ++ast->cursor; }
+        else if (kind == TOK_KW_SHORT) {
+            if (short_spec) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "duplicate short specifier");
+            short_spec = true; ++ast->cursor;
+        } else if (kind == TOK_KW_INT) {
+            if (int_spec) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "duplicate int specifier");
+            int_spec = true; ++ast->cursor;
+        } else if (kind == TOK_KW_CHAR || kind == TOK_KW_VOID || kind == TOK_KW__BOOL || kind == TOK_KW_FLOAT || kind == TOK_KW_DOUBLE) {
+            if (scalar != 0) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting type specifiers");
+            scalar = kind; ++ast->cursor;
+        } else if (kind == TOK_KW_STRUCT || kind == TOK_KW_UNION) {
+            if (aggregate != NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting aggregate specifiers");
+            ++ast->cursor; aggregate = parse_aggregate_specifier(ast, kind == TOK_KW_UNION);
+        } else break;
+        consumed = true;
+    }
+    if (!consumed || (scalar == 0 && aggregate == NULL && sign == 0 && longs == 0U && !short_spec && !int_spec)) {
+        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected a type specifier"); return types->error_type;
+    }
+    if (longs > 2U || (short_spec && longs != 0U) || (scalar != 0 && (short_spec || int_spec || longs != 0U)) || (aggregate != NULL && (scalar != 0 || sign != 0 || short_spec || int_spec || longs != 0U)) || (scalar != 0 && scalar != TOK_KW_CHAR && sign != 0)) {
+        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "invalid combination of type specifiers"); return types->error_type;
+    }
+    CinderType *type = aggregate;
+    if (type == NULL) {
+        if (scalar == TOK_KW_VOID) type = types->void_type;
+        else if (scalar == TOK_KW__BOOL) type = types->bool_type;
+        else if (scalar == TOK_KW_FLOAT) type = types->float_type;
+        else if (scalar == TOK_KW_DOUBLE) type = types->double_type;
+        else if (scalar == TOK_KW_CHAR) type = sign == 0 ? types->char_type : sign > 0 ? types->uchar_type : types->schar_type;
+        else if (short_spec) type = sign > 0 ? types->ushort_type : types->short_type;
+        else if (longs == 2U) type = sign > 0 ? types->ullong_type : types->llong_type;
+        else if (longs == 1U) type = sign > 0 ? types->ulong_type : types->long_type;
+        else type = sign > 0 ? types->uint_type : types->int_type;
+    }
+    if ((qualifiers & 4U) != 0U && type->kind != TYPE_POINTER) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "restrict requires an object pointer type");
+    return cinder_type_qualified(types, type, qualifiers);
+}
+
+static CinderType *parse_type_name(CinderAst *ast) {
+    CinderType *type = parse_type_specifier(ast);
+    while (take(ast, '*')) type = cinder_type_pointer(ast->types, type);
+    while (take(ast, '[')) {
+        size_t count = 0U;
+        if (is(ast, TOK_NUMBER) && !peek(ast)->is_floating && peek(ast)->integer >= 0) { count = (size_t)peek(ast)->integer; ++ast->cursor; }
+        else cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "type-name array requires a constant nonnegative bound");
+        (void)expect(ast, ']', "']'");
+        type = cinder_type_array(ast->types, type, count);
     }
     return type;
 }
 
 static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, CinderDecl **function_decl) {
-    while (take(ast, '*')) base = cinder_type_pointer(ast->types, base);
+    while (take(ast, '*')) {
+        base = cinder_type_pointer(ast->types, base);
+        unsigned qualifiers = 0U;
+        while (is(ast, TOK_KW_CONST) || is(ast, TOK_KW_VOLATILE) || is(ast, TOK_KW_RESTRICT)) {
+            CinderTokenKind q = peek(ast)->kind; ++ast->cursor;
+            qualifiers |= q == TOK_KW_CONST ? 1U : q == TOK_KW_VOLATILE ? 2U : 4U;
+        }
+        base = cinder_type_qualified(ast->types, base, qualifiers);
+    }
     if (!is(ast, TOK_IDENTIFIER)) {
         cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected an identifier in declarator");
         return base;
@@ -202,8 +245,21 @@ static CinderExpr *parse_unary(CinderAst *ast) {
         CinderToken *token = &ast->tokens->tokens.data[ast->cursor++];
         CinderExpr *expr = new_expr(ast, EX_UNARY, token->loc); expr->as.unary.op = (int)token->kind; expr->as.unary.value = parse_unary(ast); return expr;
     }
-    if (take(ast, TOK_KW_SIZEOF)) {
-        CinderExpr *expr = new_expr(ast, EX_SIZEOF, previous(ast)->loc); expr->as.unary.value = parse_unary(ast); return expr;
+    if (kind == TOK_KW_SIZEOF || kind == TOK_KW_ALIGNOF) {
+        ++ast->cursor;
+        CinderExpr *expr = new_expr(ast, kind == TOK_KW_SIZEOF ? EX_SIZEOF : EX_ALIGNOF, previous(ast)->loc);
+        if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast->tokens->tokens.data[ast->cursor + 1U].kind)) {
+            ++ast->cursor; expr->queried_type = parse_type_name(ast); (void)expect(ast, ')', "')'");
+        } else if (kind == TOK_KW_ALIGNOF) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "_Alignof requires a type name");
+        else expr->as.unary.value = parse_unary(ast);
+        return expr;
+    }
+    if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast->tokens->tokens.data[ast->cursor + 1U].kind)) {
+        ++ast->cursor;
+        CinderLoc loc = previous(ast)->loc;
+        CinderType *type = parse_type_name(ast); (void)expect(ast, ')', "')'");
+        CinderExpr *expr = new_expr(ast, EX_CAST, loc); expr->as.cast.cast_type = type;
+        expr->as.cast.value = parse_unary(ast); return expr;
     }
     return parse_postfix(ast);
 }
