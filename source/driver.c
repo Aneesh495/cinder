@@ -96,6 +96,7 @@ int cinder_driver_run(const CinderOptions *options) {
     if (options->dump_ir) cinder_dump_ir(&module, stdout);
     CinderOptStats stats;
     if (cinder_optimize(&module, options->optimization, &stats, &diags) != 0) goto done_ir;
+    for (size_t f = 0U; f < module.functions.len; ++f) if (cinder_mir_boundary(&module.functions.data[f], &diags) != 0) goto done_ir;
     if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) { fputs("; optimized IR\n", stdout); cinder_dump_ir(&module, stdout); }
     if (options->dump_mir) { fprintf(stdout, "MIR boundary: %zu functions, target=x86_64-sysv folded=%u forwarded=%u dead=%u\n", module.functions.len, stats.constants_folded, stats.memory_forwarded, stats.dead_instructions_removed); for (size_t f = 0U; f < module.functions.len; ++f) { CinderCFGAnalysis cfg; cinder_cfg_init(&cfg); if (cinder_analyze_cfg(&module.functions.data[f], &cfg, &diags) == 0) cinder_dump_cfg(&module.functions.data[f], &cfg, stdout); cinder_cfg_destroy(&cfg); } }
@@ -112,7 +113,6 @@ int cinder_driver_run(const CinderOptions *options) {
         }
     }
     for (size_t f = 0U; f < module.functions.len; ++f) {
-        if (cinder_mir_boundary(&module.functions.data[f], &diags) != 0) goto done_assembly;
         CinderAllocation allocation; cinder_alloc_init(&allocation, &module.functions.data[f]); if (cinder_allocate(&allocation, &diags) != 0 || cinder_verify_allocation(&allocation, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
         if (options->dump_regalloc) cinder_dump_regalloc(&allocation, stdout);
         if (cinder_lower_x86(&module.functions.data[f], &allocation, &machine, options->emit_assembly, assembly, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }

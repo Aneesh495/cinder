@@ -514,5 +514,85 @@
   {
     "source": "convert_float_return_integer.c",
     "exit": 0
+  },
+  {
+    "source": "ssa_partial_join.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_passthrough_join.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_nested_joins.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_loop_carried.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_loop_conditional.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_loop_passthrough.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_swap_two.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_rotate_three.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_swap_float.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_rotate_double.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_nested_loops.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_break_merge.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_continue_merge.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_multiple_exits.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_do_carried.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_volatile_local.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_global_mutation.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_global_recursion.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_uninitialized_skipped.c",
+    "exit": 0
+  },
+  {
+    "source": "ssa_conditional_assignment.c",
+    "exit": 0
   }
 ]

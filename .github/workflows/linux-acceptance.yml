@@ -18,7 +18,7 @@ jobs:
       - name: Build
         run: make build
       - name: Frontend and object checks
-        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-control test-constraints test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
+        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-ssa test-control test-constraints test-undefined test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
       - name: Native Linux execution
         run: tests/run_native_linux.sh build/cindercc
       - name: Multi-unit object and assembly campaign
@@ -35,6 +35,7 @@ jobs:
           path: |
             .agent-local/evidence
             .agent-local/generated-summary.json
+            .agent-local/ssa
             .agent-local/control
             .agent-local/allocation
             .agent-local/objects

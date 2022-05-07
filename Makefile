@@ -33,8 +33,15 @@ test-preprocessor: build
 test-ir: build
 	@tests/run_ir.sh $(BUILD_DIR)/cindercc
 
+test-ssa: build
+	@$(CMAKE) --build $(BUILD_DIR) --target cinder_ssa_probe --parallel
+	@python3 tests/test_ssa.py $(BUILD_DIR)/cinder_ssa_probe 1000
+
 test-control: build
 	@python3 tests/test_control.py $(BUILD_DIR)/cindercc
+
+test-undefined: build
+	@python3 tests/test_undefined.py $(BUILD_DIR)/cindercc
 
 test-constraints: build
 	@python3 tests/test_constraints.py $(BUILD_DIR)/cindercc

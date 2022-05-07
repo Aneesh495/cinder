@@ -37,6 +37,41 @@ static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t 
     }
 }
 
+static CinderValueId alias_of(CinderValueId value, const CinderValueId *aliases, size_t count) {
+    if ((size_t)value >= count) return value;
+    for (size_t hops = 0U; aliases[value] != value && hops < count; ++hops) value = aliases[value];
+    return value;
+}
+
+static unsigned propagate_copies(CinderIRFunction *function) {
+    size_t count = function->value_count;
+    CinderValueId *aliases = cinder_alloc((count == 0U ? 1U : count) * sizeof(*aliases));
+    for (size_t v = 0U; v < count; ++v) aliases[v] = (CinderValueId)v;
+    for (size_t b = 0U; b < function->blocks.len; ++b)
+        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+            CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+            if (inst->op == IR_COPY) aliases[inst->dst] = inst->left;
+        }
+    unsigned changes = 0U;
+    for (size_t b = 0U; b < function->blocks.len; ++b) {
+        CinderIRBlock *block = &function->blocks.data[b];
+        for (size_t i = 0U; i < block->instructions.len; ++i) {
+            CinderIRInst *inst = &block->instructions.data[i];
+            CinderValueId left = alias_of(inst->left, aliases, count), right = alias_of(inst->right, aliases, count);
+            if (left != inst->left) { inst->left = left; ++changes; }
+            if (right != inst->right) { inst->right = right; ++changes; }
+            for (size_t a = 0U; a < inst->args.len; ++a) {
+                CinderValueId value = alias_of(inst->args.data[a], aliases, count);
+                if (value != inst->args.data[a]) { inst->args.data[a] = value; ++changes; }
+            }
+        }
+        CinderValueId value = alias_of(block->terminator.value, aliases, count), condition = alias_of(block->terminator.condition, aliases, count);
+        if (value != block->terminator.value) { block->terminator.value = value; ++changes; }
+        if (condition != block->terminator.condition) { block->terminator.condition = condition; ++changes; }
+    }
+    free(aliases); return changes;
+}
+
 int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags) {
     (void)diags;
     stats->functions_changed = 0U; stats->instructions_changed = 0U; stats->constants_folded = 0U; stats->blocks_removed = 0U; stats->memory_forwarded = 0U; stats->dead_instructions_removed = 0U;
@@ -46,7 +81,9 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
         int64_t *constant = cinder_alloc((function->value_count == 0U ? 1U : function->value_count) * sizeof(*constant));
         bool *known = cinder_alloc((function->value_count == 0U ? 1U : function->value_count) * sizeof(*known));
         for (size_t i = 0U; i < function->value_count; ++i) known[i] = false;
-        bool changed_function = false;
+        unsigned copies = propagate_copies(function);
+        stats->instructions_changed += copies;
+        bool changed_function = copies != 0U;
         for (size_t b = 0U; b < function->blocks.len; ++b) {
             CinderIRBlock *block = &function->blocks.data[b];
             for (size_t i = 0U; i < block->instructions.len; ++i) {

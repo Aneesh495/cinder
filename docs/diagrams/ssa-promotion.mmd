@@ -1,0 +1,12 @@
+flowchart LR
+    typed[Typed scalar loads and stores] --> live[Live slots before definitions]
+    typed --> cfg[Reachability and immediate dominators]
+    cfg --> df[Dominance frontiers]
+    live --> phi[Pruned iterated frontier insertion]
+    df --> phi
+    phi --> rename[Dominator tree renaming with undo stack]
+    rename --> verify[Unique definitions and edge dominance verification]
+    verify --> split[Critical edge splitting]
+    split --> allocation[CFG liveness and physical allocation]
+    allocation --> copies[Edge parallel copies with cycle temporaries]
+    copies --> native[Original encoder and ELF output]
