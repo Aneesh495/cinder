@@ -6,6 +6,9 @@
 static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t *out) {
     CinderIROp op = inst->op;
     bool unsig = inst->type != NULL && inst->type->is_unsigned;
+    const CinderType *operand = inst->source_type != NULL ? inst->source_type : inst->type;
+    unsigned width = (unsigned)(operand->size * 8U);
+    int64_t minimum = width == 64U ? INT64_MIN : -(INT64_C(1) << (width - 1U));
     switch (op) {
         case IR_ADD:
             if (!unsig && ((right > 0 && left > INT64_MAX - right) || (right < 0 && left < INT64_MIN - right))) return false;
@@ -31,8 +34,8 @@ static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t 
         case IR_CMP_LE_S: *out = left <= right; return true;
         case IR_CMP_GT_S: *out = left > right; return true;
         case IR_CMP_GE_S: *out = left >= right; return true;
-        case IR_DIV_S: if (right == 0 || (left == INT64_MIN && right == -1)) return false; *out = left / right; return true;
-        case IR_MOD_S: if (right == 0 || (left == INT64_MIN && right == -1)) return false; *out = left % right; return true;
+        case IR_DIV_S: if (right == 0 || (left == minimum && right == -1)) return false; *out = left / right; return true;
+        case IR_MOD_S: if (right == 0 || (left == minimum && right == -1)) return false; *out = left % right; return true;
         default: return false;
     }
 }

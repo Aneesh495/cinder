@@ -31,6 +31,9 @@ int cinder_liveness_build(const CinderIRFunction *function, CinderLiveness *live
         return 1;
     }
     size_t bytes = live->words * live->blocks * sizeof(uint64_t);
+    if (bytes > 32U * 1024U * 1024U) {
+        cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "liveness storage exceeds the 128 MiB analysis limit"); return 1;
+    }
     live->use = cinder_alloc(bytes); live->def = cinder_alloc(bytes);
     live->in = cinder_alloc(bytes); live->out = cinder_alloc(bytes);
     memset(live->use, 0, bytes); memset(live->def, 0, bytes);

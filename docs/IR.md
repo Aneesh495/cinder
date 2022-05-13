@@ -26,8 +26,9 @@ source behavior, but that representation is excluded from a defined-input oracle
 definitions, operand availability, dominance, local-slot bounds, scalar register
 classes, conversion source types, and complete unique phi predecessor coverage.
 The driver verifies before optimization and after optimization/edge splitting.
-Exact call signatures, object-memory contracts, and round-trip parsing remain
-open verifier work.
+Call signatures, scalar widths, fixed argument classes/ordinals, prototype
+arity, variadic promotions, storage types, and return types are checked explicitly.
+Object-memory contracts remain open verifier work.
 
 `source/mir.c` splits critical edges carrying phi transfers before allocation.
 The encoder emits edge transfers through the parallel-copy resolver using
@@ -55,3 +56,19 @@ running their native code.
 Analyses are rebuilt on demand. Edge splitting invalidates CFG/dominance/liveness;
 copy propagation invalidates uses/liveness; dead instruction removal invalidates
 definition and use tables. No cached analysis crosses these boundaries.
+
+`--serialize-ir -o program.cir` writes deterministic typed IR. `cinderir` reads
+the format, verifies it, and can print canonical IR, interpret it, or emit an
+object or assembly. The parser carries no frontend AST dependency. Normal and
+parsed IR produce identical objects for the scalar source corpus. See
+`IR_FORMAT.md` for fields and parser bounds.
+
+`make test-ir-campaign` executes 100,000 typed modules through original and
+parsed interpretation and O2 optimization. It exhausts unsigned 8-bit addition
+and samples signed overflow, unsigned multiplication, division/remainder,
+shifts, floating operations/conversions, memory joins, and recursive calls.
+Undefined/resource outcomes are inventoried separately from defined execution.
+The harness retains every canonical input and observation, source/tool hashes,
+per-family counts, and artifact hashes under ignored `.agent-local/ir-campaign`.
+This campaign does not cover the pending object-memory instructions or serve as
+final frozen-source acceptance.

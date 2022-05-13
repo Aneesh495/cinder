@@ -525,6 +525,7 @@ typedef struct {
     CinderIROp op;
     CinderType *type;
     CinderType *source_type;
+    CinderType *callee_type;
     CinderValueId dst;
     CinderValueId left;
     CinderValueId right;
@@ -599,6 +600,9 @@ void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
 int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags);
 void cinder_dump_ir(const CinderIRModule *module, FILE *out);
+const char *cinder_ir_op_name(CinderIROp op);
+int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *diags);
+int cinder_parse_ir(CinderIRModule *module, const char *text, size_t length, CinderDiagnostics *diags);
 
 typedef struct {
     CinderBlockId *data;
@@ -770,6 +774,7 @@ typedef struct {
     bool dump_tokens;
     bool dump_ast;
     bool dump_ir;
+    bool serialize_ir;
     bool dump_mir;
     bool dump_regalloc;
     bool verify_each;
