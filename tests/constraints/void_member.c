@@ -1,0 +1,1 @@
+struct Record { void member; };

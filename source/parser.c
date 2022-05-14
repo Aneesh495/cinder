@@ -18,39 +18,117 @@ static CinderExpr *new_expr(CinderAst *ast, CinderExprKind kind, CinderLoc loc) 
 static CinderStmt *new_stmt(CinderAst *ast, CinderStmtKind kind, CinderLoc loc) { CinderStmt *stmt = node_alloc(ast, sizeof(*stmt)); memset(stmt, 0, sizeof(*stmt)); stmt->kind = kind; stmt->loc = loc; return stmt; }
 static CinderDecl *new_decl(CinderAst *ast, CinderDeclKind kind, CinderLoc loc) { CinderDecl *decl = node_alloc(ast, sizeof(*decl)); memset(decl, 0, sizeof(*decl)); decl->kind = kind; decl->loc = loc; decl->params.data = NULL; decl->params.len = 0U; decl->params.cap = 0U; return decl; }
 
-static bool is_type_start(CinderTokenKind kind) {
+static CinderParseBinding *binding_token(CinderAst *ast, const CinderToken *token, bool tag) {
+    if (token->kind != TOK_IDENTIFIER) return NULL;
+    for (size_t i = ast->bindings.len; i > 0U; --i) {
+        CinderParseBinding *binding = &ast->bindings.data[i - 1U];
+        if ((binding->kind == PARSE_TAG) == tag && strlen(binding->name) == token->length && memcmp(binding->name, token->text, token->length) == 0) return binding;
+    }
+    return NULL;
+}
+
+static void bind_name(CinderAst *ast, char *name, CinderType *type, CinderParseBindingKind kind, int64_t value, CinderLoc loc) {
+    if (name == NULL) return;
+    for (size_t i = ast->bindings.len; i > 0U; --i) {
+        CinderParseBinding *old = &ast->bindings.data[i - 1U];
+        if (old->scope != ast->scope_depth || (old->kind == PARSE_TAG) != (kind == PARSE_TAG) || strcmp(name, old->name) != 0) continue;
+        if (kind != PARSE_TAG && (kind == PARSE_ENUMERATOR || old->kind == PARSE_ENUMERATOR || old->kind != kind || (kind == PARSE_TYPEDEF && !cinder_type_equal(old->type, type)))) cinder_diag(ast->diags, CINDER_ERROR, loc, "conflicting declaration of '%s'", name);
+        break;
+    }
+    CinderParseBinding binding = {name, type, kind, value, ast->scope_depth};
+    cinder_vec_push((CinderVec *)&ast->bindings, &binding);
+}
+
+static bool type_keyword(CinderTokenKind kind) {
     return kind == TOK_KW_CONST || kind == TOK_KW_VOLATILE || kind == TOK_KW_RESTRICT || kind == TOK_KW_VOID || kind == TOK_KW_CHAR || kind == TOK_KW_SHORT || kind == TOK_KW_INT || kind == TOK_KW_LONG || kind == TOK_KW_SIGNED || kind == TOK_KW_UNSIGNED || kind == TOK_KW_FLOAT || kind == TOK_KW_DOUBLE || kind == TOK_KW__BOOL || kind == TOK_KW_STRUCT || kind == TOK_KW_UNION || kind == TOK_KW_ENUM;
+}
+
+static bool is_type_start(CinderAst *ast, const CinderToken *token) {
+    CinderParseBinding *binding = binding_token(ast, token, false);
+    return type_keyword(token->kind) || (binding != NULL && binding->kind == PARSE_TYPEDEF);
 }
 
 static CinderType *parse_type_specifier(CinderAst *ast);
 static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, CinderDecl **function_decl);
+static CinderExpr *parse_conditional(CinderAst *ast);
 
 static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
-    CinderType *type = cinder_type_new(ast->types, is_union ? TYPE_UNION : TYPE_STRUCT);
+    CinderTypeKind kind = is_union ? TYPE_UNION : TYPE_STRUCT;
+    CinderType *type = NULL;
     CinderToken *keyword = &ast->tokens->tokens.data[ast->cursor - 1U];
-    type->tag = NULL;
     if (is(ast, TOK_IDENTIFIER)) {
         CinderToken *tag = &ast->tokens->tokens.data[ast->cursor++];
-        type->tag = cinder_arena_strndup(&ast->arena, tag->text, tag->length);
+        CinderParseBinding *old = binding_token(ast, tag, true);
+        if (old != NULL && ((!is(ast, '{') && !is(ast, ';')) || old->scope == ast->scope_depth)) {
+            type = old->type;
+            if (type->kind != kind) cinder_diag(ast->diags, CINDER_ERROR, tag->loc, "tag has a different aggregate kind");
+        } else {
+            type = cinder_type_new(ast->types, kind);
+            type->tag = cinder_arena_strndup(&ast->arena, tag->text, tag->length);
+            bind_name(ast, type->tag, type, PARSE_TAG, 0, tag->loc);
+        }
     }
+    if (type == NULL) type = cinder_type_new(ast->types, kind);
     if (!take(ast, '{')) return type;
+    if (type->complete) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate tag is already defined");
+    if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
         CinderType *field_base = parse_type_specifier(ast);
-        char *field_name = NULL;
-        CinderLoc field_loc = peek(ast)->loc;
-        CinderType *field_type = parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
-        CinderField field;
-        field.name = field_name;
-        field.type = field_type;
-        field.offset = 0U;
-        field.bit_offset = 0U;
-        field.bit_width = 0U;
-        cinder_vec_push((CinderVec *)&type->fields, &field);
+        do {
+            char *field_name = NULL; CinderLoc field_loc = peek(ast)->loc;
+            CinderType *field_type = parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
+            CinderField field = {field_name, field_type, 0U, 0U, 0U};
+            for (size_t f = 0U; f < type->fields.len; ++f)
+                if (field_name != NULL && type->fields.data[f].name != NULL && strcmp(field_name, type->fields.data[f].name) == 0) cinder_diag(ast->diags, CINDER_ERROR, field_loc, "duplicate aggregate member '%s'", field_name);
+            cinder_vec_push((CinderVec *)&type->fields, &field);
+        } while (take(ast, ','));
         (void)expect(ast, ';', "';'");
     }
     (void)expect(ast, '}', "'}'");
     (void)keyword;
     (void)cinder_type_layout_aggregate(type, ast->diags, type->tag == NULL ? cinder_loc(CINDER_NO_FILE, 0U, 0U) : peek(ast)->loc);
+    for (size_t t = 0U; t < ast->types->all_types.len; ++t) {
+        CinderType *copy = ast->types->all_types.data[t];
+        if (copy == type || copy->identity != type->identity) continue;
+        copy->complete = type->complete; copy->size = type->size; copy->align = type->align;
+        copy->fields.len = 0U;
+        for (size_t f = 0U; f < type->fields.len; ++f) cinder_vec_push((CinderVec *)&copy->fields, &type->fields.data[f]);
+    }
+    return type;
+}
+
+static CinderType *parse_enum_specifier(CinderAst *ast) {
+    CinderType *type = NULL;
+    if (is(ast, TOK_IDENTIFIER)) {
+        CinderToken *tag = &ast->tokens->tokens.data[ast->cursor++];
+        CinderParseBinding *old = binding_token(ast, tag, true);
+        if (old != NULL && (!is(ast, '{') || old->scope == ast->scope_depth)) {
+            type = old->type;
+            if (type->kind != TYPE_ENUM) cinder_diag(ast->diags, CINDER_ERROR, tag->loc, "tag has a different kind");
+        } else {
+            type = cinder_type_new(ast->types, TYPE_ENUM); type->tag = cinder_arena_strndup(&ast->arena, tag->text, tag->length);
+            bind_name(ast, type->tag, type, PARSE_TAG, 0, tag->loc);
+        }
+    }
+    if (type == NULL) type = cinder_type_new(ast->types, TYPE_ENUM);
+    if (!take(ast, '{')) { if (!type->complete) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "enum tag has no definition"); return type; }
+    if (type->complete) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "enum tag is already defined");
+    if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "enum definition requires an enumerator");
+    int64_t next = 0;
+    while (!is(ast, '}') && !is(ast, TOK_EOF)) {
+        CinderToken *token = expect(ast, TOK_IDENTIFIER, "enumerator name");
+        if (token == NULL) break;
+        char *name = cinder_arena_strndup(&ast->arena, token->text, token->length);
+        if (take(ast, '=')) {
+            CinderExpr *expr = parse_conditional(ast); CinderType *value_type;
+            cinder_vec_push((CinderVec *)&ast->constant_exprs, &expr);
+            if (!cinder_constant_integer(ast, expr, &next, &value_type) || next < INT32_MIN || next > INT32_MAX) { cinder_diag(ast->diags, CINDER_ERROR, token->loc, "enumerator requires an integer constant representable as int"); next = 0; }
+        } else if (next > INT32_MAX) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "enumerator value is outside int range");
+        bind_name(ast, name, ast->types->int_type, PARSE_ENUMERATOR, next, token->loc);
+        ++next;
+        if (!take(ast, ',')) break;
+    }
+    (void)expect(ast, '}', "'}'"); type->size = 4U; type->align = 4U; type->complete = true;
     return type;
 }
 
@@ -83,6 +161,13 @@ static CinderType *parse_type_specifier(CinderAst *ast) {
         } else if (kind == TOK_KW_STRUCT || kind == TOK_KW_UNION) {
             if (aggregate != NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting aggregate specifiers");
             ++ast->cursor; aggregate = parse_aggregate_specifier(ast, kind == TOK_KW_UNION);
+        } else if (kind == TOK_KW_ENUM) {
+            if (aggregate != NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting enum specifier");
+            ++ast->cursor; aggregate = parse_enum_specifier(ast);
+        } else if (kind == TOK_IDENTIFIER && aggregate == NULL && scalar == 0 && sign == 0 && longs == 0U && !short_spec && !int_spec) {
+            CinderParseBinding *binding = binding_token(ast, peek(ast), false);
+            if (binding == NULL || binding->kind != PARSE_TYPEDEF) break;
+            aggregate = binding->type; ++ast->cursor;
         } else break;
         consumed = true;
     }
@@ -108,69 +193,130 @@ static CinderType *parse_type_specifier(CinderAst *ast) {
     return cinder_type_qualified(types, type, qualifiers);
 }
 
-static CinderType *parse_type_name(CinderAst *ast) {
-    CinderType *type = parse_type_specifier(ast);
-    while (take(ast, '*')) type = cinder_type_pointer(ast->types, type);
-    while (take(ast, '[')) {
-        size_t count = 0U;
-        if (is(ast, TOK_NUMBER) && !peek(ast)->is_floating && peek(ast)->integer >= 0) { count = (size_t)peek(ast)->integer; ++ast->cursor; }
-        else cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "type-name array requires a constant nonnegative bound");
-        (void)expect(ast, ']', "']'");
-        type = cinder_type_array(ast->types, type, count);
+typedef enum { DECLARATOR_NAME, DECLARATOR_POINTER, DECLARATOR_ARRAY, DECLARATOR_FUNCTION } DeclaratorKind;
+typedef struct DeclaratorNode DeclaratorNode;
+typedef struct ParameterNode ParameterNode;
+struct ParameterNode { CinderParam param; ParameterNode *next; };
+struct DeclaratorNode {
+    DeclaratorKind kind;
+    DeclaratorNode *child;
+    unsigned qualifiers;
+    size_t length;
+    bool incomplete;
+    bool variadic;
+    ParameterNode *params;
+};
+
+static DeclaratorNode *declarator_node(CinderAst *ast, DeclaratorKind kind, DeclaratorNode *child) {
+    DeclaratorNode *node = node_alloc(ast, sizeof(*node)); memset(node, 0, sizeof(*node)); node->kind = kind; node->child = child; return node;
+}
+
+static CinderType *apply_declarator(CinderAst *ast, DeclaratorNode *node, CinderType *base) {
+    for (; node != NULL && node->kind != DECLARATOR_NAME; node = node->child) {
+        if (node->kind == DECLARATOR_POINTER) base = cinder_type_qualified(ast->types, cinder_type_pointer(ast->types, base), node->qualifiers);
+        else if (node->kind == DECLARATOR_ARRAY) {
+            if (base->kind == TYPE_VOID || base->kind == TYPE_FUNCTION || (!base->complete && base->kind != TYPE_ERROR)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "array element requires a complete object type");
+            base = cinder_type_array(ast->types, base, node->length);
+            if (node->incomplete) base->complete = false;
+        } else {
+            if (base->kind == TYPE_ARRAY || base->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "function cannot return an array or function");
+            CinderParamVec params = {NULL, 0U, 0U};
+            for (ParameterNode *p = node->params; p != NULL; p = p->next) cinder_vec_push((CinderVec *)&params, &p->param);
+            base = cinder_type_function(ast->types, base, &params); base->variadic = node->variadic; free(params.data);
+        }
     }
+    return base;
+}
+
+static DeclaratorNode *parse_declarator_node(CinderAst *ast, char **name, CinderLoc *name_loc, bool abstract);
+
+static CinderType *declarator_type(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, bool abstract) {
+    if (++ast->declarator_depth >= 256U) {
+        --ast->declarator_depth; cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "declarator nesting exceeds 255 levels"); return ast->types->error_type;
+    }
+    DeclaratorNode *node = parse_declarator_node(ast, name, name_loc, abstract);
+    CinderType *type = apply_declarator(ast, node, base); --ast->declarator_depth; return type;
+}
+
+static DeclaratorNode *parse_declarator_node(CinderAst *ast, char **name, CinderLoc *name_loc, bool abstract) {
+    DeclaratorNode *first = NULL, *last = NULL;
+    unsigned pointers = 0U;
+    while (take(ast, '*')) {
+        if (++pointers + ast->declarator_depth >= 256U) { cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "pointer declarator exceeds nesting limit"); break; }
+        DeclaratorNode *pointer = declarator_node(ast, DECLARATOR_POINTER, NULL);
+        while (is(ast, TOK_KW_CONST) || is(ast, TOK_KW_VOLATILE) || is(ast, TOK_KW_RESTRICT)) {
+            CinderTokenKind kind = peek(ast)->kind; ++ast->cursor;
+            pointer->qualifiers |= kind == TOK_KW_CONST ? 1U : kind == TOK_KW_VOLATILE ? 2U : 4U;
+        }
+        if (first == NULL) first = pointer; else last->child = pointer;
+        last = pointer;
+    }
+    DeclaratorNode *direct;
+    if (is(ast, TOK_IDENTIFIER)) {
+        CinderToken *token = &ast->tokens->tokens.data[ast->cursor++];
+        *name = cinder_arena_strndup(&ast->arena, token->text, token->length); *name_loc = token->loc;
+        direct = declarator_node(ast, DECLARATOR_NAME, NULL);
+    } else if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && (ast->tokens->tokens.data[ast->cursor + 1U].kind == '*' || ast->tokens->tokens.data[ast->cursor + 1U].kind == '(' || (ast->tokens->tokens.data[ast->cursor + 1U].kind == TOK_IDENTIFIER && !is_type_start(ast, &ast->tokens->tokens.data[ast->cursor + 1U])))) {
+        ++ast->cursor;
+        if (++ast->declarator_depth >= 256U) { cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "declarator nesting exceeds 255 levels"); direct = declarator_node(ast, DECLARATOR_NAME, NULL); }
+        else direct = parse_declarator_node(ast, name, name_loc, abstract);
+        --ast->declarator_depth; (void)expect(ast, ')', "')'");
+    } else {
+        direct = declarator_node(ast, DECLARATOR_NAME, NULL);
+        if (!abstract) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected an identifier in declarator");
+    }
+    size_t suffixes = 0U;
+    while (is(ast, '[') || is(ast, '(')) {
+        if (++suffixes >= 256U) { cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "declarator suffix nesting exceeds 255 levels"); break; }
+        if (take(ast, '[')) {
+            DeclaratorNode *array = declarator_node(ast, DECLARATOR_ARRAY, direct);
+            unsigned qualifiers = 0U;
+            while (is(ast, TOK_KW_CONST) || is(ast, TOK_KW_VOLATILE) || is(ast, TOK_KW_RESTRICT) || is(ast, TOK_KW_STATIC)) {
+                CinderTokenKind kind = peek(ast)->kind; ++ast->cursor;
+                qualifiers |= kind == TOK_KW_CONST ? 1U : kind == TOK_KW_VOLATILE ? 2U : kind == TOK_KW_RESTRICT ? 4U : 0U;
+            }
+            array->qualifiers = qualifiers;
+            if (is(ast, ']')) array->incomplete = true;
+            else {
+                CinderExpr *expr = parse_conditional(ast); CinderType *type; int64_t length;
+                cinder_vec_push((CinderVec *)&ast->constant_exprs, &expr);
+                if (!cinder_constant_integer(ast, expr, &length, &type) || length <= 0 || (uint64_t)length > SIZE_MAX) cinder_diag(ast->diags, CINDER_ERROR, expr->loc, "array bound requires a positive integer constant");
+                else array->length = (size_t)length;
+            }
+            (void)expect(ast, ']', "']'"); direct = array;
+        } else {
+            ++ast->cursor; DeclaratorNode *fn = declarator_node(ast, DECLARATOR_FUNCTION, direct); ParameterNode *tail = NULL;
+            size_t saved = ast->bindings.len; ++ast->scope_depth;
+            if (is(ast, TOK_KW_VOID) && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ')') ++ast->cursor;
+            else if (!is(ast, ')')) do {
+                if (take(ast, TOK_ELLIPSIS)) { if (fn->params == NULL) cinder_diag(ast->diags, CINDER_ERROR, previous(ast)->loc, "variadic prototype requires a named parameter"); fn->variadic = true; break; }
+                (void)take(ast, TOK_KW_REGISTER);
+                CinderType *base = parse_type_specifier(ast); char *param_name = NULL; CinderLoc loc = peek(ast)->loc;
+                CinderType *type = declarator_type(ast, base, &param_name, &loc, true);
+                if (type->kind == TYPE_ARRAY) type = cinder_type_pointer(ast->types, type->base);
+                else if (type->kind == TYPE_FUNCTION) type = cinder_type_pointer(ast->types, type);
+                if (type->kind == TYPE_VOID) cinder_diag(ast->diags, CINDER_ERROR, loc, "void parameter must be the sole unnamed parameter");
+                ParameterNode *param = node_alloc(ast, sizeof(*param)); param->param = (CinderParam){param_name, type}; param->next = NULL;
+                if (tail == NULL) fn->params = param; else tail->next = param;
+                tail = param; bind_name(ast, param_name, type, PARSE_OBJECT, 0, loc);
+            } while (take(ast, ','));
+            (void)expect(ast, ')', "')'"); --ast->scope_depth; ast->bindings.len = saved; direct = fn;
+        }
+    }
+    if (last != NULL) { last->child = direct; return first; }
+    return direct;
+}
+
+static CinderType *parse_type_name(CinderAst *ast) {
+    CinderType *base = parse_type_specifier(ast); char *name = NULL; CinderLoc loc = peek(ast)->loc;
+    CinderType *type = declarator_type(ast, base, &name, &loc, true);
+    if (name != NULL) cinder_diag(ast->diags, CINDER_ERROR, loc, "type name cannot declare an identifier");
     return type;
 }
 
 static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, CinderDecl **function_decl) {
-    while (take(ast, '*')) {
-        base = cinder_type_pointer(ast->types, base);
-        unsigned qualifiers = 0U;
-        while (is(ast, TOK_KW_CONST) || is(ast, TOK_KW_VOLATILE) || is(ast, TOK_KW_RESTRICT)) {
-            CinderTokenKind q = peek(ast)->kind; ++ast->cursor;
-            qualifiers |= q == TOK_KW_CONST ? 1U : q == TOK_KW_VOLATILE ? 2U : 4U;
-        }
-        base = cinder_type_qualified(ast->types, base, qualifiers);
-    }
-    if (!is(ast, TOK_IDENTIFIER)) {
-        cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected an identifier in declarator");
-        return base;
-    }
-    CinderToken *identifier = &ast->tokens->tokens.data[ast->cursor++];
-    *name = cinder_arena_strndup(&ast->arena, identifier->text, identifier->length);
-    *name_loc = identifier->loc;
-    bool variadic = false;
-    if (take(ast, '(')) {
-        CinderParamVec params = {NULL, 0U, 0U};
-        if (!is(ast, ')')) {
-            if (is(ast, TOK_KW_VOID) && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ')') {
-                ast->cursor++;
-            } else while (true) {
-                if (take(ast, TOK_ELLIPSIS)) { variadic = true; break; }
-                CinderType *param_base = parse_type_specifier(ast);
-                char *param_name = NULL;
-                CinderLoc param_loc;
-                CinderType *param_type = parse_declarator(ast, param_base, &param_name, &param_loc, NULL);
-                CinderParam param = {param_name, param_type};
-                cinder_vec_push((CinderVec *)&params, &param);
-                if (!take(ast, ',')) break;
-            }
-        }
-        (void)expect(ast, ')', "')'");
-        base = cinder_type_function(ast->types, base, &params);
-        base->variadic = variadic;
-        free(params.data);
-        if (function_decl != NULL) {
-            CinderDecl *ignored = NULL;
-            (void)ignored;
-        }
-    }
-    while (take(ast, '[')) {
-        size_t length = 0U;
-        if (is(ast, TOK_NUMBER)) length = (size_t)peek(ast)->integer, ast->cursor++;
-        (void)expect(ast, ']', "']'");
-        base = cinder_type_array(ast->types, base, length);
-    }
-    return base;
+    (void)function_decl; *name_loc = peek(ast)->loc;
+    return declarator_type(ast, base, name, name_loc, false);
 }
 
 static CinderExpr *parse_expression(CinderAst *ast);
@@ -196,7 +342,12 @@ static CinderExpr *parse_primary(CinderAst *ast) {
         CinderExpr *expr = new_expr(ast, EX_STRING, token->loc); expr->as.string = cinder_arena_strndup(&ast->arena, token->text, token->length); return expr;
     }
     if (take(ast, TOK_IDENTIFIER)) {
-        CinderExpr *expr = new_expr(ast, EX_NAME, token->loc); expr->as.name = cinder_arena_strndup(&ast->arena, token->text, token->length); return expr;
+        CinderParseBinding *binding = binding_token(ast, token, false);
+        if (binding != NULL && binding->kind == PARSE_ENUMERATOR) { CinderExpr *expr = new_expr(ast, EX_INT, token->loc); expr->as.integer = binding->value; expr->type = binding->type; return expr; }
+        if (binding != NULL && binding->kind == PARSE_TYPEDEF) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "typedef name is not an expression");
+        CinderExpr *expr = new_expr(ast, EX_NAME, token->loc); expr->as.name = cinder_arena_strndup(&ast->arena, token->text, token->length);
+        if (binding != NULL) { expr->type = binding->type; expr->name_visible = binding->kind == PARSE_OBJECT; }
+        return expr;
     }
     if (take(ast, '(')) {
         CinderExpr *expr = parse_expression(ast);
@@ -218,7 +369,7 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             if (expr->kind == EX_NAME && strcmp(expr->as.name, "va_arg") == 0) {
                 CinderExpr *list = parse_assignment(ast);
                 (void)expect(ast, ',', "','");
-                CinderType *argument_type = parse_type_specifier(ast);
+                CinderType *argument_type = parse_type_name(ast);
                 (void)expect(ast, ')', "')'");
                 CinderExpr *va = new_expr(ast, EX_VA_ARG, expr->loc); va->as.va_arg.list = list; va->as.va_arg.type = argument_type; expr = va; continue;
             }
@@ -248,13 +399,13 @@ static CinderExpr *parse_unary(CinderAst *ast) {
     if (kind == TOK_KW_SIZEOF || kind == TOK_KW_ALIGNOF) {
         ++ast->cursor;
         CinderExpr *expr = new_expr(ast, kind == TOK_KW_SIZEOF ? EX_SIZEOF : EX_ALIGNOF, previous(ast)->loc);
-        if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast->tokens->tokens.data[ast->cursor + 1U].kind)) {
+        if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast, &ast->tokens->tokens.data[ast->cursor + 1U])) {
             ++ast->cursor; expr->queried_type = parse_type_name(ast); (void)expect(ast, ')', "')'");
         } else if (kind == TOK_KW_ALIGNOF) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "_Alignof requires a type name");
         else expr->as.unary.value = parse_unary(ast);
         return expr;
     }
-    if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast->tokens->tokens.data[ast->cursor + 1U].kind)) {
+    if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast, &ast->tokens->tokens.data[ast->cursor + 1U])) {
         ++ast->cursor;
         CinderLoc loc = previous(ast)->loc;
         CinderType *type = parse_type_name(ast); (void)expect(ast, ')', "')'");
@@ -337,6 +488,7 @@ static CinderStmt *parse_statement(CinderAst *ast);
 static CinderStmt *parse_compound(CinderAst *ast) {
     CinderLoc loc = peek(ast)->loc;
     (void)expect(ast, '{', "'{'");
+    size_t saved = ast->bindings.len; ++ast->scope_depth;
     CinderStmt *stmt = new_stmt(ast, ST_BLOCK, loc);
     stmt->as.block.items.data = NULL; stmt->as.block.items.len = 0U; stmt->as.block.items.cap = 0U;
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
@@ -344,26 +496,40 @@ static CinderStmt *parse_compound(CinderAst *ast) {
         if (item != NULL) cinder_vec_push((CinderVec *)&stmt->as.block.items, &item);
     }
     (void)expect(ast, '}', "'}'");
+    --ast->scope_depth; ast->bindings.len = saved;
     return stmt;
 }
 
 static CinderDecl *parse_local_decl(CinderAst *ast) {
     CinderLoc loc = peek(ast)->loc;
+    bool alias = take(ast, TOK_KW_TYPEDEF);
+    bool is_static = take(ast, TOK_KW_STATIC), is_extern = take(ast, TOK_KW_EXTERN);
+    (void)take(ast, TOK_KW_AUTO); (void)take(ast, TOK_KW_REGISTER);
     CinderType *base = parse_type_specifier(ast);
-    char *name = NULL; CinderLoc name_loc;
-    CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
-    CinderDecl *decl = new_decl(ast, DECL_VAR, loc); decl->name = name; decl->loc = name_loc; decl->type = type;
-    if (take(ast, '=')) decl->initializer = parse_assignment(ast);
+    if (is(ast, ';') && (base->kind == TYPE_STRUCT || base->kind == TYPE_UNION || base->kind == TYPE_ENUM)) { ++ast->cursor; return NULL; }
+    CinderDecl *first = NULL, *tail = NULL;
+    do {
+        char *name = NULL; CinderLoc name_loc;
+        CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
+        CinderDecl *decl = new_decl(ast, alias ? DECL_TYPEDEF : type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
+        decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
+        bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
+        if (take(ast, '=')) { decl->initializer = parse_assignment(ast); if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer"); }
+        if (tail == NULL) first = decl; else tail->next = decl;
+        tail = decl;
+    } while (take(ast, ','));
     (void)expect(ast, ';', "';'");
-    return decl;
+    return first;
 }
 
 static CinderStmt *parse_statement(CinderAst *ast) {
     CinderToken *token = peek(ast);
     if (is(ast, '{')) return parse_compound(ast);
     if (take(ast, ';')) return new_stmt(ast, ST_EMPTY, token->loc);
-    if (is_type_start(token->kind)) {
-        CinderStmt *stmt = new_stmt(ast, ST_DECL, token->loc); stmt->as.decl = parse_local_decl(ast); return stmt;
+    if (is_type_start(ast, token) || token->kind == TOK_KW_TYPEDEF || token->kind == TOK_KW_STATIC || token->kind == TOK_KW_EXTERN || token->kind == TOK_KW_AUTO || token->kind == TOK_KW_REGISTER) {
+        CinderStmt *stmt = new_stmt(ast, ST_DECL, token->loc); stmt->as.decl = parse_local_decl(ast);
+        if (stmt->as.decl == NULL) stmt->kind = ST_EMPTY;
+        return stmt;
     }
     if (take(ast, TOK_KW_RETURN)) {
         CinderStmt *stmt = new_stmt(ast, ST_RETURN, token->loc);
@@ -388,11 +554,13 @@ static CinderStmt *parse_statement(CinderAst *ast) {
     }
     if (take(ast, TOK_KW_FOR)) {
         CinderStmt *stmt = new_stmt(ast, ST_FOR, token->loc); (void)expect(ast, '(', "'('");
-        if (is_type_start(peek(ast)->kind)) stmt->as.for_stmt.init = new_stmt(ast, ST_DECL, peek(ast)->loc), stmt->as.for_stmt.init->as.decl = parse_local_decl(ast);
+        size_t saved = ast->bindings.len; ++ast->scope_depth;
+        if (is_type_start(ast, peek(ast))) stmt->as.for_stmt.init = new_stmt(ast, ST_DECL, peek(ast)->loc), stmt->as.for_stmt.init->as.decl = parse_local_decl(ast);
         else if (!is(ast, ';')) { stmt->as.for_stmt.init = new_stmt(ast, ST_EXPR, peek(ast)->loc); stmt->as.for_stmt.init->as.expr = parse_expression(ast); (void)expect(ast, ';', "';'"); }
         else { take(ast, ';'); stmt->as.for_stmt.init = NULL; }
         stmt->as.for_stmt.condition = is(ast, ';') ? NULL : parse_expression(ast); (void)expect(ast, ';', "';'");
-        stmt->as.for_stmt.step = is(ast, ')') ? NULL : parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.for_stmt.body = parse_statement(ast); return stmt;
+        stmt->as.for_stmt.step = is(ast, ')') ? NULL : parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.for_stmt.body = parse_statement(ast);
+        --ast->scope_depth; ast->bindings.len = saved; return stmt;
     }
     if (take(ast, TOK_KW_BREAK)) { CinderStmt *stmt = new_stmt(ast, ST_BREAK, token->loc); (void)expect(ast, ';', "';'"); return stmt; }
     if (take(ast, TOK_KW_CONTINUE)) { CinderStmt *stmt = new_stmt(ast, ST_CONTINUE, token->loc); (void)expect(ast, ';', "';'"); return stmt; }
@@ -401,31 +569,49 @@ static CinderStmt *parse_statement(CinderAst *ast) {
 
 int cinder_parse(CinderAst *ast) {
     while (!is(ast, TOK_EOF)) {
-        bool is_static = take(ast, TOK_KW_STATIC);
-        bool is_extern = take(ast, TOK_KW_EXTERN);
-        if (!is_type_start(peek(ast)->kind)) {
-            cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected a declaration");
-            ast->cursor++;
-            continue;
+        bool is_static = false, is_extern = false, alias = false;
+        while (is(ast, TOK_KW_STATIC) || is(ast, TOK_KW_EXTERN) || is(ast, TOK_KW_TYPEDEF) || is(ast, TOK_KW_INLINE) || is(ast, TOK_KW_NORETURN)) {
+            CinderTokenKind kind = peek(ast)->kind; ++ast->cursor;
+            if (kind == TOK_KW_STATIC) is_static = true;
+            else if (kind == TOK_KW_EXTERN) is_extern = true;
+            else if (kind == TOK_KW_TYPEDEF) alias = true;
         }
-        CinderLoc loc = peek(ast)->loc;
-        CinderType *base = parse_type_specifier(ast);
-        if ((base->kind == TYPE_STRUCT || base->kind == TYPE_UNION) && is(ast, ';')) { ast->cursor++; continue; }
-        char *name = NULL; CinderLoc name_loc;
-        CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
-        CinderDecl *decl = new_decl(ast, type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
-        decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
-        if (type->kind == TYPE_FUNCTION) {
-            for (size_t i = 0U; i < type->params.len; ++i) {
-                CinderDecl *param = new_decl(ast, DECL_VAR, name_loc); param->name = type->params.data[i].name; param->type = type->params.data[i].type; cinder_vec_push((CinderVec *)&decl->params, &param);
+        if ((unsigned)is_static + (unsigned)is_extern + (unsigned)alias > 1U) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting storage classes");
+        if (!is_type_start(ast, peek(ast))) {
+            cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected a declaration"); ++ast->cursor; continue;
+        }
+        CinderLoc loc = peek(ast)->loc; CinderType *base = parse_type_specifier(ast);
+        if ((base->kind == TYPE_STRUCT || base->kind == TYPE_UNION || base->kind == TYPE_ENUM) && take(ast, ';')) continue;
+        bool definition = false;
+        do {
+            char *name = NULL; CinderLoc name_loc;
+            CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
+            CinderDecl *decl = new_decl(ast, alias ? DECL_TYPEDEF : type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
+            decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
+            bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
+            if (decl->kind == DECL_FUNCTION) {
+                for (size_t i = 0U; i < type->params.len; ++i) {
+                    CinderDecl *param = new_decl(ast, DECL_VAR, name_loc); param->name = type->params.data[i].name; param->type = type->params.data[i].type; cinder_vec_push((CinderVec *)&decl->params, &param);
+                }
+                if (is(ast, '{')) {
+                    size_t saved = ast->bindings.len; ++ast->scope_depth;
+                    for (size_t p = 0U; p < decl->params.len; ++p) {
+                        CinderDecl *param = decl->params.data[p];
+                        if (param->name == NULL) cinder_diag(ast->diags, CINDER_ERROR, name_loc, "function definition requires parameter names");
+                        bind_name(ast, param->name, param->type, PARSE_OBJECT, 0, name_loc);
+                    }
+                    --ast->scope_depth;
+                    decl->is_definition = true; decl->body = parse_compound(ast); definition = true;
+                    ast->bindings.len = saved;
+                }
+            } else if (take(ast, '=')) {
+                decl->initializer = parse_assignment(ast);
+                if (alias) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef cannot have an initializer");
             }
-            if (is(ast, '{')) { decl->is_definition = true; decl->body = parse_compound(ast); }
-            else (void)expect(ast, ';', "';'");
-        } else {
-            if (take(ast, '=')) decl->initializer = parse_assignment(ast);
-            (void)expect(ast, ';', "';'");
-        }
-        cinder_vec_push((CinderVec *)&ast->declarations, &decl);
+            cinder_vec_push((CinderVec *)&ast->declarations, &decl);
+            if (definition) break;
+        } while (take(ast, ','));
+        if (!definition) (void)expect(ast, ';', "';'");
     }
     return ast->diags->errors == 0U ? 0 : 1;
 }

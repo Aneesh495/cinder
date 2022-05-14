@@ -59,6 +59,9 @@ test-numeric: build
 test-storage:
 	@tests/run_storage.sh
 
+test-census:
+	@python3 tests/test_census.py
+
 test-allocation: build
 	@tests/run_allocation.sh
 

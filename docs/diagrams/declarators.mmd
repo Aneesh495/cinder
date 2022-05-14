@@ -1,0 +1,15 @@
+flowchart TD
+    Tokens[Declaration tokens and scoped bindings] --> Spec[Base type and qualifiers]
+    Tokens --> Tree[Declarator binding tree]
+    Tree --> Prefix[Pointer prefixes and pointer qualifiers]
+    Tree --> Direct[Identifier or parenthesized declarator]
+    Direct --> Suffix[Array and function suffixes]
+    Suffix --> Params[Prototype parameter types and adjustment]
+    Spec --> Apply[Apply tree to base type]
+    Prefix --> Apply
+    Suffix --> Apply
+    Apply --> Type[Typed declaration with stable tag identity]
+    Type --> Names[Publish typedef or object binding]
+    Names --> Init[Parse initializer in declaration order]
+    Init --> Sema[Check visibility and conversions]
+    Sema --> IR[Typed storage and call signatures]

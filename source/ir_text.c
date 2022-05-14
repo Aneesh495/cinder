@@ -68,7 +68,7 @@ static void write_type(FILE *out, const TypeTable *table, size_t id) {
     const CinderType *type = table->data[id];
     fprintf(out, "type %zu %s %u %u %u %u %zu %zu ", id, kind_name(type->kind), type->qualifiers, type->complete ? 1U : 0U, type->is_unsigned ? 1U : 0U, type->plain_char ? 1U : 0U, type->size, type->align);
     write_type_ref(out, table, type->base); fprintf(out, " %zu ", type->array_len); write_type_ref(out, table, type->return_type);
-    fprintf(out, " %u ", type->variadic ? 1U : 0U); write_string(out, type->tag); fprintf(out, " params %zu fields %zu\n", type->params.len, type->fields.len);
+    fprintf(out, " %u ", type->variadic ? 1U : 0U); write_string(out, type->tag); fprintf(out, " params %zu fields %zu identity %u\n", type->params.len, type->fields.len, type->identity);
     for (size_t p = 0U; p < type->params.len; ++p) {
         fputs("type-param ", out); write_string(out, type->params.data[p].name); fputc(' ', out); write_type_ref(out, table, type->params.data[p].type); fputc('\n', out);
     }
@@ -270,6 +270,8 @@ static void read_types(Reader *reader) {
         type->base = type_ref(reader); type->array_len = (size_t)number(reader, IR_TABLE_LIMIT); type->return_type = type_ref(reader);
         type->variadic = boolean(reader); type->tag = string(reader, false, false);
         expect(reader, "params"); size_t parameters = (size_t)number(reader, 4096U); expect(reader, "fields"); size_t fields = (size_t)number(reader, 65536U);
+        expect(reader, "identity"); type->identity = (uint32_t)number(reader, UINT32_MAX);
+        if (type->identity == 0U) parse_error(reader, "type identity must be nonzero");
         for (size_t p = 0U; p < parameters && !reader->failed; ++p) {
             expect(reader, "type-param"); CinderParam param; param.name = string(reader, false, false); param.type = type_ref(reader);
             if (param.type == NULL) parse_error(reader, "parameter has no type");

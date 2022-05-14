@@ -52,6 +52,23 @@ static CinderSymbol *scope_here(CinderScope *scope, const char *name) {
 
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope);
 
+static void sema_local_decl(CinderSema *sema, CinderDecl *first, CinderScope *scope, CinderScope *parameter_scope) {
+    for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
+        if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
+        if (decl->kind == DECL_VAR && (decl->is_static || decl->is_extern)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "block-scope static/extern object storage is not implemented");
+        if (decl->kind == DECL_VAR && (decl->type->kind == TYPE_VOID || !decl->type->complete)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "local object requires a complete object type");
+        CinderSymbol *old = scope_here(scope, decl->name);
+        if (old != NULL || (parameter_scope != NULL && scope_here(parameter_scope, decl->name) != NULL)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
+        else scope_add(scope, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
+        if (decl->initializer != NULL) {
+            CinderType *value = sema_expr(sema, decl->initializer, scope);
+            bool string_array = decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY && decl->type->base->kind == TYPE_CHAR;
+            if (!string_array && !value_compatible(decl->type, value)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "initializer for '%s' has incompatible type", decl->name);
+            if (numeric_type(decl->type) && numeric_type(value)) decl->initializer = convert_expr(sema, decl->initializer, decl->type);
+        }
+    }
+}
+
 static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, CinderType *return_type, unsigned loop_depth) {
     if (stmt == NULL) return;
     switch (stmt->kind) {
@@ -66,11 +83,7 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
             for (size_t i = 0U; i < stmt->as.block.items.len; ++i) {
                 CinderStmt *item = stmt->as.block.items.data[i];
                 if (item->kind == ST_DECL) {
-                    CinderDecl *decl = item->as.decl;
-                    if (scope_here(&child, decl->name) != NULL || (stmt == sema->function_body && scope_here(scope, decl->name) != NULL)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
-                    else scope_add(&child, decl->name, decl->type, decl, false);
-                    if (decl->initializer != NULL && !(decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY && decl->type->base->kind == TYPE_CHAR) && !value_compatible(decl->type, sema_expr(sema, decl->initializer, &child))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "initializer for '%s' has incompatible type", decl->name);
-                    if (decl->initializer != NULL && numeric_type(decl->type) && numeric_type(decl->initializer->type)) decl->initializer = convert_expr(sema, decl->initializer, decl->type);
+                    sema_local_decl(sema, item->as.decl, &child, stmt == sema->function_body ? scope : NULL);
                 } else sema_stmt(sema, item, &child, return_type, loop_depth);
             }
             for (size_t i = 0U; i < child.symbols.len; ++i) free(child.symbols.data[i].name);
@@ -88,13 +101,7 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
             CinderScope child = {{NULL, 0U, 0U}, scope};
             if (stmt->as.for_stmt.init != NULL) {
                 if (stmt->as.for_stmt.init->kind == ST_DECL) {
-                    CinderDecl *decl = stmt->as.for_stmt.init->as.decl;
-                    scope_add(&child, decl->name, decl->type, decl, false);
-                    if (decl->initializer != NULL) {
-                        CinderType *value = sema_expr(sema, decl->initializer, &child);
-                        if (!value_compatible(decl->type, value)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "incompatible for-loop initializer");
-                        else decl->initializer = convert_expr(sema, decl->initializer, decl->type);
-                    }
+                    sema_local_decl(sema, stmt->as.for_stmt.init->as.decl, &child, NULL);
                 } else sema_stmt(sema, stmt->as.for_stmt.init, &child, return_type, loop_depth);
             }
             if (stmt->as.for_stmt.condition != NULL && !numeric_type(sema_expr(sema, stmt->as.for_stmt.condition, &child))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "for condition must be scalar");
@@ -121,7 +128,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         case EX_STRING: expr->type = cinder_type_pointer(sema->types, sema->types->char_type); return expr->type;
         case EX_NAME: {
             CinderSymbol *symbol = cinder_scope_lookup(scope, expr->as.name);
-            if (symbol == NULL) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "use of undeclared identifier '%s'", expr->as.name); expr->type = sema->types->error_type; return expr->type; }
+            if (symbol == NULL || !expr->name_visible) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "use of undeclared identifier '%s'", expr->as.name); expr->type = sema->types->error_type; return expr->type; }
             expr->type = symbol->type; expr->is_lvalue = !symbol->is_function; return expr->type;
         }
         case EX_BINARY: {
@@ -221,12 +228,15 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
 int cinder_sema_run(CinderSema *sema) {
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
+        if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
+        if (decl->kind == DECL_VAR && decl->type->kind == TYPE_VOID) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "global object cannot have void type");
         CinderSymbol *old = cinder_scope_lookup(&sema->globals, decl->name);
         if (old != NULL && !cinder_type_compatible(old->type, decl->type)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting declaration of '%s'", decl->name);
         else if (old == NULL) scope_add(&sema->globals, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
     }
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
+        if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
         if (decl->initializer != NULL) {
             CinderType *initializer_type = sema_expr(sema, decl->initializer, &sema->globals);
             bool string_array = decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY && decl->type->base->kind == TYPE_CHAR;

@@ -7,9 +7,15 @@
       "name": "Translation units and includes",
       "required_boundary": "Actual multi-file preprocessing and linkage",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/preprocessor/include_guard.c",
+        "tests/preprocessor/include_macro.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/preprocessor/invalid_include_missing.c",
+        "tests/preprocessor/invalid_include_cycle.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -20,9 +26,20 @@
       "name": "Object/function/variadic macros",
       "required_boundary": "Expansion order, recursion control, #, and ##",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/preprocessor/argument_prescan.c",
+        "tests/preprocessor/balanced_arguments.c",
+        "tests/preprocessor/paste_rescan.c",
+        "tests/preprocessor/stringification_expanded.c",
+        "tests/preprocessor/variadic_stringify.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/preprocessor/invalid_macro_arity.c",
+        "tests/preprocessor/invalid_macro_duplicate_parameter.c",
+        "tests/preprocessor/invalid_macro_paste.c",
+        "tests/preprocessor/invalid_macro_redefinition.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -33,9 +50,19 @@
       "name": "Conditional preprocessing",
       "required_boundary": "Short-circuit evaluation and inactive branches",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/preprocessor/conditional_chain.c",
+        "tests/preprocessor/conditional_chain_later.c",
+        "tests/preprocessor/conditional_nested_inactive.c",
+        "tests/preprocessor/conditional_unsigned.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/preprocessor/invalid_division.c",
+        "tests/preprocessor/invalid_pp_float.c",
+        "tests/preprocessor/invalid_pp_trailing.c",
+        "tests/preprocessor/invalid_unmatched_endif.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -122,9 +149,16 @@
       "name": "Array declarations",
       "required_boundary": "Bounds, decay exceptions, incomplete arrays",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/control/constant_size_bound.c",
+        "tests/control/declarator_multidimensional.c",
+        "tests/control/declarator_pointer_array.c",
+        "tests/control/enum_array_bound.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/array_zero_bound.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -135,9 +169,17 @@
       "name": "Function declarators",
       "required_boundary": "Function pointers and nested pointer/array binding",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/control/declarator_abstract_callback.c",
+        "tests/control/declarator_callback_typedef.c",
+        "tests/control/declarator_return_pointer.c",
+        "tests/control/prototype_parenthesized_name.c",
+        "tests/control/prototype_unnamed.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/function_array_return.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -147,10 +189,23 @@
       "id": "C10",
       "name": "Typedef names",
       "required_boundary": "Namespace/scope and shadowing",
-      "status": "planned",
-      "valid_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/typedef_block_shadow.c",
+        "tests/control/typedef_for_scope.c",
+        "tests/control/typedef_object_shadow.c",
+        "tests/control/typedef_parenthesized_object.c",
+        "tests/control/typedef_repeated.c",
+        "tests/control/typedef_unsigned.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/typedef_as_expression.c",
+        "tests/constraints/typedef_conflict.c",
+        "tests/constraints/typedef_initializer.c",
+        "tests/constraints/typedef_object_conflict.c",
+        "tests/constraints/typedef_parameter_conflict.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -161,9 +216,19 @@
       "name": "Structures",
       "required_boundary": "Field access, alignment, padding, copy, passing/returning",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/control/aggregate_anonymous_size.c",
+        "tests/control/aggregate_grouped_fields.c",
+        "tests/control/tag_block_shadow.c",
+        "tests/control/tag_forward_completion.c",
+        "tests/control/tag_forward_shadow.c",
+        "tests/control/tag_separate_namespace.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/duplicate_member.c",
+        "tests/constraints/tag_kind_conflict.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -199,10 +264,23 @@
       "id": "C14",
       "name": "Enumerations",
       "required_boundary": "Constant values, references, representation policy",
-      "status": "planned",
-      "valid_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/constant_conditional_unsigned.c",
+        "tests/control/constant_unevaluated_branch.c",
+        "tests/control/enum_arithmetic.c",
+        "tests/control/enum_array_bound.c",
+        "tests/control/enum_shadow.c",
+        "tests/control/enum_successors.c"
+      ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/enum_duplicate.c",
+        "tests/constraints/enum_empty.c",
+        "tests/constraints/enum_out_of_range.c",
+        "tests/constraints/enum_overflow.c",
+        "tests/constraints/enum_zero_divisor.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -418,8 +496,13 @@
       "id": "C30",
       "name": "Static initialization",
       "required_boundary": "Constant expressions, addresses, and relocations",
-      "status": "planned",
-      "valid_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/control/constant_global_expression.c",
+        "tests/control/constant_global_float.c",
+        "tests/control/constant_global_integer_to_float.c",
+        "tests/control/float_global_mutation.c"
+      ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
@@ -644,7 +727,10 @@
       "status": "partial",
       "valid_cases": [],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/later_function_undeclared.c",
+        "tests/constraints/later_global_undeclared.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."

@@ -9,7 +9,7 @@ followed by hexadecimal bytes; `-` is absent. `none` is an absent reference.
 
 The type table records kind, qualifiers, completeness, signedness, plain-char
 identity, target size/alignment, pointee/element type, array length, return type,
-variadic state, tag, parameters, and aggregate fields including offsets and bit
+variadic state, tag, stable type identity, parameters, and aggregate fields including offsets and bit
 positions. Scalar layouts must match the target. By-value aggregate cycles are
 rejected; pointers to recursive aggregate identities are valid.
 
@@ -47,3 +47,7 @@ layouts, references, CFG tables, opcodes, truncation, numeric overflow, and type
 cycles while preserving prior output. `tests/ir_campaign.c` uses independent
 expected arithmetic values and undefined/resource classifications. It does not
 reuse interpreter arithmetic to construct the oracle.
+
+The schema is under development with the compiler. Artifacts from earlier
+checkpoints are source-bound evidence and must be regenerated after format or
+semantic changes.
