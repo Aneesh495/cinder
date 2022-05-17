@@ -250,3 +250,22 @@ with 36 malformed-IR rejection mutations. The complete typed IR campaign was
 rerun after the type identity format change. Native validation of this increment
 is pending publication. Addressable storage is the next implementation boundary;
 the full acceptance gates remain incomplete.
+
+Linux run [37166199680](https://github.com/Aneesh495/cinder/actions/runs/37166199680)
+passed `79cc4de`, including all 185 native source cases, 370 direct/parsed IR
+native checks, the full typed IR campaign, and native object probes.
+
+## Acceptance integrity continuation
+
+Removed verify's build/census/compiler-execution side effects and the legacy
+empty-gate/incomplete-manifest success path. The exact full registry now guards
+verification, with source bytes, generated configurations, compiler bytes, and
+artifact hashes bound separately. Deleted/changed artifacts, altered compiler,
+uncommitted/new source, configuration changes, corrupted bootstrap binding, and
+truncated/vacuous manifests are rejected by integrity tests.
+
+Ordinary CI records partial incremental validation separately. Native environment
+flags and summary reuse no longer create acceptance passes. Full runners and
+dedicated raw-report readers remain open and acceptance fails explicitly until
+they exist. This is an integrity guard, not completed full acceptance. Pointer
+and object memory implementation continues next.
