@@ -29,7 +29,7 @@ static void destroy_graph(CinderIRFunction *function) {
         }
         free(block->instructions.data); free(block->predecessors.data); free(block->successors.data);
     }
-    free(function->blocks.data);
+    free(function->blocks.data); free(function->local_types.data);
 }
 
 static void create_graph(CinderIRFunction *function, CinderType *integer, CinderType *floating, unsigned kind) {
@@ -112,6 +112,8 @@ static bool rejected_mutation(CinderAllocation *allocation, unsigned kind) {
     CinderInterval *first = &allocation->intervals.data[0];
     CinderLocation old = first->location;
     unsigned old_mask = allocation->saved_gpr_mask;
+    size_t old_frame = allocation->frame_size, old_bytes = allocation->local_bytes;
+    int old_local = allocation->local_offsets.data[0];
     if (kind == 0U) first->location = (CinderLocation){LOC_REGISTER, REG_R10, 0};
     if (kind == 1U) first->location = (CinderLocation){LOC_STACK, REG_NONE, -8};
     if (kind == 2U) first->location = (CinderLocation){LOC_STACK, REG_NONE, -(int)allocation->frame_size - 8};
@@ -120,29 +122,39 @@ static bool rejected_mutation(CinderAllocation *allocation, unsigned kind) {
         /* Both root definitions are live at the end of the entry block. */
     }
     if (kind == 4U) { first->location = (CinderLocation){LOC_REGISTER, REG_R12, 0}; allocation->saved_gpr_mask = 0U; }
+    if (kind == 5U) allocation->local_offsets.data[0] = allocation->local_offsets.data[1];
+    if (kind == 6U) allocation->local_bytes += 8U;
+    if (kind == 7U) allocation->frame_size = allocation->local_bytes;
+    if (kind == 8U) allocation->saved_gpr_mask |= 16U;
+    if (kind == 9U) first->location = (CinderLocation){LOC_STACK, REG_NONE, -(int)(allocation->local_bytes + (allocation->spill_slots + 1U) * 8U)};
     int result = cinder_verify_allocation(allocation, &diagnostics);
     bool rejected = result != 0 && diagnostics.errors != 0U;
     first->location = old; allocation->saved_gpr_mask = old_mask;
+    allocation->local_offsets.data[0] = old_local; allocation->frame_size = old_frame; allocation->local_bytes = old_bytes;
     cinder_diags_destroy(&diagnostics); return rejected;
 }
 
 int main(int argc, char **argv) {
     size_t count = argc > 1 ? (size_t)strtoul(argv[1], NULL, 10) : 10000U;
     if (count == 0U) return 2;
-    CinderType integer; memset(&integer, 0, sizeof(integer)); integer.kind = TYPE_LONG; integer.size = 8U;
-    CinderType floating; memset(&floating, 0, sizeof(floating)); floating.kind = TYPE_DOUBLE; floating.size = 8U;
+    CinderType integer; memset(&integer, 0, sizeof(integer)); integer.kind = TYPE_LONG; integer.size = 8U; integer.align = 8U; integer.complete = true;
+    CinderType floating; memset(&floating, 0, sizeof(floating)); floating.kind = TYPE_DOUBLE; floating.size = 8U; floating.align = 8U; floating.complete = true;
+    CinderType array = integer; array.kind = TYPE_ARRAY; array.size = 37U; array.align = 1U;
+    CinderType aggregate = integer; aggregate.kind = TYPE_STRUCT; aggregate.size = 48U; aggregate.align = 16U;
     unsigned mutations = 0U;
     for (size_t test = 0U; test < count; ++test) {
         state = UINT64_C(0x62762dcf87102) + test * UINT64_C(0x9e3779b97f4a7c15);
         CinderIRFunction function; create_graph(&function, &integer, &floating, (unsigned)(test % 7U));
         function.local_count = 2U;
+        CinderType *first_type = test % 2U == 0U ? &integer : &array, *second_type = test % 3U == 0U ? &aggregate : &floating;
+        cinder_vec_push((CinderVec *)&function.local_types, &first_type); cinder_vec_push((CinderVec *)&function.local_types, &second_type);
         CinderDiagnostics diagnostics; cinder_diags_init(&diagnostics);
         CinderAllocation allocation; cinder_alloc_init(&allocation, &function);
         if (cinder_allocate(&allocation, &diagnostics) != 0 || cinder_verify_allocation(&allocation, &diagnostics) != 0) {
             fprintf(stderr, "allocation failed seed=%zu errors=%u\n", test, diagnostics.errors); return 1;
         }
         if (test < 1000U) {
-            if (!rejected_mutation(&allocation, (unsigned)(test % 5U))) { fprintf(stderr, "checker accepted mutation %zu\n", test); return 1; }
+            if (!rejected_mutation(&allocation, (unsigned)(test % 10U))) { fprintf(stderr, "checker accepted mutation %zu\n", test); return 1; }
             ++mutations;
         }
         printf("{\"seed\":%zu,\"blocks\":%zu,\"values\":%zu,\"spills\":%u,\"slots\":%zu,\"frame\":%zu,\"checker\":true}\n", test, function.blocks.len, function.value_count, allocation.spills, allocation.spill_slots, allocation.frame_size);

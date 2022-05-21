@@ -80,9 +80,9 @@ static int forced_cycle(CinderAllocation *allocation, CinderDiagnostics *diagnos
         CinderInterval *interval = &allocation->intervals.data[i];
         if (interval->value >= 6U && interval->value <= 8U) {
             interval->location = (CinderLocation){LOC_REGISTER, (CinderRegister)((fp ? REG_XMM2 : REG_R12) + interval->value - 6U), 0};
-        } else interval->location = (CinderLocation){LOC_STACK, REG_NONE, -(int)((allocation->ir->local_count + interval->value + 1U) * 8U)};
+        } else interval->location = (CinderLocation){LOC_STACK, REG_NONE, -(int)((allocation->local_bytes / 8U + interval->value + 1U) * 8U)};
     }
-    allocation->frame_size = ((allocation->ir->local_count + allocation->spill_slots + (fp ? 0U : 3U) + 14U) * 8U + 15U) & ~(size_t)15U;
+    allocation->frame_size = ((allocation->local_bytes / 8U + allocation->spill_slots + (fp ? 0U : 3U) + 14U) * 8U + 15U) & ~(size_t)15U;
     return cinder_verify_allocation(allocation, diagnostics);
 }
 

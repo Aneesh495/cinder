@@ -701,11 +701,14 @@ typedef struct {
     unsigned spills;
     unsigned saved_gpr_mask;
     size_t spill_slots;
+    CINDER_VEC_TYPE(int) local_offsets;
+    size_t local_bytes;
 } CinderAllocation;
 
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function);
 void cinder_alloc_destroy(CinderAllocation *allocation);
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_layout_stack(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
 bool cinder_ir_floating(const CinderType *type);
 CinderType *cinder_ir_value_type(const CinderIRFunction *function, CinderValueId value);
