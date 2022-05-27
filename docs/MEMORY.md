@@ -1,0 +1,39 @@
+# Object memory
+
+Typed expressions preserve array/function designators until value conversion.
+Array decay yields an element pointer. Address-of and sizeof retain the object
+type. Subscripts, dereference, and member selection form lvalues. Compound
+assignment and increments evaluate their lvalue address once.
+
+IR represents local/global addresses, scalar memory reads/writes, pointer
+offsets, pointer differences, and member pointers explicitly. Addressed locals
+are excluded from promotion. Pointer strides and member offsets come from the
+LP64 type model, and the verifier checks them independently.
+
+The interpreter allocates byte storage with a stable object identity, declared
+type, initialization map, lifetime state, and stored pointer metadata. Pointers
+carry object identity, offset, and subobject bounds. Loads inspect only owned
+bytes and never dereference host addresses. Character access may inspect an
+object representation; other accesses must match an aligned declared subobject.
+Const objects/subobjects reject writes even after a cast.
+
+Each block entry creates fresh local identities. Scope exits, break, continue,
+and returns retire the objects being left. Reentering a loop cannot reuse
+initialized bytes or revive a previously escaped pointer. Parameter objects
+remain alive until their function returns. Calls pass full value metadata in
+source argument order. Phi inputs are copied simultaneously.
+
+Native code uses actual object extents and declared-width integer/SSE memory
+operations. Arrays and aggregate objects occupy their complete target size.
+RIP-relative addresses use original ELF relocations. Pointer offsets scale by
+the exact target pointee size.
+
+`make test-control` checks the authored defined memory programs against host
+reference execution, IR interpretation, emitted objects, and native Linux
+execution. `make test-memory` records separate UB classes through serialized
+IR and never executes emitted undefined programs.
+
+Aggregate values/copy, bitfields, general initializer lists, compound literals,
+allocated storage/library models, restrict contracts, and goto scope entry
+remain open. The abstract VM does not expose host addresses or padding values
+as differential equality oracles.

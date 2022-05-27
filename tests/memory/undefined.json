@@ -1,0 +1,102 @@
+[
+  {
+    "source": "null_dereference.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "one_past_load.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "negative_index.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "pointer_too_far.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "scalar_offset.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "member_past_load.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "matrix_row_past.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "uninitialized_element.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "partial_initialization.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "block_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "return_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "break_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "continue_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "reentry_uninitialized.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "reentry_escaped.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "incompatible_alias.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "misaligned_alias.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "readonly_alias.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "distinct_difference.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "distinct_relational.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "row_relational.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "local_readonly.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "character_readonly.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "array_readonly.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "expired_condition.undefined.c",
+    "classification": 10
+  }
+]

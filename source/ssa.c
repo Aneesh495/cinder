@@ -41,7 +41,7 @@ static void local_liveness(const CinderIRFunction *function, const CinderCFGAnal
             const CinderIRInst *inst = &block->instructions.data[i];
             if (inst->slot < 0 || (size_t)inst->slot != slot) continue;
             if (inst->op == IR_LOCAL_LOAD && !definitions[b]) uses[b] = true;
-            if (inst->op == IR_LOCAL_STORE) definitions[b] = true;
+            if (inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_BEGIN) definitions[b] = true;
         }
     }
     bool changed;
@@ -110,6 +110,11 @@ static void rename_slots(CinderIRFunction *function, const CinderCFGAnalysis *cf
                 CinderIRInst *inst = &block->instructions.data[i];
                 if (inst->slot < 0 || (size_t)inst->slot >= function->local_count || !eligible[inst->slot]) continue;
                 size_t slot = (size_t)inst->slot;
+                if (inst->op == IR_LOCAL_BEGIN) {
+                    RenameUndo change = {slot, current[slot]}; cinder_vec_push((CinderVec *)&undo, &change);
+                    inst->op = IR_UNDEF; inst->dst = (CinderValueId)function->value_count++; inst->slot = -1;
+                    current[slot] = inst->dst; continue;
+                }
                 if (inst->op == IR_PHI || inst->op == IR_LOCAL_STORE) {
                     RenameUndo change = {slot, current[slot]};
                     cinder_vec_push((CinderVec *)&undo, &change);
@@ -154,6 +159,11 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
     for (size_t slot = 0U; slot < function->local_count; ++slot) {
         eligible[slot] = promotable(function->local_types.data[slot]); current[slot] = CINDER_INVALID_VALUE;
     }
+    for (size_t b = 0U; b < function->blocks.len; ++b)
+        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+            const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+            if (inst->op == IR_LOCAL_ADDRESS && inst->slot >= 0 && (size_t)inst->slot < function->local_count) eligible[inst->slot] = false;
+        }
     int inserted = insert_phis(function, &cfg, eligible);
     CinderIRBlock *entry = &function->blocks.data[0];
     for (size_t slot = 0U; slot < function->local_count; ++slot) {

@@ -32,6 +32,7 @@ set(CINDER_SOURCES
   source/analysis.c
   source/ssa.c
   source/ir_interp.c
+  source/interp_memory.c
   source/opt.c
   source/mir.c
   source/regalloc.c

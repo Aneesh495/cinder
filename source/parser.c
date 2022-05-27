@@ -16,7 +16,7 @@ static CinderToken *expect(CinderAst *ast, CinderTokenKind kind, const char *wha
 static void *node_alloc(CinderAst *ast, size_t size) { return cinder_arena_alloc(&ast->arena, size, _Alignof(max_align_t)); }
 static CinderExpr *new_expr(CinderAst *ast, CinderExprKind kind, CinderLoc loc) { CinderExpr *expr = node_alloc(ast, sizeof(*expr)); memset(expr, 0, sizeof(*expr)); expr->kind = kind; expr->loc = loc; return expr; }
 static CinderStmt *new_stmt(CinderAst *ast, CinderStmtKind kind, CinderLoc loc) { CinderStmt *stmt = node_alloc(ast, sizeof(*stmt)); memset(stmt, 0, sizeof(*stmt)); stmt->kind = kind; stmt->loc = loc; return stmt; }
-static CinderDecl *new_decl(CinderAst *ast, CinderDeclKind kind, CinderLoc loc) { CinderDecl *decl = node_alloc(ast, sizeof(*decl)); memset(decl, 0, sizeof(*decl)); decl->kind = kind; decl->loc = loc; decl->params.data = NULL; decl->params.len = 0U; decl->params.cap = 0U; return decl; }
+static CinderDecl *new_decl(CinderAst *ast, CinderDeclKind kind, CinderLoc loc) { CinderDecl *decl = node_alloc(ast, sizeof(*decl)); memset(decl, 0, sizeof(*decl)); decl->kind = kind; decl->loc = loc; decl->lowering_slot = -1; decl->params.data = NULL; decl->params.len = 0U; decl->params.cap = 0U; return decl; }
 
 static CinderParseBinding *binding_token(CinderAst *ast, const CinderToken *token, bool tag) {
     if (token->kind != TOK_IDENTIFIER) return NULL;
@@ -381,6 +381,16 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             }
             (void)expect(ast, ')', "')'");
             expr = call;
+        } else if (take(ast, '[')) {
+            CinderExpr *index = new_expr(ast, EX_INDEX, expr->loc);
+            index->as.index.base = expr; index->as.index.index = parse_expression(ast);
+            (void)expect(ast, ']', "']'"); expr = index;
+        } else if (is(ast, '.') || is(ast, TOK_ARROW)) {
+            bool arrow = take(ast, TOK_ARROW); if (!arrow) (void)take(ast, '.');
+            CinderToken *name = expect(ast, TOK_IDENTIFIER, "member name");
+            CinderExpr *member = new_expr(ast, EX_MEMBER, expr->loc);
+            member->as.member.base = expr; member->as.member.arrow = arrow;
+            member->as.member.name = cinder_arena_strndup(&ast->arena, name->text, name->length); expr = member;
         } else if (take(ast, TOK_PLUSPLUS)) {
             CinderExpr *unary = new_expr(ast, EX_UNARY, expr->loc); unary->as.unary.op = TOK_PLUSPLUS; unary->as.unary.value = expr; unary->as.unary.postfix = true; expr = unary;
         } else if (take(ast, TOK_MINUSMINUS)) {

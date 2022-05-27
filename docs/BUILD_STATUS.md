@@ -1,6 +1,6 @@
 # Build status
 
-Updated: 2026-10-03
+Updated: 2026-10-05
 
 ## Repository and publication
 
@@ -21,7 +21,7 @@ Updated: 2026-10-03
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 - Eight authored application fixtures and a deterministic defined-program generator are now part of the local workload suite.
 
-The current native implementation covers scalar integer/float operations and mixed scalar SysV argument lists. Complete C01-C48 coverage, full SSA renaming/out-of-SSA, aggregate expression/ABI classification, callbacks, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
+The current native implementation covers scalar integer/float operations and mixed scalar SysV argument lists. Complete C01-C48 coverage, aggregate expression/ABI classification, callbacks, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
 
 ## Commands and results
 
@@ -269,3 +269,18 @@ flags and summary reuse no longer create acceptance passes. Full runners and
 dedicated raw-report readers remain open and acceptance fails explicitly until
 they exist. This is an integrity guard, not completed full acceptance. Pointer
 and object memory implementation continues next.
+
+## Pointer and object memory continuation
+
+Added explicit array decay, subscripts, member selection, addresses, typed
+scalar loads/stores, pointer offsets/differences, and object comparisons.
+Addressed locals stay out of SSA promotion. Native stack objects use declared
+byte widths and target extents. The interpreter owns byte objects with pointer
+provenance, initialization, subobject bounds, alignment/access checks, and
+block/loop lifetimes. `cinderir --classify` exposes the actual outcome as JSON.
+
+The authored source corpus now includes arrays, nested members, scalar aliases,
+pointer parameters/returns, and branch/loop scope exits. Undefined memory
+cases are classified without native execution. Incremental tests and hosted
+publication validate each checkpoint; aggregate values, callbacks, complete
+initializers, hosted runtime, and the full acceptance campaigns remain open.
