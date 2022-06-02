@@ -42,6 +42,7 @@ jobs:
             .agent-local/ssa
             .agent-local/control
             .agent-local/memory
+            .agent-local/abi-boundary
             .agent-local/allocation
             .agent-local/objects
             build

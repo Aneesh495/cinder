@@ -543,6 +543,7 @@ typedef enum {
     IR_POINTER_MEMBER,
     IR_LOCAL_BEGIN,
     IR_LOCAL_END,
+    IR_FUNCTION_ADDRESS,
     IR_UNDEF,
 } CinderIROp;
 

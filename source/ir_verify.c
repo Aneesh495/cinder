@@ -137,9 +137,14 @@ static void check_storage(const CinderIRModule *module, const CinderIRFunction *
         for (size_t p = 0U; p < (size_t)inst->slot; ++p) if (cinder_ir_floating(function->params.data[p]->type) == fp) ++ordinal;
         if ((size_t)inst->operator_code != ordinal || fp != cinder_ir_floating(inst->type) || !same_value_type(inst->type, function->params.data[inst->slot]->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR argument class, ordinal, or type disagrees with prototype");
     }
+    if (inst->op == IR_FUNCTION_ADDRESS) {
+        if (inst->type->kind != TYPE_POINTER || inst->type->base->kind != TYPE_FUNCTION) cinder_diag(diags, CINDER_FATAL, inst->loc, "function address has no function pointer type");
+        else for (size_t f = 0U; f < module->functions.len; ++f) if (strcmp(module->functions.data[f].name, inst->callee) == 0 && !cinder_type_compatible(inst->type->base, module->functions.data[f].type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "function address type disagrees with definition");
+    }
     if (inst->op == IR_CALL) {
         const CinderType *signature = inst->callee_type;
         if (signature == NULL || signature->kind != TYPE_FUNCTION || signature->return_type == NULL) { cinder_diag(diags, CINDER_FATAL, inst->loc, "IR call has no function signature"); return; }
+        if (inst->callee == NULL && (types[inst->left]->kind != TYPE_POINTER || !cinder_type_equal(types[inst->left]->base, signature))) cinder_diag(diags, CINDER_FATAL, inst->loc, "indirect callee type disagrees with function signature");
         if (inst->args.len < signature->params.len || (!signature->variadic && inst->args.len != signature->params.len) || !same_value_type(inst->type, signature->return_type) || inst->floating_result != cinder_ir_floating(inst->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR call arity or return class disagrees with signature");
         for (size_t a = 0U; a < inst->args.len; ++a) {
             const CinderType *type = types[inst->args.data[a]];
@@ -147,7 +152,7 @@ static void check_storage(const CinderIRModule *module, const CinderIRFunction *
             if (a < signature->params.len && !same_value_type(type, signature->params.data[a].type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR call argument type disagrees with prototype");
             if (a >= signature->params.len && (type->kind == TYPE_FLOAT || type->size < 4U)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR variadic argument lacks default promotion");
         }
-        for (size_t f = 0U; f < module->functions.len; ++f)
+        for (size_t f = 0U; inst->callee != NULL && f < module->functions.len; ++f)
             if (strcmp(module->functions.data[f].name, inst->callee) == 0 && !cinder_type_compatible(signature, module->functions.data[f].type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR call signature disagrees with function definition");
     } else if (inst->callee_type != NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "non-call IR instruction carries a function signature");
 }
@@ -218,7 +223,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                     if (!(integer(inst->type) || cinder_ir_floating(inst->type))) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result requires a supported scalar value type");
                 } else if (inst->dst != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "effect-only IR instruction defines a value");
                 if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_ADDRESS || inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END || inst->op == IR_PHI) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot is outside storage table");
-                if ((inst->op == IR_GLOBAL_LOAD || inst->op == IR_GLOBAL_STORE || inst->op == IR_GLOBAL_ADDRESS || inst->op == IR_CALL) && inst->callee == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR symbol operation has no symbol");
+                if ((inst->op == IR_GLOBAL_LOAD || inst->op == IR_GLOBAL_STORE || inst->op == IR_GLOBAL_ADDRESS || inst->op == IR_FUNCTION_ADDRESS) && inst->callee == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR symbol operation has no symbol");
             }
         }
         CinderCFGAnalysis cfg; cinder_cfg_init(&cfg);
@@ -227,7 +232,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRBlock *block = &function->blocks.data[b];
                 for (size_t i = 0U; i < block->instructions.len && diags->errors == 0U; ++i) {
                     const CinderIRInst *inst = &block->instructions.data[i];
-                    bool needs_left = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
+                    bool needs_left = (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
                     bool needs_right = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
                     if (needs_left) check_use(inst->left, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);
                     else if (inst->left != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has an unexpected left operand");

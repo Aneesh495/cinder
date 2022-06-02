@@ -25,6 +25,7 @@ typedef struct {
 
 typedef struct {
     const CinderType *type;
+    const char *function_name;
     unsigned char *bytes;
     unsigned char *initialized;
     size_t size;

@@ -214,6 +214,15 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     else if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], inst->loc)) goto done;
                     break;
                 }
+                case IR_FUNCTION_ADDRESS: {
+                    uint32_t identity = 0U;
+                    for (size_t object = 0U; object < context->objects.len; ++object) if (context->objects.data[object].function_name != NULL && strcmp(context->objects.data[object].function_name, inst->callee) == 0) { identity = (uint32_t)object + 1U; break; }
+                    if (identity == 0U) {
+                        identity = cinder_interp_object(context, inst->type->base, true, true, inst->loc); if (identity == 0U) goto done;
+                        context->objects.data[identity - 1U].function_name = inst->callee;
+                    }
+                    result = cinder_interp_address(context, identity); break;
+                }
                 case IR_LOCAL_BEGIN:
                     cinder_interp_retire(context, locals[inst->slot]);
                     locals[inst->slot] = cinder_interp_object(context, function->local_types.data[inst->slot], false, false, inst->loc);
@@ -282,7 +291,15 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     }
                     break;
                 case IR_CALL: {
-                    const CinderIRFunction *callee = find_function(context->module, inst->callee);
+                    const char *name = inst->callee;
+                    if (name == NULL) {
+                        const InterpValue *address = &values[inst->left];
+                        if (!address->pointer || address->address.object == 0U || (size_t)address->address.object > context->objects.len || address->address.offset != 0) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "invalid indirect function pointer"); goto done; }
+                        const InterpObject *target = &context->objects.data[address->address.object - 1U];
+                        if (!target->alive || target->function_name == NULL || !cinder_type_compatible(target->type, inst->callee_type)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "indirect call target or signature is invalid"); goto done; }
+                        name = target->function_name;
+                    }
+                    const CinderIRFunction *callee = find_function(context->module, name);
                     if (callee == NULL) { cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "external call is unavailable"); goto done; }
                     size_t count = inst->args.len == 0U ? 1U : inst->args.len;
                     InterpValue *arguments = cinder_alloc(count * sizeof(*arguments)); bool ready = true;

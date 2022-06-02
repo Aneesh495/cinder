@@ -257,6 +257,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         case EX_CALL: {
             if (expr->as.call.callee->kind == EX_NAME && (strcmp(expr->as.call.callee->as.name, "va_start") == 0 || strcmp(expr->as.call.callee->as.name, "va_end") == 0)) { for (size_t i = 0U; i < expr->as.call.args.len; ++i) (void)sema_expr(sema, expr->as.call.args.data[i], scope); expr->type = sema->types->void_type; return expr->type; }
             CinderType *callee = sema_expr(sema, expr->as.call.callee, scope);
+            if (callee->kind == TYPE_FUNCTION && expr->as.call.callee->kind != EX_NAME) callee = sema_value(sema, &expr->as.call.callee, scope);
             if (callee->kind != TYPE_FUNCTION) { if (callee->kind == TYPE_POINTER && callee->base->kind == TYPE_FUNCTION) callee = callee->base; else cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "called object is not a function"); }
             if (callee->kind == TYPE_FUNCTION) {
                 if (expr->as.call.args.len < callee->params.len) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "too few arguments for function prototype");
