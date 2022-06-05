@@ -21,6 +21,8 @@ jobs:
         run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-constraints test-undefined test-memory test-numeric test-storage test-census test-allocation test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
       - name: Native Linux execution
         run: tests/run_native_linux.sh build/cindercc
+      - name: Scalar callback ABI campaign
+        run: make test-abi-callbacks
       - name: Multi-unit object and assembly campaign
         run: make test-object-campaign
       - name: Sanitizer build
@@ -43,6 +45,7 @@ jobs:
             .agent-local/control
             .agent-local/memory
             .agent-local/abi-boundary
+            .agent-local/abi-callbacks
             .agent-local/allocation
             .agent-local/objects
             build
