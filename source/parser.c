@@ -336,10 +336,25 @@ static CinderExpr *parse_primary(CinderAst *ast) {
         return expr;
     }
     if (take(ast, TOK_CHAR)) {
-        CinderExpr *expr = new_expr(ast, EX_CHAR, token->loc); expr->as.integer = token->length >= 3U ? (unsigned char)token->text[1] : 0; return expr;
+        CinderExpr *expr = new_expr(ast, EX_CHAR, token->loc);
+        size_t count; char *bytes = cinder_literal_decode(&ast->arena, token, &count, ast->diags);
+        if (count != 1U) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "ordinary character constant requires one target byte");
+        unsigned value = count == 0U ? 0U : (unsigned char)bytes[0];
+        expr->as.integer = value < 128U ? (int64_t)value : (int64_t)value - 256;
+        expr->type = ast->types->int_type; return expr;
     }
     if (take(ast, TOK_STRING)) {
-        CinderExpr *expr = new_expr(ast, EX_STRING, token->loc); expr->as.string = cinder_arena_strndup(&ast->arena, token->text, token->length); return expr;
+        CinderExpr *expr = new_expr(ast, EX_STRING, token->loc);
+        CinderBytes bytes = {NULL, 0U, 0U};
+        do {
+            size_t count; char *part = cinder_literal_decode(&ast->arena, token, &count, ast->diags);
+            cinder_bytes_append(&bytes, (const unsigned char *)part, count);
+            token = peek(ast);
+        } while (take(ast, TOK_STRING));
+        expr->literal_length = bytes.len;
+        expr->as.string = cinder_arena_strndup(&ast->arena, bytes.data == NULL ? "" : (const char *)bytes.data, bytes.len);
+        expr->type = cinder_type_array(ast->types, ast->types->char_type, bytes.len + 1U);
+        free(bytes.data); return expr;
     }
     if (take(ast, TOK_IDENTIFIER)) {
         CinderParseBinding *binding = binding_token(ast, token, false);

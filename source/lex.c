@@ -83,7 +83,8 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
         }
         size_t start = i;
         CinderLoc loc = cinder_preprocessed_loc(sources, start, 1U);
-        if (is_ident_start(c)) {
+        size_t prefix = i + 1U < length && (c == 'L' || c == 'u' || c == 'U') && (text[i + 1U] == '"' || text[i + 1U] == '\'') ? 1U : i + 2U < length && c == 'u' && text[i + 1U] == '8' && text[i + 2U] == '"' ? 2U : 0U;
+        if (is_ident_start(c) && prefix == 0U) {
             ++i;
             while (i < length && is_ident_continue((unsigned char)text[i])) ++i;
             CinderTokenKind kind = keyword_kind(text + start, i - start);
@@ -102,8 +103,9 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
             (void)cinder_parse_number(&tokens->tokens.data[tokens->tokens.len - 1U], diags);
             continue;
         }
-        if (c == '"' || c == '\'') {
-            unsigned char quote = c;
+        if (c == '"' || c == '\'' || prefix != 0U) {
+            i += prefix;
+            unsigned char quote = (unsigned char)text[i];
             ++i;
             bool closed = false;
             while (i < length) {

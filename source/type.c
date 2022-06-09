@@ -69,6 +69,11 @@ CinderType *cinder_type_new(CinderTypeContext *types, CinderTypeKind kind) {
 }
 
 CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, unsigned qualifiers) {
+    if (base->kind == TYPE_ARRAY && qualifiers != 0U) {
+        CinderType *element = cinder_type_qualified(types, base->base, qualifiers);
+        CinderType *array = cinder_type_array(types, element, base->array_len);
+        array->complete = base->complete; return array;
+    }
     if (qualifiers == 0U || (base->qualifiers | qualifiers) == base->qualifiers) return base;
     CinderType *result = cinder_type_new(types, base->kind);
     *result = *base; result->qualifiers |= qualifiers;

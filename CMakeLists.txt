@@ -16,6 +16,7 @@ set(CINDER_SOURCES
   source/output.c
   source/token.c
   source/lex.c
+  source/literal.c
   source/numeric.c
   source/pp.c
   source/pp_tokens.c

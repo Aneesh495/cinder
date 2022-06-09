@@ -541,6 +541,11 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_FUNCTION_ADDRESS: case IR_GLOBAL_ADDRESS:
                     emit8(object, 0x48U); emit8(object, 0x8DU); emit8(object, 0x05U); symbol_displacement(object, inst->callee);
                     store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_OBJECT_COPY: case IR_OBJECT_INIT:
+                    load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 7U, 0U);
+                    load_value_alloc(object, function, allocation, inst->right); emit_mov_reg_reg(object, 6U, 0U);
+                    emit8(object, 0x48U); emit8(object, 0xB9U); emit64(object, inst->type->size);
+                    emit8(object, 0xF3U); emit8(object, 0xA4U); break;
                 case IR_MEMORY_LOAD:
                     load_value_to_r10(object, function, allocation, inst->left);
                     object_load(object, inst->type, 0x82U, true, 0);

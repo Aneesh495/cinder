@@ -230,6 +230,10 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     break;
                 case IR_LOCAL_END: cinder_interp_retire(context, locals[inst->slot]); break;
                 case IR_LOCAL_ADDRESS: result = cinder_interp_address(context, locals[inst->slot]); break;
+                case IR_OBJECT_COPY: case IR_OBJECT_INIT:
+                    if (!values[inst->left].pointer || !values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "object transfer lacks pointer provenance"); goto done; }
+                    if (!cinder_interp_object_copy(context, values[inst->left].address, values[inst->right].address, inst->type, inst->op == IR_OBJECT_INIT, inst->loc)) goto done;
+                    break;
                 case IR_LOCAL_LOAD: {
                     InterpValue address = cinder_interp_address(context, locals[inst->slot]);
                     if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto done;

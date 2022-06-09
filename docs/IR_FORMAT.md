@@ -61,3 +61,9 @@ was defined. Ordinary `--interpret` still fails on those outcomes.
 Address, typed memory, pointer arithmetic/member, and local lifetime opcodes
 retain their types and operands in canonical text. The parser verifies object
 slots, pointer strides, field offsets, and scalar access widths before use.
+
+`object.copy` and `object.init` transfer the complete extent of a typed array
+or aggregate through two compatible object pointers. They are effect-only
+instructions. Initialization is explicit because const objects can be
+initialized while ordinary writes remain constrained. The interpreter copies
+initialization flags and pointer metadata with the object representation.
