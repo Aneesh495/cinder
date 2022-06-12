@@ -110,12 +110,11 @@ bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const Cin
     if (type->kind == TYPE_FLOAT) { uint32_t narrow = (uint32_t)bits; float single; memcpy(&single, &narrow, sizeof(single)); value->floating = (double)single; }
     else if (type->kind == TYPE_DOUBLE) memcpy(&value->floating, &bits, sizeof(bits));
     else value->integer = cinder_interp_integer(bits, type);
-    if (type->kind == TYPE_POINTER) {
-        value->pointer = true;
-        if (bits == 0U) value->address = (InterpPointer){0};
-        else {
-            for (size_t p = 0U; p < object->pointers.len; ++p) if (object->pointers.data[p].offset == offset && (uint64_t)pointer_bits(object->pointers.data[p].pointer) == bits) { value->address = object->pointers.data[p].pointer; return true; }
-            value->pointer = false; /* Non-pointer byte writes cannot forge provenance. */
+    if (type->kind == TYPE_POINTER && bits == 0U) {
+        value->pointer = true; value->address = (InterpPointer){0};
+    } else if (!value->fp && type->size == 8U) {
+        for (size_t p = 0U; p < object->pointers.len; ++p) if (object->pointers.data[p].offset == offset && (uint64_t)pointer_bits(object->pointers.data[p].pointer) == bits) {
+            value->pointer = true; value->address = object->pointers.data[p].pointer; return true;
         }
     }
     return true;
@@ -132,7 +131,7 @@ bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const Ci
         else ++p;
     }
     for (size_t i = 0U; i < type->size; ++i) { object->bytes[offset + i] = (unsigned char)(bits >> (i * 8U)); object->initialized[offset + i] = 1U; }
-    if (type->kind == TYPE_POINTER && value->pointer && value->address.object != 0U) { InterpStoredPointer stored = {offset, value->address}; cinder_vec_push((CinderVec *)&object->pointers, &stored); }
+    if (!cinder_ir_floating(type) && type->size == 8U && value->pointer && value->address.object != 0U && bits == (uint64_t)pointer_bits(value->address)) { InterpStoredPointer stored = {offset, value->address}; cinder_vec_push((CinderVec *)&object->pointers, &stored); }
     return true;
 }
 
