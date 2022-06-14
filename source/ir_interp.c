@@ -270,7 +270,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     }
                     if (inst->type->kind == TYPE_POINTER) {
                         result = *source; result.fp = false; result.pointer = source->pointer || source->integer == 0;
-                        if (inst->source_type->kind == TYPE_POINTER && inst->source_type->base->kind == TYPE_ARRAY && result.pointer && result.address.object != 0U) {
+                        if (inst->source_type->kind == TYPE_POINTER && inst->source_type->base->kind == TYPE_ARRAY && inst->source_type->base->complete && result.pointer && result.address.object != 0U) {
                             if (!cinder_interp_member(context, result.address, 0U, inst->source_type->base->size, &result, inst->loc)) goto done;
                         }
                         break;

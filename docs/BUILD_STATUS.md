@@ -312,3 +312,14 @@ The authored source suite includes 51 literal programs, malformed encoding and
 profile checks, and independent object-contract mutations. See `LITERALS.md`.
 Initializer lists, designators, compound literals, static addresses, and the
 remaining language/ABI acceptance work are still incomplete.
+
+## Declaration coalescing and source order
+
+Extern/tentative/initialized file declarations now produce one owned symbol,
+with compatible composite types, inherited static function linkage, and
+end-of-unit completion for external tentative arrays. Incomplete array typedefs
+instantiate separate object bounds. Semantic layout checks retain source order
+instead of accepting an earlier use because a tag was defined later.
+Authored source constraints and actual ELF binding/extent checks cover the
+increment. Block-scope static/extern storage and static address initializers
+still need their duration/linkage and relocation implementation.

@@ -37,8 +37,23 @@ implemented. Empty
 parameter lists are accepted as zero fixed parameters in this profile; untyped
 identifier parameter lists and old-style definitions are diagnosed.
 
-The current native slice uses these declarations for scalar computations and
-layout queries. Field/index access, array/function decay in expressions,
-address-taking, aggregate copies, flexible members, bitfields, and the aggregate
-ABI remain open. A declaration being parsed does not imply those operations are
-implemented.
+File-scope declarations build compatible composite types before initialization.
+An earlier array bound therefore controls a later initializer with an omitted
+bound. Extern declarations, tentative definitions, and one initialized
+definition coalesce into one object. Incomplete external tentative arrays get
+one element at translation-unit end. Duplicate definitions, incompatible
+pointer/array types, conflicting qualifiers, and conflicting linkage are
+diagnosed. Function declarations retain valid inherited internal linkage.
+
+Each type records when its layout became complete. Size/alignment, member,
+subscript, and pointer-step constraints use the expression's source order, so
+a later tag definition cannot validate an earlier incomplete-type operation.
+Incomplete array typedefs instantiate independent object bounds.
+
+`make test-linkage` checks actual ELF symbol count, binding, kind, and size,
+then rejects duplicate canonical IR globals. The authored source suite includes
+redeclarations, prototype composites, source-order constraints, and inferred
+array boundaries at both optimization levels. Field/index access, decay,
+addresses, scalar callbacks, and character array initialization reach native
+output. General aggregate values, flexible members, bitfields, static pointer
+relocations, and the complete aggregate ABI remain open.

@@ -49,7 +49,7 @@ static InterpObject *checked_object(InterpContext *context, InterpPointer pointe
 
 static bool compatible_scalar(const CinderType *declared, const CinderType *access) {
     CinderType a = *declared, b = *access; a.qualifiers = 0U; b.qualifiers = 0U;
-    if (cinder_type_equal(&a, &b)) return true;
+    if (cinder_type_compatible(&a, &b)) return true;
     if (a.kind == b.kind && a.size == b.size && a.kind >= TYPE_CHAR && a.kind <= TYPE_LLONG) return true;
     return a.kind == TYPE_ENUM && b.kind == TYPE_INT && b.size == a.size;
 }

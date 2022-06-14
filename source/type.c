@@ -7,6 +7,7 @@ static void set_scalar(CinderType *type, size_t size, size_t align, bool is_unsi
     type->size = size;
     type->align = align;
     type->complete = true;
+    type->completion_index = 0U;
     type->is_unsigned = is_unsigned;
 }
 
@@ -23,6 +24,7 @@ void cinder_types_init(CinderTypeContext *types) {
     types->error_type->complete = false;
     types->void_type = cinder_type_new(types, TYPE_VOID);
     types->void_type->complete = true;
+    types->void_type->completion_index = 0U;
     types->void_type->size = 0U;
     types->void_type->align = 1U;
     types->bool_type = type_scalar(types, TYPE_BOOL, 1U, 1U, true);
@@ -58,6 +60,7 @@ CinderType *cinder_type_new(CinderTypeContext *types, CinderTypeKind kind) {
     type->identity = (uint32_t)types->all_types.len + 1U;
     type->align = 1U;
     type->complete = false;
+    type->completion_index = SIZE_MAX;
     type->params.data = NULL;
     type->params.len = 0U;
     type->params.cap = 0U;
@@ -72,7 +75,7 @@ CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, un
     if (base->kind == TYPE_ARRAY && qualifiers != 0U) {
         CinderType *element = cinder_type_qualified(types, base->base, qualifiers);
         CinderType *array = cinder_type_array(types, element, base->array_len);
-        array->complete = base->complete; return array;
+        array->complete = base->complete; array->completion_index = base->completion_index; return array;
     }
     if (qualifiers == 0U || (base->qualifiers | qualifiers) == base->qualifiers) return base;
     CinderType *result = cinder_type_new(types, base->kind);
@@ -122,6 +125,7 @@ CinderType *cinder_type_pointer(CinderTypeContext *types, CinderType *base) {
     type->size = 8U;
     type->align = 8U;
     type->complete = true;
+    type->completion_index = 0U;
     return type;
 }
 
@@ -133,6 +137,7 @@ CinderType *cinder_type_array(CinderTypeContext *types, CinderType *base, size_t
     type->size = base->size * length;
     type->align = base->align;
     type->complete = base->complete;
+    type->completion_index = base->completion_index;
     return type;
 }
 
@@ -140,6 +145,7 @@ CinderType *cinder_type_function(CinderTypeContext *types, CinderType *ret, cons
     CinderType *type = cinder_type_new(types, TYPE_FUNCTION);
     type->return_type = ret;
     type->complete = true;
+    type->completion_index = 0U;
     for (size_t i = 0U; i < params->len; ++i) {
         CinderParam param = params->data[i];
         cinder_vec_push((CinderVec *)&type->params, &param);
@@ -167,9 +173,49 @@ bool cinder_type_equal(const CinderType *a, const CinderType *b) {
 
 bool cinder_type_compatible(const CinderType *a, const CinderType *b) {
     if (cinder_type_equal(a, b)) return true;
-    if (a == NULL || b == NULL) return false;
-    if (a->kind == TYPE_POINTER && b->kind == TYPE_POINTER) return cinder_type_compatible(a->base, b->base) || a->base->kind == TYPE_VOID || b->base->kind == TYPE_VOID;
+    if (a == NULL || b == NULL || a->kind != b->kind || a->qualifiers != b->qualifiers || a->is_unsigned != b->is_unsigned || a->plain_char != b->plain_char) return false;
+    if (a->kind == TYPE_POINTER) return cinder_type_compatible(a->base, b->base);
+    if (a->kind == TYPE_ARRAY) return (!a->complete || !b->complete || a->array_len == b->array_len) && cinder_type_compatible(a->base, b->base);
+    if (a->kind == TYPE_FUNCTION) {
+        if (a->variadic != b->variadic || a->params.len != b->params.len || !cinder_type_compatible(a->return_type, b->return_type)) return false;
+        for (size_t p = 0U; p < a->params.len; ++p) {
+            CinderType left = *a->params.data[p].type, right = *b->params.data[p].type;
+            left.qualifiers = 0U; right.qualifiers = 0U;
+            if (!cinder_type_compatible(&left, &right)) return false;
+        }
+        return true;
+    }
     return false;
+}
+
+CinderType *cinder_type_composite(CinderTypeContext *types, CinderType *a, CinderType *b) {
+    if (!cinder_type_compatible(a, b)) return types->error_type;
+    if (cinder_type_equal(a, b)) return a;
+    CinderType *result = a;
+    if (a->kind == TYPE_POINTER) {
+        CinderType *base = cinder_type_composite(types, a->base, b->base);
+        if (base == a->base) return a;
+        if (base == b->base) return b;
+        result = cinder_type_pointer(types, base);
+    } else if (a->kind == TYPE_ARRAY) {
+        CinderType *base = cinder_type_composite(types, a->base, b->base);
+        size_t length = a->complete ? a->array_len : b->array_len;
+        if (base == a->base && (a->complete || !b->complete)) return a;
+        if (base == b->base && b->complete) return b;
+        result = cinder_type_array(types, base, length); result->complete = a->complete || b->complete;
+    } else if (a->kind == TYPE_FUNCTION) {
+        CinderParamVec params = {NULL, 0U, 0U};
+        for (size_t p = 0U; p < a->params.len; ++p) {
+            CinderParam parameter = a->params.data[p];
+            CinderType left = *parameter.type, right = *b->params.data[p].type;
+            if (left.qualifiers != right.qualifiers) parameter.type = parameter.type->qualifiers == 0U ? parameter.type : b->params.data[p].type;
+            else parameter.type = cinder_type_composite(types, parameter.type, b->params.data[p].type);
+            cinder_vec_push((CinderVec *)&params, &parameter);
+        }
+        result = cinder_type_function(types, cinder_type_composite(types, a->return_type, b->return_type), &params);
+        result->variadic = a->variadic; free(params.data);
+    }
+    return cinder_type_qualified(types, result, a->qualifiers);
 }
 
 const char *cinder_type_name(const CinderType *type) {

@@ -279,6 +279,7 @@ struct CinderType {
     uint32_t identity;
     unsigned qualifiers;
     bool complete;
+    size_t completion_index;
     bool is_unsigned;
     bool plain_char;
     size_t size;
@@ -324,6 +325,7 @@ CinderType *cinder_integer_promote(CinderTypeContext *types, CinderType *type);
 CinderType *cinder_arithmetic_type(CinderTypeContext *types, CinderType *left, CinderType *right);
 bool cinder_type_equal(const CinderType *a, const CinderType *b);
 bool cinder_type_compatible(const CinderType *a, const CinderType *b);
+CinderType *cinder_type_composite(CinderTypeContext *types, CinderType *a, CinderType *b);
 const char *cinder_type_name(const CinderType *type);
 int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, CinderLoc loc);
 /* ---------- AST ---------- */
@@ -379,6 +381,7 @@ struct CinderExpr {
     bool name_visible;
     CinderType *queried_type;
     size_t literal_length;
+    size_t parse_index;
     union {
         int64_t integer;
         double floating;
@@ -422,6 +425,12 @@ struct CinderDecl {
     CINDER_VEC_TYPE(CinderDecl *) params;
     CinderStmt *body;
     CinderDecl *next;
+    CinderDecl *canonical;
+    CinderDecl *emission;
+    bool tentative;
+    bool has_definition;
+    bool declaration_complete;
+    size_t initializer_index;
     int lowering_slot;
 };
 

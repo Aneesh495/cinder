@@ -161,7 +161,7 @@ static bool evaluate(CinderAst *ast, const CinderExpr *expr, IntegerConstant *re
     }
     if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) {
         CinderType *type = expr->queried_type != NULL ? expr->queried_type : expression_type(ast, expr->as.unary.value, depth + 1U);
-        if (type == NULL || !type->complete || type->kind == TYPE_VOID || type->kind == TYPE_FUNCTION) return false;
+        if (type == NULL || !type->complete || type->completion_index > expr->parse_index || type->kind == TYPE_VOID || type->kind == TYPE_FUNCTION) return false;
         *result = (IntegerConstant){expr->kind == EX_SIZEOF ? type->size : type->align, ast->types->ulong_type}; return true;
     }
     if (expr->kind == EX_UNARY) {

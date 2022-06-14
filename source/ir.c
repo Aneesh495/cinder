@@ -572,13 +572,15 @@ static void destroy_function(CinderIRFunction *function) {
 void cinder_ir_destroy(CinderIRModule *module) { for (size_t i = 0U; i < module->functions.len; ++i) destroy_function(&module->functions.data[i]); for (size_t i = 0U; i < module->globals.len; ++i) free(module->globals.data[i].name); free(module->globals.data); free(module->functions.data); cinder_arena_destroy(&module->arena); }
 
 static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags) {
+    CinderDecl *canonical = decl;
+    if (canonical->emission != NULL) decl = canonical->emission;
     CinderIRGlobal global;
     memset(&global, 0, sizeof(global));
     global.name = cinder_strndup(decl->name, strlen(decl->name));
-    global.type = decl->type;
+    global.type = canonical->type;
     global.read_only = false;
-    global.global = !decl->is_static;
-    global.is_extern = decl->is_extern;
+    global.global = !canonical->is_static;
+    global.is_extern = !canonical->has_definition && !canonical->tentative;
     global.loc = decl->loc;
     int64_t constant_integer = 0; CinderType *constant_type = NULL;
     if (decl->initializer != NULL && cinder_constant_integer(ast, decl->initializer, &constant_integer, &constant_type)) {
@@ -601,7 +603,7 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         CinderDecl *decl = ast->declarations.data[i];
-        if (decl->kind == DECL_VAR) { lower_global_decl(module, ast, decl, diags); continue; }
+        if (decl->kind == DECL_VAR) { if (decl->canonical == decl) lower_global_decl(module, ast, decl, diags); continue; }
         if (decl->kind != DECL_FUNCTION || !decl->is_definition) continue;
         CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.ast = ast; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static;
         for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; cinder_vec_push((CinderVec *)&function.params, &param); }
