@@ -57,3 +57,11 @@ array boundaries at both optimization levels. Field/index access, decay,
 addresses, scalar callbacks, and character array initialization reach native
 output. General aggregate values, flexible members, bitfields, static pointer
 relocations, and the complete aggregate ABI remain open.
+
+The internal tentative-definition rule is in N1570 6.9.2's Semantics section.
+Violations are undefined under clause 4; 5.1.1.3 does not require a reference
+diagnostic. Cinder diagnoses them. `reference_policy.json` identifies these
+cases, and the diagnostic harness retains each actual reference outcome.
+Linux GCC accepted a forward-tag case that Clang diagnosed. Both observations
+are preserved; Cinder must still reject the case and preserve prior output.
+See the [C language draft](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf).

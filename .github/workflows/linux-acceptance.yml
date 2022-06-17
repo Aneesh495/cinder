@@ -43,6 +43,7 @@ jobs:
             .agent-local/ir-campaign
             .agent-local/ssa
             .agent-local/control
+            .agent-local/constraints
             .agent-local/memory
             .agent-local/literals
             .agent-local/linkage
