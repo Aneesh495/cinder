@@ -51,6 +51,7 @@ int64_t cinder_interp_integer(uint64_t bits, const CinderType *type);
 uint32_t cinder_interp_object(InterpContext *context, const CinderType *type, bool zero, bool readonly, CinderLoc loc);
 void cinder_interp_retire(InterpContext *context, uint32_t id);
 InterpValue cinder_interp_address(const InterpContext *context, uint32_t id);
+InterpValue cinder_interp_pointer_value(InterpPointer pointer);
 bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const CinderType *type, InterpValue *value, CinderLoc loc);
 bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const CinderType *type, const InterpValue *value, CinderLoc loc);
 bool cinder_interp_object_copy(InterpContext *context, InterpPointer destination, InterpPointer source, const CinderType *type, bool initializing, CinderLoc loc);

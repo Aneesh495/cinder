@@ -569,7 +569,15 @@ static void destroy_function(CinderIRFunction *function) {
     free(function->blocks.data);
 }
 
-void cinder_ir_destroy(CinderIRModule *module) { for (size_t i = 0U; i < module->functions.len; ++i) destroy_function(&module->functions.data[i]); for (size_t i = 0U; i < module->globals.len; ++i) free(module->globals.data[i].name); free(module->globals.data); free(module->functions.data); cinder_arena_destroy(&module->arena); }
+void cinder_ir_destroy(CinderIRModule *module) {
+    for (size_t i = 0U; i < module->functions.len; ++i) destroy_function(&module->functions.data[i]);
+    for (size_t i = 0U; i < module->globals.len; ++i) {
+        CinderIRGlobal *global = &module->globals.data[i]; free(global->name);
+        for (size_t a = 0U; a < global->addresses.len; ++a) free(global->addresses.data[a].symbol);
+        free(global->addresses.data);
+    }
+    free(module->globals.data); free(module->functions.data); cinder_arena_destroy(&module->arena);
+}
 
 static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags) {
     CinderDecl *canonical = decl;
@@ -578,7 +586,8 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     memset(&global, 0, sizeof(global));
     global.name = cinder_strndup(decl->name, strlen(decl->name));
     global.type = canonical->type;
-    global.read_only = false;
+    global.read_only = (global.type->qualifiers & 1U) != 0U;
+    for (CinderType *element = global.type; element->kind == TYPE_ARRAY; element = element->base) if ((element->base->qualifiers & 1U) != 0U) global.read_only = true;
     global.global = !canonical->is_static;
     global.is_extern = !canonical->has_definition && !canonical->tentative;
     global.loc = decl->loc;
@@ -587,6 +596,15 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
         global.integer = constant_integer; global.has_initializer = true;
         if (global.type->kind == TYPE_FLOAT) global.floating = constant_type->is_unsigned ? (double)(float)(uint64_t)constant_integer : (double)(float)constant_integer;
         else if (global.type->kind == TYPE_DOUBLE) global.floating = constant_type->is_unsigned ? (double)(uint64_t)constant_integer : (double)constant_integer;
+    }
+    else if (decl->initializer != NULL && global.type->kind == TYPE_POINTER) {
+        CinderIRAddress address;
+        if (!cinder_static_address(module, ast, decl->initializer, &address, diags)) cinder_diag(diags, CINDER_ERROR, decl->loc, "pointer initializer for '%s' is not a supported address constant", decl->name);
+        else {
+            address.pointer_type = global.type;
+            if (address.symbol != NULL) cinder_vec_push((CinderVec *)&global.addresses, &address);
+            global.has_initializer = true;
+        }
     }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_FLOAT) { global.floating = decl->initializer->as.floating; global.has_initializer = true; }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_STRING) {

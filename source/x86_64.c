@@ -192,7 +192,7 @@ static void store_float_constant(CinderMachineObject *object, const CinderIRFunc
     char name[64]; int written = snprintf(name, sizeof(name), ".LCF%u", object->literal_counter++);
     if (written <= 0 || (size_t)written >= sizeof(name)) return;
     CinderDataSymbol symbol; symbol.name = cinder_strndup(name, (size_t)written); symbol.section_kind = 2U; symbol.offset = offset; symbol.size = 8U; symbol.global = false; cinder_vec_push((CinderVec *)&object->data_symbols, &symbol);
-    emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x05U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(name, (size_t)written), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix);
+    emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x05U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(name, (size_t)written), R_X86_64_PC32, -4, 0U}; cinder_vec_push((CinderVec *)&object->fixups, &fix);
     store_float_value(object, function, allocation, value);
 }
 
@@ -320,7 +320,7 @@ static void emit_call(CinderMachineObject *object, const CinderIRFunction *funct
     if (inst->callee == NULL) { emit8(object, 0x41U); emit8(object, 0xFFU); emit8(object, 0xD3U); }
     else {
         emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U);
-        CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4};
+        CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4, 0U};
         cinder_vec_push((CinderVec *)&object->fixups, &fix);
     }
     if (frame != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xC4U); emit32(object, (uint32_t)frame); }
@@ -338,7 +338,7 @@ static void emit_call(CinderMachineObject *object, const CinderIRFunction *funct
 
 static void symbol_displacement(CinderMachineObject *object, const char *name) {
     size_t offset = object->text.len; emit32(object, 0U);
-    CinderFixup fix = {offset, cinder_strndup(name, strlen(name)), R_X86_64_PC32, -4};
+    CinderFixup fix = {offset, cinder_strndup(name, strlen(name)), R_X86_64_PC32, -4, 0U};
     cinder_vec_push((CinderVec *)&object->fixups, &fix);
 }
 
@@ -663,14 +663,15 @@ int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *obje
             for (size_t b = 0U; b < global->byte_count && b < total; ++b) cinder_bytes_put8(bytes, (uint8_t)global->bytes[b]);
             while (bytes->len < symbol.offset + total) cinder_bytes_put8(bytes, 0U);
             symbol.size = total;
-        } else if (global->has_initializer) {
-            bytes_align(&object->data, global->type->align);
-            symbol.section_kind = CINDER_DATA_SECTION;
-            symbol.offset = object->data.len;
-            if (global->type->kind == TYPE_FLOAT) { float value = (float)global->floating; uint32_t bits; memcpy(&bits, &value, sizeof(bits)); cinder_bytes_put32(&object->data, bits); }
-            else if (global->type->kind == TYPE_DOUBLE) { uint64_t bits; memcpy(&bits, &global->floating, sizeof(bits)); cinder_bytes_put64(&object->data, bits); }
-            else append_integer(&object->data, global->integer, global->type->size);
-            while (object->data.len < symbol.offset + global->type->size) cinder_bytes_put8(&object->data, 0U);
+        } else if (global->has_initializer || global->read_only) {
+            CinderBytes *bytes = global->read_only ? &object->rodata : &object->data;
+            bytes_align(bytes, global->type->align);
+            symbol.section_kind = global->read_only ? CINDER_RODATA_SECTION : CINDER_DATA_SECTION;
+            symbol.offset = bytes->len;
+            if (global->type->kind == TYPE_FLOAT) { float value = (float)global->floating; uint32_t bits; memcpy(&bits, &value, sizeof(bits)); cinder_bytes_put32(bytes, bits); }
+            else if (global->type->kind == TYPE_DOUBLE) { uint64_t bits; memcpy(&bits, &global->floating, sizeof(bits)); cinder_bytes_put64(bytes, bits); }
+            else append_integer(bytes, global->integer, global->type->size);
+            while (bytes->len < symbol.offset + global->type->size) cinder_bytes_put8(bytes, 0U);
             symbol.size = global->type->size;
         } else {
             object->bss_size = data_align_up(object->bss_size, global->type->align);
@@ -680,6 +681,11 @@ int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *obje
             symbol.size = global->type->size;
         }
         cinder_vec_push((CinderVec *)&object->data_symbols, &symbol);
+        for (size_t a = 0U; a < global->addresses.len; ++a) {
+            const CinderIRAddress *address = &global->addresses.data[a];
+            CinderFixup fix = {symbol.offset + address->offset, cinder_strndup(address->symbol, strlen(address->symbol)), 1, address->addend, symbol.section_kind};
+            cinder_vec_push((CinderVec *)&object->fixups, &fix);
+        }
     }
     return diags->errors == 0U ? 0 : 1;
 }

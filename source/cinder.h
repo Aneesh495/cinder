@@ -622,11 +622,23 @@ typedef struct {
 } CinderIRFunction;
 
 typedef struct {
+    size_t offset;
+    char *symbol;
+    int64_t addend;
+    CinderType *pointer_type;
+    CinderType *target_type;
+    size_t domain_begin;
+    size_t domain_end;
+    bool function;
+} CinderIRAddress;
+
+typedef struct {
     char *name;
     CinderType *type;
     int64_t integer;
     double floating;
     char *bytes;
+    CINDER_VEC_TYPE(CinderIRAddress) addresses;
     size_t byte_count;
     bool read_only;
     bool global;
@@ -645,6 +657,7 @@ typedef struct {
 void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types);
 void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
+bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderExpr *expr, CinderIRAddress *address, CinderDiagnostics *diags);
 int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags);
 void cinder_dump_ir(const CinderIRModule *module, FILE *out);
 const char *cinder_ir_op_name(CinderIROp op);
@@ -773,6 +786,7 @@ typedef struct {
     char *symbol;
     int type;
     int64_t addend;
+    unsigned section_kind;
 } CinderFixup;
 
 typedef struct {

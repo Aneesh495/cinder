@@ -130,7 +130,8 @@
         "tests/literals/concatenated_index.c",
         "tests/literals/embedded_nul.c",
         "tests/literals/ucn_four_byte.c",
-        "tests/literals/utf8_prefix.c"
+        "tests/literals/utf8_prefix.c",
+        "tests/static_addresses/global_string_pointer.c"
       ],
       "boundary_cases": [
         "tests/memory/literal_write.undefined.c",
@@ -157,7 +158,9 @@
         "tests/memory/qualified_pointer.c",
         "tests/callbacks/local_pointer.c",
         "tests/callbacks/callback_comparison.c",
-        "tests/linkage/pointer_array_composite.c"
+        "tests/linkage/pointer_array_composite.c",
+        "tests/static_addresses/global_void_pointer.c",
+        "tests/static_addresses/global_one_past.c"
       ],
       "boundary_cases": [
         "tests/memory/one_past.c"
@@ -235,7 +238,8 @@
         "tests/control/prototype_unnamed.c",
         "tests/callbacks/callback_return.c",
         "tests/callbacks/explicit_dereference.c",
-        "tests/linkage/function_array_parameter_composite.c"
+        "tests/linkage/function_array_parameter_composite.c",
+        "tests/static_addresses/global_function_pointer.c"
       ],
       "boundary_cases": [],
       "negative_cases": [
@@ -290,7 +294,8 @@
         "tests/memory/nested_members.c",
         "tests/callbacks/callback_member.c",
         "tests/callbacks/callback_context.c",
-        "tests/linkage/tag_member_after_definition.c"
+        "tests/linkage/tag_member_after_definition.c",
+        "tests/static_addresses/global_member_pointer.c"
       ],
       "boundary_cases": [
         "tests/memory/member_array.c",
@@ -419,7 +424,8 @@
       "status": "partial",
       "valid_cases": [
         "tests/memory/qualified_pointer.c",
-        "tests/literals/local_const_typedef.c"
+        "tests/literals/local_const_typedef.c",
+        "tests/static_addresses/global_const_pointer.c"
       ],
       "boundary_cases": [
         "tests/memory/character_representation.c"
@@ -729,9 +735,15 @@
         "tests/control/float_global_mutation.c",
         "tests/literals/global_embedded_nul.c",
         "tests/literals/global_const.c",
-        "tests/linkage/extern_initializer.c"
+        "tests/linkage/extern_initializer.c",
+        "tests/static_addresses/global_array_element.c",
+        "tests/static_addresses/global_function_const_pointer.c",
+        "tests/static_addresses/global_conditional_address.c"
       ],
-      "boundary_cases": [],
+      "boundary_cases": [
+        "tests/memory/static_pointer_one_past.undefined.c",
+        "tests/memory/static_pointer_outside.undefined.c"
+      ],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
@@ -844,7 +856,9 @@
         "tests/memory/parameter_mutation.c",
         "tests/callbacks/callback_parameter.c",
         "tests/callbacks/callback_recursive.c",
-        "tests/callbacks/callback_nested.c"
+        "tests/callbacks/callback_nested.c",
+        "tests/static_addresses/global_function_float.c",
+        "tests/static_addresses/global_function_mixed.c"
       ],
       "boundary_cases": [
         "tests/memory/pointer_return.c",
@@ -912,7 +926,8 @@
       "status": "partial",
       "valid_cases": [
         "tests/test_objects.py",
-        "tests/linkage/function_static_inheritance.c"
+        "tests/linkage/function_static_inheritance.c",
+        "tests/static_addresses/global_static_function_pointer.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -1034,7 +1049,8 @@
       "required_boundary": "Mixed-toolchain objects and real system linking",
       "status": "partial",
       "valid_cases": [
-        "tests/test_objects.py"
+        "tests/test_objects.py",
+        "tests/static_addresses/global_static_object_pointer.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],

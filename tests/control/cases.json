@@ -1402,5 +1402,137 @@
   {
     "source": "../linkage/inline_tag_alignment.c",
     "exit": 8
+  },
+  {
+    "source": "../static_addresses/global_object_pointer.c",
+    "exit": 37
+  },
+  {
+    "source": "../static_addresses/global_const_pointer.c",
+    "exit": 41
+  },
+  {
+    "source": "../static_addresses/global_const_object_pointer.c",
+    "exit": 43
+  },
+  {
+    "source": "../static_addresses/global_void_pointer.c",
+    "exit": 47
+  },
+  {
+    "source": "../static_addresses/global_string_pointer.c",
+    "exit": 99
+  },
+  {
+    "source": "../static_addresses/global_string_offset.c",
+    "exit": 98
+  },
+  {
+    "source": "../static_addresses/global_string_embedded_nul.c",
+    "exit": 100
+  },
+  {
+    "source": "../static_addresses/global_string_const_pointer.c",
+    "exit": 98
+  },
+  {
+    "source": "../static_addresses/global_array_decay.c",
+    "exit": 53
+  },
+  {
+    "source": "../static_addresses/global_array_element.c",
+    "exit": 59
+  },
+  {
+    "source": "../static_addresses/global_array_plus.c",
+    "exit": 61
+  },
+  {
+    "source": "../static_addresses/global_array_minus.c",
+    "exit": 67
+  },
+  {
+    "source": "../static_addresses/global_one_past.c",
+    "exit": 1
+  },
+  {
+    "source": "../static_addresses/global_array_pointer.c",
+    "exit": 71
+  },
+  {
+    "source": "../static_addresses/global_member_pointer.c",
+    "exit": 73
+  },
+  {
+    "source": "../static_addresses/global_member_array.c",
+    "exit": 79
+  },
+  {
+    "source": "../static_addresses/global_array_member.c",
+    "exit": 83
+  },
+  {
+    "source": "../static_addresses/global_character_representation.c",
+    "exit": 52
+  },
+  {
+    "source": "../static_addresses/global_character_offset.c",
+    "exit": 18
+  },
+  {
+    "source": "../static_addresses/global_function_pointer.c",
+    "exit": 89
+  },
+  {
+    "source": "../static_addresses/global_function_explicit.c",
+    "exit": 97
+  },
+  {
+    "source": "../static_addresses/global_function_prototype.c",
+    "exit": 101
+  },
+  {
+    "source": "../static_addresses/global_function_float.c",
+    "exit": 15
+  },
+  {
+    "source": "../static_addresses/global_function_mixed.c",
+    "exit": 12
+  },
+  {
+    "source": "../static_addresses/global_function_comparison.c",
+    "exit": 1
+  },
+  {
+    "source": "../static_addresses/global_function_const_pointer.c",
+    "exit": 103
+  },
+  {
+    "source": "../static_addresses/global_static_object_pointer.c",
+    "exit": 107
+  },
+  {
+    "source": "../static_addresses/global_static_function_pointer.c",
+    "exit": 109
+  },
+  {
+    "source": "../static_addresses/global_null_pointer.c",
+    "exit": 1
+  },
+  {
+    "source": "../static_addresses/global_null_function.c",
+    "exit": 1
+  },
+  {
+    "source": "../static_addresses/global_void_cast_array.c",
+    "exit": 98
+  },
+  {
+    "source": "../static_addresses/global_conditional_address.c",
+    "exit": 113
+  },
+  {
+    "source": "../static_addresses/global_conditional_function.c",
+    "exit": 131
   }
 ]

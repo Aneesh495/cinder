@@ -1,6 +1,6 @@
 # Canonical typed IR
 
-The schema header is `cinder-ir 1 lp64-le sysv-x86-64`. The format uses whitespace
+The schema header is `cinder-ir 2 lp64-le sysv-x86-64`. The format uses whitespace
 separated tokens and optional `#` comments between tokens. The writer emits a
 deterministic order. Type IDs follow first reachable use; recursive aggregate
 identities are collected before their members. Integers and floating values use
@@ -14,7 +14,10 @@ positions. Scalar layouts must match the target. By-value aggregate cycles are
 rejected; pointers to recursive aggregate identities are valid.
 
 Globals record symbol binding, extern/initializer/read-only state, exact scalar
-bits, initial bytes, and source location. Functions record signature, binding,
+bits, initial bytes, typed symbolic address records, and source location.
+An address records its destination offset, symbol, exact signed addend,
+pointer/target types, domain begin/end, and function identity flag.
+Functions record signature, binding,
 value/local counts, local storage types, parameters, and blocks. Blocks contain
 reciprocal predecessor/successor tables, instructions, and one terminator.
 

@@ -252,7 +252,11 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     if (!pointer->pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer has no object provenance"); goto done; }
                     if (inst->op == IR_MEMORY_LOAD) { if (!cinder_interp_load(context, pointer->address, inst->type, &result, inst->loc)) goto done; }
                     else if (inst->op == IR_MEMORY_STORE) { if (!cinder_interp_store(context, pointer->address, inst->type, &values[inst->right], inst->loc)) goto done; }
-                    else if (inst->op == IR_POINTER_OFFSET) { if (!cinder_interp_offset(context, pointer->address, values[inst->right].integer, inst->operator_code, (size_t)inst->integer, &result, inst->loc)) goto done; }
+                    else if (inst->op == IR_POINTER_OFFSET) {
+                        const CinderType *index_type = cinder_ir_value_type(function, inst->right);
+                        if (index_type->is_unsigned && values[inst->right].integer < 0) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, inst->loc, "unsigned pointer index exceeds the object domain"); goto done; }
+                        if (!cinder_interp_offset(context, pointer->address, values[inst->right].integer, inst->operator_code, (size_t)inst->integer, &result, inst->loc)) goto done;
+                    }
                     else if (inst->op == IR_POINTER_MEMBER) { if (!cinder_interp_member(context, pointer->address, (size_t)inst->integer, inst->type->base->size, &result, inst->loc)) goto done; }
                     else {
                         if (!values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer subtraction has no object provenance"); goto done; }
@@ -380,6 +384,28 @@ CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *fu
             for (size_t byte = 0U; byte < object->size; ++byte) object->bytes[byte] = (unsigned char)(bits >> (byte * 8U));
         }
         object->readonly = global->read_only || (global->type->qualifiers & 1U) != 0U;
+    }
+    for (size_t g = 0U; g < module->globals.len && ready; ++g) {
+        const CinderIRGlobal *global = &module->globals.data[g];
+        for (size_t a = 0U; a < global->addresses.len; ++a) {
+            const CinderIRAddress *address = &global->addresses.data[a]; uint32_t target = 0U;
+            if (address->function) {
+                for (size_t o = 0U; o < context.objects.len; ++o) if (context.objects.data[o].function_name != NULL && strcmp(context.objects.data[o].function_name, address->symbol) == 0) { target = (uint32_t)o + 1U; break; }
+                if (target == 0U) {
+                    target = cinder_interp_object(&context, address->target_type, true, true, global->loc);
+                    if (target != 0U) context.objects.data[target - 1U].function_name = address->symbol;
+                }
+            } else {
+                size_t index = global_index(module, address->symbol);
+                if (index != SIZE_MAX) target = globals[index];
+            }
+            if (target == 0U) { cinder_interp_fail(&context, INTERP_UNSUPPORTED, global->loc, "address initializer target storage is unavailable"); ready = false; break; }
+            if (address->addend < 0 || (uint64_t)address->addend < address->domain_begin || (uint64_t)address->addend > address->domain_end) { cinder_interp_fail(&context, INTERP_POINTER_BOUNDS, global->loc, "address initializer exceeds its object domain"); ready = false; break; }
+            InterpValue value = cinder_interp_pointer_value((InterpPointer){target, address->addend, address->domain_begin, address->domain_end});
+            InterpObject *object = &context.objects.data[globals[g] - 1U];
+            for (size_t byte = 0U; byte < 8U; ++byte) object->bytes[address->offset + byte] = (unsigned char)((uint64_t)value.integer >> (byte * 8U));
+            InterpStoredPointer stored = {address->offset, value.address}; cinder_vec_push((CinderVec *)&object->pointers, &stored);
+        }
     }
     size_t argument_storage = arg_count == 0U ? 1U : arg_count;
     InterpValue *arguments = cinder_alloc(argument_storage * sizeof(*arguments)); memset(arguments, 0, argument_storage * sizeof(*arguments));

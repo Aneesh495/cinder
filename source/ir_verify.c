@@ -190,11 +190,55 @@ static bool validate_cfg(const CinderIRFunction *function, CinderDiagnostics *di
     return diags->errors == 0U;
 }
 
+static const CinderType *pointer_storage(const CinderType *type, size_t offset, unsigned depth) {
+    if (type == NULL || depth >= 64U || offset >= type->size) return NULL;
+    if (type->kind == TYPE_POINTER) return offset == 0U ? type : NULL;
+    if (type->kind == TYPE_ARRAY && type->base->size != 0U) return pointer_storage(type->base, offset % type->base->size, depth + 1U);
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
+        for (size_t f = 0U; f < type->fields.len; ++f) {
+            const CinderField *field = &type->fields.data[f];
+            if (offset >= field->offset && offset - field->offset < field->type->size) {
+                const CinderType *found = pointer_storage(field->type, offset - field->offset, depth + 1U);
+                if (found != NULL) return found;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void verify_addresses(const CinderIRModule *module, const CinderIRGlobal *global, CinderDiagnostics *diags) {
+    if (global->addresses.len != 0U && (global->is_extern || !global->has_initializer)) { cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer has no owned definition"); return; }
+    for (size_t a = 0U; a < global->addresses.len; ++a) {
+        const CinderIRAddress *address = &global->addresses.data[a];
+        if (address->symbol == NULL || address->symbol[0] == '\0' || address->pointer_type == NULL || address->pointer_type->kind != TYPE_POINTER || address->target_type == NULL) { cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer has no symbol or pointer/target type"); continue; }
+        const CinderType *storage = pointer_storage(global->type, address->offset, 0U);
+        if (storage == NULL || !same_value_type(storage, address->pointer_type) || global->type->size - address->offset < 8U) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer is outside compatible pointer storage");
+        if (address->function != (address->target_type->kind == TYPE_FUNCTION) || address->domain_begin > address->domain_end || address->domain_end > (address->function ? 1U : address->target_type->size)) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer has an invalid target domain");
+        if (address->function && (address->addend != 0 || address->domain_begin != 0U || address->domain_end != 1U)) cinder_diag(diags, CINDER_FATAL, global->loc, "function address initializer has a displacement");
+        bool object_declared = false;
+        for (size_t g = 0U; g < module->globals.len; ++g) {
+            const CinderIRGlobal *target = &module->globals.data[g];
+            if (target->name != NULL && strcmp(target->name, address->symbol) == 0) object_declared = true;
+            if (target->name != NULL && strcmp(target->name, address->symbol) == 0 && (address->function || !cinder_type_compatible(target->type, address->target_type))) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer target disagrees with global declaration");
+        }
+        if (!address->function && !object_declared) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer references an undeclared object");
+        for (size_t f = 0U; f < module->functions.len; ++f) {
+            const CinderIRFunction *target = &module->functions.data[f];
+            if (target->name != NULL && strcmp(target->name, address->symbol) == 0 && (!address->function || !cinder_type_compatible(target->type, address->target_type))) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer target disagrees with function declaration");
+        }
+        for (size_t earlier = 0U; earlier < a; ++earlier) {
+            size_t offset = global->addresses.data[earlier].offset;
+            if (offset <= SIZE_MAX - 8U && address->offset <= SIZE_MAX - 8U && offset < address->offset + 8U && address->offset < offset + 8U) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializers overlap");
+        }
+    }
+}
+
 int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
     for (size_t g = 0U; g < module->globals.len; ++g) {
         const CinderIRGlobal *global = &module->globals.data[g];
         if (global->name == NULL || global->name[0] == '\0' || global->type == NULL || (!global->is_extern && !global->type->complete)) cinder_diag(diags, CINDER_FATAL, global->loc, "IR global has no complete declaration");
         if (global->type != NULL && global->byte_count > global->type->size) cinder_diag(diags, CINDER_FATAL, global->loc, "IR global initializer exceeds object storage");
+        if (global->type != NULL) verify_addresses(module, global, diags);
         for (size_t previous = 0U; previous < g && global->name != NULL; ++previous)
             if (module->globals.data[previous].name != NULL && strcmp(global->name, module->globals.data[previous].name) == 0) cinder_diag(diags, CINDER_FATAL, global->loc, "IR global has duplicate definitions");
     }
