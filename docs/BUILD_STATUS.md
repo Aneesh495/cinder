@@ -334,3 +334,13 @@ inspect writable/read-only relocations and link two owned translation units.
 Unsigned pointer indexes retain their signedness rather than being narrowed to
 signed long. General initializer lists and block static/extern storage remain
 open, along with the remaining ABI, runtime, debug, and acceptance requirements.
+
+## Scalar constant initialization
+
+Static arithmetic initialization now uses target conversions for integer,
+boolean, float, and double values. It evaluates floating arithmetic/comparison
+expressions, casts, conditional common types, and short-circuit operations.
+Binary32 rounds at each typed operation; integer conversion bounds are checked.
+Boolean object and function addresses fold without using a host address.
+Integer constant expression rules remain separate for enum/array requirements.
+The source suite adds 36 individually authored conversion and rounding cases.

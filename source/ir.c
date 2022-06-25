@@ -591,12 +591,8 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     global.global = !canonical->is_static;
     global.is_extern = !canonical->has_definition && !canonical->tentative;
     global.loc = decl->loc;
-    int64_t constant_integer = 0; CinderType *constant_type = NULL;
-    if (decl->initializer != NULL && cinder_constant_integer(ast, decl->initializer, &constant_integer, &constant_type)) {
-        global.integer = constant_integer; global.has_initializer = true;
-        if (global.type->kind == TYPE_FLOAT) global.floating = constant_type->is_unsigned ? (double)(float)(uint64_t)constant_integer : (double)(float)constant_integer;
-        else if (global.type->kind == TYPE_DOUBLE) global.floating = constant_type->is_unsigned ? (double)(uint64_t)constant_integer : (double)constant_integer;
-    }
+    bool numeric = (global.type->kind >= TYPE_BOOL && global.type->kind <= TYPE_DOUBLE) || global.type->kind == TYPE_ENUM;
+    if (decl->initializer != NULL && numeric && cinder_constant_scalar(ast, decl->initializer, global.type, &global.integer, &global.floating)) global.has_initializer = true;
     else if (decl->initializer != NULL && global.type->kind == TYPE_POINTER) {
         CinderIRAddress address;
         if (!cinder_static_address(module, ast, decl->initializer, &address, diags)) cinder_diag(diags, CINDER_ERROR, decl->loc, "pointer initializer for '%s' is not a supported address constant", decl->name);
@@ -606,7 +602,12 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
             global.has_initializer = true;
         }
     }
-    else if (decl->initializer != NULL && decl->initializer->kind == EX_FLOAT) { global.floating = decl->initializer->as.floating; global.has_initializer = true; }
+    else if (decl->initializer != NULL && global.type->kind == TYPE_BOOL && decl->initializer->type->kind == TYPE_POINTER) {
+        CinderIRAddress address;
+        if (!cinder_static_address(module, ast, decl->initializer, &address, diags) || address.addend < 0 || (uint64_t)address.addend < address.domain_begin || (uint64_t)address.addend > address.domain_end) cinder_diag(diags, CINDER_ERROR, decl->loc, "boolean initializer for '%s' is not a supported constant", decl->name);
+        else { global.integer = address.symbol != NULL; global.has_initializer = true; }
+        free(address.symbol);
+    }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_STRING) {
         global.byte_count = decl->initializer->literal_length + 1U;
         if (global.byte_count > global.type->size) global.byte_count = global.type->size;

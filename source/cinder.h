@@ -658,6 +658,7 @@ void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types);
 void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
 bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderExpr *expr, CinderIRAddress *address, CinderDiagnostics *diags);
+bool cinder_constant_scalar(CinderAst *ast, const CinderExpr *expr, CinderType *target, int64_t *integer, double *floating);
 int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags);
 void cinder_dump_ir(const CinderIRModule *module, FILE *out);
 const char *cinder_ir_op_name(CinderIROp op);

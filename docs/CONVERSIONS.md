@@ -1,5 +1,12 @@
 # Scalar types and conversions
 
+Static scalar initialization uses the same target widths and formats.
+Arithmetic constant evaluation handles mixed integer/floating operations,
+comparisons, conditional selection, and casts. Boolean storage is normalized
+to zero/one. Floating-to-integer conversion checks the truncated value's range,
+and every binary32 operation rounds before its result is reused. Enum/array
+integer constant expression requirements retain their separate restrictions.
+
 The frontend assigns LP64 ranks and widths to expressions before IR lowering.
 `char`, `signed char`, and `unsigned char` are distinct types. Plain `char` is
 signed on the target. Integer promotions map `_Bool`, character types, and
