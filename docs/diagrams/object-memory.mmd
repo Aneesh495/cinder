@@ -9,3 +9,9 @@ flowchart TD
     FRESH --> VM
     EXIT[Scope exit, break, continue, return] --> DEAD[Retired object]
     DEAD --> LIFETIME[Expired pointer classification]
+    LIST[Brace initializer and designator path] --> PLAN[Source ordered subobject initialization plan]
+    PLAN --> ZERO[Omitted subobject zero effects]
+    PLAN --> INIT[Scalar or object initialization effects]
+    ZERO --> CHECK
+    INIT --> CHECK
+    PLAN --> STATIC[Global bytes and pointer relocations]

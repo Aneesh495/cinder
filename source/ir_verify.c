@@ -48,8 +48,18 @@ static bool binary_float(CinderIROp op) {
 
 static bool same_value_type(const CinderType *left, const CinderType *right);
 
+static bool member_value_type(const CinderType *actual, const CinderType *field, unsigned qualifiers, unsigned depth) {
+    if (actual == NULL || field == NULL || depth >= 64U) return false;
+    if (field->kind == TYPE_ARRAY) {
+        return actual->kind == TYPE_ARRAY && actual->array_len == field->array_len && actual->size == field->size && actual->qualifiers == field->qualifiers && member_value_type(actual->base, field->base, qualifiers, depth + 1U);
+    }
+    CinderType qualified = *field; qualified.qualifiers |= qualifiers;
+    return cinder_type_equal(actual, &qualified);
+}
+
 static void check_types(const CinderIRInst *inst, CinderType *const *types, CinderDiagnostics *diags) {
     bool result_fp = cinder_ir_floating(inst->type);
+    if (inst->op == IR_ZERO_INIT && (inst->type->kind != TYPE_CHAR || types[inst->left]->kind != TYPE_POINTER || types[inst->left]->base->kind != TYPE_CHAR || inst->integer < 0 || (uint64_t)inst->integer > 64U * 1024U * 1024U)) cinder_diag(diags, CINDER_FATAL, inst->loc, "zero initializer has no byte pointer or bounded extent");
     if (inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT) {
         const CinderType *left = types[inst->left], *right = types[inst->right];
         bool aggregate = inst->type->kind == TYPE_ARRAY || inst->type->kind == TYPE_STRUCT || inst->type->kind == TYPE_UNION;
@@ -84,7 +94,7 @@ static void check_types(const CinderIRInst *inst, CinderType *const *types, Cind
         if (inst->source_type == NULL || !cinder_type_equal(inst->source_type, types[inst->left])) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR conversion source type disagrees with its operand");
         if (!(integer(inst->type) || result_fp) || !(integer(types[inst->left]) || cinder_ir_floating(types[inst->left]))) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR conversion does not have scalar types");
     }
-    if (inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE) {
+    if (inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT) {
         const CinderType *pointer = types[inst->left];
         const CinderType *value = inst->op == IR_MEMORY_LOAD ? inst->type : types[inst->right];
         if (pointer->kind != TYPE_POINTER || !same_value_type(pointer->base, inst->type) || !same_value_type(value, inst->type) || !(integer(inst->type) || result_fp)) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed memory access disagrees with pointer or scalar storage");
@@ -102,7 +112,7 @@ static void check_types(const CinderIRInst *inst, CinderType *const *types, Cind
         if (base->kind != TYPE_POINTER || (base->base->kind != TYPE_STRUCT && base->base->kind != TYPE_UNION) || inst->type->kind != TYPE_POINTER || inst->slot < 0 || (size_t)inst->slot >= base->base->fields.len) cinder_diag(diags, CINDER_FATAL, inst->loc, "member pointer has no aggregate field");
         else {
             const CinderField *field = &base->base->fields.data[inst->slot];
-            if (inst->integer < 0 || (uint64_t)inst->integer != field->offset || !same_value_type(inst->type->base, field->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "member pointer has incorrect offset or type");
+            if (inst->integer < 0 || (uint64_t)inst->integer != field->offset || !member_value_type(inst->type->base, field->type, base->base->qualifiers, 0U)) cinder_diag(diags, CINDER_FATAL, inst->loc, "member pointer has incorrect offset or type");
         }
     }
     if (inst->op == IR_PHI)
@@ -124,8 +134,9 @@ static void check_storage(const CinderIRModule *module, const CinderIRFunction *
         for (size_t g = 0U; g < module->globals.len; ++g) if (strcmp(module->globals.data[g].name, inst->callee) == 0) global = &module->globals.data[g];
         if (global == NULL || inst->type->kind != TYPE_POINTER || !cinder_type_compatible(inst->type->base, global->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "global address has an unknown symbol or incorrect object type");
     }
-    if (inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE) {
+    if (inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) {
         const CinderType *slot_type = function->local_types.data[inst->slot];
+        if (inst->op == IR_LOCAL_STORE && (slot_type->qualifiers & 1U) != 0U) cinder_diag(diags, CINDER_FATAL, inst->loc, "local store modifies a const-qualified object");
         const CinderType *value = inst->op == IR_LOCAL_LOAD ? inst->type : types[inst->left];
         if (!same_value_type(slot_type, value) || !same_value_type(slot_type, inst->type) || !(integer(slot_type) || cinder_ir_floating(slot_type))) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local scalar access type disagrees with storage");
     }
@@ -265,7 +276,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 if (inst->op != IR_NOP && inst->type == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed IR instruction has no type");
-                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
+                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
                 if (has_result) {
                     if ((size_t)inst->dst >= function->value_count) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has no valid result ID");
                     else if (definitions[inst->dst] != CINDER_INVALID_BLOCK) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result ID has multiple definitions");
@@ -273,7 +284,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                     if (inst->type == NULL || inst->type->kind == TYPE_VOID || inst->type->kind == TYPE_ERROR || !inst->type->complete) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result has no type");
                     if (!(integer(inst->type) || cinder_ir_floating(inst->type))) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result requires a supported scalar value type");
                 } else if (inst->dst != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "effect-only IR instruction defines a value");
-                if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_ADDRESS || inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END || inst->op == IR_PHI) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot is outside storage table");
+                if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_LOCAL_ADDRESS || inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END || inst->op == IR_PHI) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot is outside storage table");
                 if ((inst->op == IR_GLOBAL_LOAD || inst->op == IR_GLOBAL_STORE || inst->op == IR_GLOBAL_ADDRESS || inst->op == IR_FUNCTION_ADDRESS) && inst->callee == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR symbol operation has no symbol");
             }
         }
@@ -283,8 +294,8 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRBlock *block = &function->blocks.data[b];
                 for (size_t i = 0U; i < block->instructions.len && diags->errors == 0U; ++i) {
                     const CinderIRInst *inst = &block->instructions.data[i];
-                    bool needs_left = (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
-                    bool needs_right = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
+                    bool needs_left = (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_ZERO_INIT || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
+                    bool needs_right = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
                     if (needs_left) check_use(inst->left, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);
                     else if (inst->left != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has an unexpected left operand");
                     if (needs_right) check_use(inst->right, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);

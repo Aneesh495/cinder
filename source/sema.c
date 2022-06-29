@@ -104,16 +104,158 @@ static bool string_array_initializer(CinderSema *sema, CinderDecl *decl) {
     return true;
 }
 
+typedef struct { CinderType *type; size_t index; size_t offset; } InitFrame;
+
+static bool aggregate_type(const CinderType *type) { return type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION; }
+
+static size_t init_child_count(const CinderType *type) {
+    if (type->kind == TYPE_ARRAY) return type->complete ? type->array_len : SIZE_MAX;
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) return type->fields.len;
+    return 1U;
+}
+
+static CinderType *init_child(InitFrame frame, size_t *offset) {
+    *offset = frame.offset;
+    if (frame.type->kind == TYPE_ARRAY) { *offset += frame.index * frame.type->base->size; return frame.type->base; }
+    if (frame.type->kind == TYPE_STRUCT || frame.type->kind == TYPE_UNION) { *offset += frame.type->fields.data[frame.index].offset; return frame.type->fields.data[frame.index].type; }
+    return frame.type;
+}
+
+static void init_advance(InitFrame *frames, size_t *depth) {
+    while (*depth != 0U) {
+        InitFrame *frame = &frames[*depth - 1U];
+        if (frame->type->kind == TYPE_UNION) frame->index = frame->type->fields.len;
+        else ++frame->index;
+        if (frame->index < init_child_count(frame->type) || *depth == 1U) return;
+        --*depth;
+    }
+}
+
+static void init_action(CinderDecl *decl, size_t offset, CinderType *type, CinderExpr *value) {
+    for (size_t i = 0U; i < decl->init_actions.len; ++i) {
+        CinderInitAction *previous = &decl->init_actions.data[i];
+        if (previous->offset == offset && previous->type->size == type->size) { previous->value = NULL; previous->zero = false; }
+    }
+    CinderInitAction action = {offset, type, value, false}; cinder_vec_push((CinderVec *)&decl->init_actions, &action);
+}
+
+typedef struct { size_t begin; size_t end; } InitSpan;
+
+static int compare_init_span(const void *left, const void *right) {
+    const InitSpan *a = left, *b = right;
+    return a->begin < b->begin ? -1 : a->begin > b->begin ? 1 : 0;
+}
+
+static void initializer_zero_gaps(CinderSema *sema, CinderDecl *decl, size_t first, CinderType *type, size_t offset) {
+    CINDER_VEC_TYPE(InitSpan) spans = {NULL, 0U, 0U};
+    CINDER_VEC_TYPE(CinderInitAction) zeros = {NULL, 0U, 0U};
+    for (size_t a = first; a < decl->init_actions.len; ++a) {
+        const CinderInitAction *action = &decl->init_actions.data[a];
+        if (action->value == NULL && !action->zero) continue;
+        InitSpan span = {action->offset, action->offset + action->type->size}; cinder_vec_push((CinderVec *)&spans, &span);
+    }
+    if (spans.len != 0U) qsort(spans.data, spans.len, sizeof(*spans.data), compare_init_span);
+    size_t cursor = offset, end = offset + type->size;
+    for (size_t a = 0U; a <= spans.len; ++a) {
+        size_t next = a < spans.len ? spans.data[a].begin : end;
+        if (cursor < next) {
+            CinderInitAction zero = {cursor, cinder_type_array(sema->types, sema->types->char_type, next - cursor), NULL, true};
+            cinder_vec_push((CinderVec *)&zeros, &zero);
+        }
+        if (a < spans.len && spans.data[a].end > cursor) cursor = spans.data[a].end;
+    }
+    size_t original = decl->init_actions.len;
+    for (size_t z = 0U; z < zeros.len; ++z) cinder_vec_push((CinderVec *)&decl->init_actions, &zeros.data[z]);
+    if (zeros.len != 0U) {
+        memmove(decl->init_actions.data + first + zeros.len, decl->init_actions.data + first, (original - first) * sizeof(*decl->init_actions.data));
+        memcpy(decl->init_actions.data + first, zeros.data, zeros.len * sizeof(*zeros.data));
+    }
+    free(zeros.data); free(spans.data);
+}
+
+static void sema_init_object(CinderSema *sema, CinderDecl *decl, CinderExpr **expression, CinderType *type, size_t offset, CinderScope *scope, unsigned nesting) {
+    CinderExpr *expr = *expression;
+    if (nesting >= 64U) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer object nesting exceeds the profile limit"); return; }
+    if (expr->kind != EX_INIT_LIST) {
+        if (expr->kind == EX_STRING && type->kind == TYPE_ARRAY && type->base->kind == TYPE_CHAR) {
+            if (!type->complete) { type->array_len = expr->literal_length + 1U; type->size = type->array_len; type->complete = true; type->completion_index = decl->initializer_index; }
+            if (expr->literal_length > type->size) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "string initializer exceeds its array subobject");
+        } else {
+            (void)sema_value(sema, expression, scope); expr = *expression;
+            if (!assignment_compatible(sema, type, expr)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer has incompatible subobject type");
+            else if (!aggregate_type(type)) *expression = convert_expr(sema, expr, type);
+        }
+        init_action(decl, offset, type, *expression); return;
+    }
+    expr->type = type;
+    if (type->kind == TYPE_ARRAY && type->base->kind == TYPE_CHAR && expr->as.initializer.entries.len == 1U && expr->as.initializer.entries.data[0].designators.len == 0U && expr->as.initializer.entries.data[0].value->kind == EX_STRING) {
+        sema_init_object(sema, decl, &expr->as.initializer.entries.data[0].value, type, offset, scope, nesting + 1U); return;
+    }
+    size_t first = decl->init_actions.len;
+    if (aggregate_type(type) && type->complete) {
+        for (size_t a = 0U; a < first; ++a) {
+            CinderInitAction *old = &decl->init_actions.data[a];
+            if (old->offset >= offset && old->offset - offset <= type->size && old->type->size <= type->size - (old->offset - offset)) { old->value = NULL; old->zero = false; }
+        }
+    }
+    InitFrame frames[64]; size_t depth = 1U; frames[0] = (InitFrame){type, 0U, offset};
+    bool inferred = type->kind == TYPE_ARRAY && !type->complete; size_t extent = 0U;
+    for (size_t e = 0U; e < expr->as.initializer.entries.len; ++e) {
+        CinderInitEntry *entry = &expr->as.initializer.entries.data[e];
+        if (entry->designators.len != 0U) {
+            depth = 1U; frames[0] = (InitFrame){type, 0U, offset};
+            for (size_t d = 0U; d < entry->designators.len; ++d) {
+                CinderInitDesignator *designator = &entry->designators.data[d]; InitFrame *frame = &frames[depth - 1U];
+                if (designator->member != NULL && (frame->type->kind == TYPE_STRUCT || frame->type->kind == TYPE_UNION)) {
+                    size_t field = 0U;
+                    while (field < frame->type->fields.len && (frame->type->fields.data[field].name == NULL || strcmp(frame->type->fields.data[field].name, designator->member) != 0)) ++field;
+                    if (field == frame->type->fields.len) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator names no member"); break; }
+                    frame->index = field;
+                } else if (designator->index != NULL && frame->type->kind == TYPE_ARRAY) {
+                    int64_t index; CinderType *index_type;
+                    if (!cinder_constant_integer(sema->ast, designator->index, &index, &index_type) || index < 0 || (uint64_t)index >= init_child_count(frame->type) || frame->type->base->size == 0U || (uint64_t)index > 64U * 1024U * 1024U / frame->type->base->size) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "array designator requires an in-range constant index"); break; }
+                    frame->index = (size_t)index;
+                } else { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator does not match its object"); break; }
+                if (d + 1U < entry->designators.len) {
+                    size_t child_offset; CinderType *child = init_child(*frame, &child_offset);
+                    if (!aggregate_type(child) || depth == CINDER_ARRAY_LEN(frames)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator path is too deep or not an aggregate"); break; }
+                    frames[depth++] = (InitFrame){child, 0U, child_offset};
+                }
+            }
+        }
+        if (sema->diags->errors != 0U) return;
+        if (frames[depth - 1U].index >= init_child_count(frames[depth - 1U].type)) { cinder_diag(sema->diags, CINDER_ERROR, entry->value->loc, "initializer has excess elements"); continue; }
+        if (inferred && frames[0].index >= extent) extent = frames[0].index + 1U;
+        size_t child_offset; CinderType *child = init_child(frames[depth - 1U], &child_offset);
+        if (entry->value->kind != EX_INIT_LIST && !(entry->value->kind == EX_STRING && child->kind == TYPE_ARRAY && child->base->kind == TYPE_CHAR)) {
+            (void)sema_expr(sema, entry->value, scope);
+            while (aggregate_type(child) && !value_compatible(child, entry->value->type)) {
+                if (depth == CINDER_ARRAY_LEN(frames) || init_child_count(child) == 0U || (!child->complete && child != type)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer requires a complete aggregate subobject"); return; }
+                frames[depth++] = (InitFrame){child, 0U, child_offset}; child = init_child(frames[depth - 1U], &child_offset);
+            }
+        }
+        if (child_offset > 64U * 1024U * 1024U || child->size > 64U * 1024U * 1024U - child_offset) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer exceeds the target object limit"); return; }
+        sema_init_object(sema, decl, &entry->value, child, child_offset, scope, nesting + 1U); init_advance(frames, &depth);
+    }
+    if (inferred) {
+        if (extent == 0U || type->base->size == 0U || extent > 64U * 1024U * 1024U / type->base->size) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer cannot infer a bounded complete array"); return; }
+        type->array_len = extent; type->size = extent * type->base->size; type->complete = true; type->completion_index = decl->initializer_index;
+    }
+    if (aggregate_type(type) && type->complete) initializer_zero_gaps(sema, decl, first, type, offset);
+}
+
 static void sema_local_decl(CinderSema *sema, CinderDecl *first, CinderScope *scope, CinderScope *parameter_scope) {
     for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
         bool string_array = string_array_initializer(sema, decl);
+        bool list = decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST;
         if (decl->kind == DECL_VAR && (decl->is_static || decl->is_extern)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "block-scope static/extern object storage is not implemented");
-        if (decl->kind == DECL_VAR && (decl->type->kind == TYPE_VOID || (!decl->declaration_complete && !string_array))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "local object requires a complete object type");
+        if (decl->kind == DECL_VAR && (decl->type->kind == TYPE_VOID || (!decl->declaration_complete && !string_array && !(list && decl->type->kind == TYPE_ARRAY && decl->type->base->complete)))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "local object requires a complete object type");
         CinderSymbol *old = scope_here(scope, decl->name);
         if (old != NULL || (parameter_scope != NULL && scope_here(parameter_scope, decl->name) != NULL)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
         else scope_add(scope, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
-        if (decl->initializer != NULL && !string_array) {
+        if (list || (decl->initializer != NULL && (decl->type->kind == TYPE_STRUCT || decl->type->kind == TYPE_UNION))) sema_init_object(sema, decl, &decl->initializer, decl->type, 0U, scope, 0U);
+        else if (decl->initializer != NULL && !string_array) {
             (void)sema_value(sema, &decl->initializer, scope);
             if (!assignment_compatible(sema, decl->type, decl->initializer)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "initializer for '%s' has incompatible type", decl->name);
             else decl->initializer = convert_expr(sema, decl->initializer, decl->type);
@@ -175,6 +317,9 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope) {
     if (expr == NULL) return sema->types->void_type;
     switch (expr->kind) {
+        case EX_INIT_LIST:
+            if (expr->type == NULL) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer list requires an object context"); expr->type = sema->types->error_type; }
+            return expr->type;
         case EX_INT: case EX_CHAR: if (expr->type == NULL) expr->type = sema->types->int_type; expr->is_lvalue = false; return expr->type;
         case EX_FLOAT: if (expr->type == NULL) expr->type = sema->types->double_type; expr->is_lvalue = false; return expr->type;
         case EX_STRING: expr->is_lvalue = true; return expr->type;
@@ -333,10 +478,19 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
 }
 
 int cinder_sema_run(CinderSema *sema) {
+    /* Initializer bounds belong to the definition's source point. Build a
+     * temporary lookup table before composing later redeclarations. */
+    for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
+        CinderDecl *decl = sema->ast->declarations.data[i];
+        if (decl->kind != DECL_TYPEDEF && decl->name != NULL && scope_here(&sema->globals, decl->name) == NULL) scope_add(&sema->globals, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
+    }
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
         if (decl->kind == DECL_VAR) (void)string_array_initializer(sema, decl);
+        if (decl->kind == DECL_VAR && decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST) sema_init_object(sema, decl, &decl->initializer, decl->type, 0U, &sema->globals, 0U);
     }
+    for (size_t i = 0U; i < sema->globals.symbols.len; ++i) free(sema->globals.symbols.data[i].name);
+    free(sema->globals.symbols.data); sema->globals.symbols.data = NULL; sema->globals.symbols.len = 0U; sema->globals.symbols.cap = 0U;
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
@@ -364,7 +518,8 @@ int cinder_sema_run(CinderSema *sema) {
         CinderDecl *decl = sema->ast->declarations.data[i];
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
         bool string_array = string_array_initializer(sema, decl);
-        if (decl->initializer != NULL && !string_array) {
+        if (decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST) { /* Planned before declaration composition. */ }
+        else if (decl->initializer != NULL && !string_array) {
             (void)sema_value(sema, &decl->initializer, &sema->globals);
             if (!assignment_compatible(sema, decl->type, decl->initializer)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "global initializer for '%s' has incompatible type", decl->name);
         }

@@ -91,18 +91,18 @@ static bool const_storage(const CinderType *type, size_t offset, size_t length, 
     return false;
 }
 
-static InterpObject *checked_access(InterpContext *context, InterpPointer pointer, const CinderType *type, bool writing, CinderLoc loc) {
+static InterpObject *checked_access(InterpContext *context, InterpPointer pointer, const CinderType *type, bool writing, bool initializing, CinderLoc loc) {
     InterpObject *object = checked_object(context, pointer, type->size, loc);
     if (object == NULL) return NULL;
-    if (writing && (object->readonly || const_storage(object->type, (size_t)pointer.offset, type->size, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only object"); return NULL; }
-    if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || type->size > 8U || type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION || !permits_access(object->type, (size_t)pointer.offset, type, writing, 0U)) {
+    if (writing && (object->readonly || (!initializing && const_storage(object->type, (size_t)pointer.offset, type->size, 0U)))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only object"); return NULL; }
+    if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || type->size > 8U || type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION || !permits_access(object->type, (size_t)pointer.offset, type, writing && !initializing, 0U)) {
         cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "misaligned or incompatible typed object access"); return NULL;
     }
     return object;
 }
 
 bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const CinderType *type, InterpValue *value, CinderLoc loc) {
-    InterpObject *object = checked_access(context, pointer, type, false, loc); if (object == NULL) return false;
+    InterpObject *object = checked_access(context, pointer, type, false, false, loc); if (object == NULL) return false;
     size_t offset = (size_t)pointer.offset;
     for (size_t i = 0U; i < type->size; ++i) if (object->initialized[offset + i] == 0U) { cinder_interp_fail(context, INTERP_UNINITIALIZED, loc, "read of uninitialized object bytes"); return false; }
     uint64_t bits = 0U; for (size_t i = 0U; i < type->size; ++i) bits |= (uint64_t)object->bytes[offset + i] << (i * 8U);
@@ -120,8 +120,8 @@ bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const Cin
     return true;
 }
 
-bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const CinderType *type, const InterpValue *value, CinderLoc loc) {
-    InterpObject *object = checked_access(context, pointer, type, true, loc); if (object == NULL) return false;
+bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const CinderType *type, const InterpValue *value, bool initializing, CinderLoc loc) {
+    InterpObject *object = checked_access(context, pointer, type, true, initializing, loc); if (object == NULL) return false;
     size_t offset = (size_t)pointer.offset; uint64_t bits = (uint64_t)value->integer;
     if (type->kind == TYPE_FLOAT) { float single = (float)value->floating; uint32_t narrow; memcpy(&narrow, &single, sizeof(narrow)); bits = narrow; }
     else if (type->kind == TYPE_DOUBLE) memcpy(&bits, &value->floating, sizeof(bits));
@@ -132,6 +132,19 @@ bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const Ci
     }
     for (size_t i = 0U; i < type->size; ++i) { object->bytes[offset + i] = (unsigned char)(bits >> (i * 8U)); object->initialized[offset + i] = 1U; }
     if (!cinder_ir_floating(type) && type->size == 8U && value->pointer && value->address.object != 0U && bits == (uint64_t)pointer_bits(value->address)) { InterpStoredPointer stored = {offset, value->address}; cinder_vec_push((CinderVec *)&object->pointers, &stored); }
+    return true;
+}
+
+bool cinder_interp_zero(InterpContext *context, InterpPointer pointer, size_t count, CinderLoc loc) {
+    InterpObject *object = checked_object(context, pointer, count, loc); if (object == NULL) return false;
+    if (object->readonly) { cinder_interp_fail(context, INTERP_READONLY, loc, "zero initialization modifies immutable storage"); return false; }
+    size_t offset = (size_t)pointer.offset;
+    memset(object->bytes + offset, 0, count); memset(object->initialized + offset, 1, count);
+    for (size_t p = 0U; p < object->pointers.len;) {
+        size_t old = object->pointers.data[p].offset;
+        if (old < offset + count && offset < old + 8U) object->pointers.data[p] = object->pointers.data[--object->pointers.len];
+        else ++p;
+    }
     return true;
 }
 

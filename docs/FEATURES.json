@@ -691,30 +691,51 @@
       "id": "C27",
       "name": "Initializers",
       "required_boundary": "Scalar, nested aggregate, string, and zero filling",
-      "status": "planned",
+      "status": "partial",
       "valid_cases": [
         "tests/literals/local_exact.c",
         "tests/literals/local_padding.c",
-        "tests/literals/local_array_scope.c"
+        "tests/literals/local_array_scope.c",
+        "tests/initializers/local_nested_struct.c",
+        "tests/initializers/local_matrix_elided.c",
+        "tests/initializers/local_copy_pointer_metadata.c",
+        "tests/initializers/global_struct_string_list.c"
       ],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "boundary_cases": [
+        "tests/initializers/local_const_nested_omitted.c",
+        "tests/initializers/local_incomplete_array_alias_lists.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/initializer_array_excess.c",
+        "tests/constraints/initializer_incomplete_member.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Complete aggregate expression results and call-return initializers, and full feature-native acceptance."
       ]
     },
     {
       "id": "C28",
       "name": "Designated initializers",
       "required_boundary": "Field/index designators, overrides, bounds",
-      "status": "planned",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/initializers/local_nested_designated.c",
+        "tests/initializers/local_array_designated_continue.c"
+      ],
+      "boundary_cases": [
+        "tests/initializers/global_subarray_override.c",
+        "tests/initializers/local_copy_then_nested_reset.c",
+        "tests/initializers/global_union_pointer_override.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/initializer_outside_index.c",
+        "tests/constraints/initializer_path_on_scalar.c",
+        "tests/constraints/initializer_variable_index.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Complete bitfield and flexible-member initialization constraints and full feature-native acceptance."
       ]
     },
     {

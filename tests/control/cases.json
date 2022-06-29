@@ -1678,5 +1678,269 @@
   {
     "source": "../initializers/global_float_literal_midpoint.c",
     "exit": 1
+  },
+  {
+    "source": "../initializers/local_scalar_braces.c",
+    "exit": 5
+  },
+  {
+    "source": "../initializers/local_scalar_nested_braces.c",
+    "exit": 7
+  },
+  {
+    "source": "../initializers/local_array_list.c",
+    "exit": 10
+  },
+  {
+    "source": "../initializers/local_array_inferred_list.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/local_array_omitted.c",
+    "exit": 3
+  },
+  {
+    "source": "../initializers/local_array_designated.c",
+    "exit": 36
+  },
+  {
+    "source": "../initializers/local_array_designated_continue.c",
+    "exit": 41
+  },
+  {
+    "source": "../initializers/local_array_designated_infer.c",
+    "exit": 43
+  },
+  {
+    "source": "../initializers/local_matrix_braced.c",
+    "exit": 4
+  },
+  {
+    "source": "../initializers/local_matrix_elided.c",
+    "exit": 4
+  },
+  {
+    "source": "../initializers/local_matrix_inferred.c",
+    "exit": 16
+  },
+  {
+    "source": "../initializers/local_matrix_designated.c",
+    "exit": 68
+  },
+  {
+    "source": "../initializers/local_struct_list.c",
+    "exit": 21
+  },
+  {
+    "source": "../initializers/local_struct_designated.c",
+    "exit": 90
+  },
+  {
+    "source": "../initializers/local_struct_omitted.c",
+    "exit": 53
+  },
+  {
+    "source": "../initializers/local_nested_struct.c",
+    "exit": 10
+  },
+  {
+    "source": "../initializers/local_nested_elided.c",
+    "exit": 8
+  },
+  {
+    "source": "../initializers/local_nested_designated.c",
+    "exit": 120
+  },
+  {
+    "source": "../initializers/local_struct_array_member.c",
+    "exit": 31
+  },
+  {
+    "source": "../initializers/local_struct_string_member.c",
+    "exit": 21
+  },
+  {
+    "source": "../initializers/local_struct_pointer_member.c",
+    "exit": 42
+  },
+  {
+    "source": "../initializers/local_const_struct_list.c",
+    "exit": 60
+  },
+  {
+    "source": "../initializers/local_const_array_list.c",
+    "exit": 78
+  },
+  {
+    "source": "../initializers/local_pointer_array_list.c",
+    "exit": 90
+  },
+  {
+    "source": "../initializers/local_callback_array_list.c",
+    "exit": 16
+  },
+  {
+    "source": "../initializers/local_union_list.c",
+    "exit": 53
+  },
+  {
+    "source": "../initializers/local_union_designated.c",
+    "exit": 6
+  },
+  {
+    "source": "../initializers/local_overwritten_initializer.c",
+    "exit": 11
+  },
+  {
+    "source": "../initializers/global_array_list.c",
+    "exit": 10
+  },
+  {
+    "source": "../initializers/global_array_inferred_list.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/global_array_designated_list.c",
+    "exit": 37
+  },
+  {
+    "source": "../initializers/global_matrix_elided.c",
+    "exit": 4
+  },
+  {
+    "source": "../initializers/global_struct_list.c",
+    "exit": 33
+  },
+  {
+    "source": "../initializers/global_struct_pointer_list.c",
+    "exit": 60
+  },
+  {
+    "source": "../initializers/global_struct_string_list.c",
+    "exit": 46
+  },
+  {
+    "source": "../initializers/global_const_struct_list.c",
+    "exit": 46
+  },
+  {
+    "source": "../initializers/global_callback_array_list.c",
+    "exit": 18
+  },
+  {
+    "source": "../initializers/global_character_brace_string.c",
+    "exit": 4
+  },
+  {
+    "source": "../initializers/local_character_brace_string.c",
+    "exit": 4
+  },
+  {
+    "source": "../initializers/local_subarray_override.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/global_subarray_override.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/local_struct_override.c",
+    "exit": 9
+  },
+  {
+    "source": "../initializers/global_struct_override.c",
+    "exit": 9
+  },
+  {
+    "source": "../initializers/local_copy_initializer.c",
+    "exit": 13
+  },
+  {
+    "source": "../initializers/local_const_copy_initializer.c",
+    "exit": 17
+  },
+  {
+    "source": "../initializers/local_union_copy_initializer.c",
+    "exit": 7
+  },
+  {
+    "source": "../initializers/local_copy_list_element.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/local_copy_then_nested_reset.c",
+    "exit": 15
+  },
+  {
+    "source": "../initializers/local_copy_then_leaf_override.c",
+    "exit": 18
+  },
+  {
+    "source": "../initializers/local_copy_pointer_metadata.c",
+    "exit": 21
+  },
+  {
+    "source": "../initializers/local_copy_callback_metadata.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/local_incomplete_array_alias_lists.c",
+    "exit": 25
+  },
+  {
+    "source": "../initializers/global_prior_array_bound_list.c",
+    "exit": 12
+  },
+  {
+    "source": "../initializers/local_nested_character_lists.c",
+    "exit": 10
+  },
+  {
+    "source": "../initializers/local_designator_constant_expression.c",
+    "exit": 36
+  },
+  {
+    "source": "../initializers/global_numeric_list_conversions.c",
+    "exit": 16
+  },
+  {
+    "source": "../initializers/local_numeric_list_conversions.c",
+    "exit": 16
+  },
+  {
+    "source": "../initializers/global_boolean_pointer_list.c",
+    "exit": 3
+  },
+  {
+    "source": "../initializers/local_boolean_pointer_list.c",
+    "exit": 3
+  },
+  {
+    "source": "../initializers/local_const_nested_omitted.c",
+    "exit": 23
+  },
+  {
+    "source": "../initializers/global_inferred_designated_matrix.c",
+    "exit": 36
+  },
+  {
+    "source": "../initializers/local_inferred_designated_matrix.c",
+    "exit": 36
+  },
+  {
+    "source": "../initializers/local_zero_pointer_members.c",
+    "exit": 13
+  },
+  {
+    "source": "../initializers/global_union_pointer_override.c",
+    "exit": 17
+  },
+  {
+    "source": "../initializers/global_union_scalar_override.c",
+    "exit": 17
+  },
+  {
+    "source": "../initializers/global_pointer_subarray_reset.c",
+    "exit": 9
   }
 ]

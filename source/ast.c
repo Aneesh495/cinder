@@ -44,6 +44,14 @@ static void free_expr(CinderExpr *expr) {
         free_expr(expr->as.index.base); free_expr(expr->as.index.index);
     } else if (expr->kind == EX_MEMBER) {
         free_expr(expr->as.member.base);
+    } else if (expr->kind == EX_INIT_LIST) {
+        for (size_t i = 0U; i < expr->as.initializer.entries.len; ++i) {
+            CinderInitEntry *entry = &expr->as.initializer.entries.data[i];
+            free_expr(entry->value);
+            for (size_t d = 0U; d < entry->designators.len; ++d) free_expr(entry->designators.data[d].index);
+            free(entry->designators.data);
+        }
+        free(expr->as.initializer.entries.data);
     }
 }
 
@@ -73,7 +81,7 @@ static void free_stmt(CinderStmt *stmt) {
             free_stmt(stmt->as.for_stmt.body);
             break;
         case ST_DECL:
-            for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { free_expr(decl->initializer); free(decl->params.data); }
+            for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { free_expr(decl->initializer); free(decl->params.data); free(decl->init_actions.data); }
             break;
         case ST_EMPTY:
         case ST_BREAK:
@@ -88,6 +96,7 @@ void cinder_ast_destroy(CinderAst *ast) {
         free_expr(decl->initializer);
         free_stmt(decl->body);
         free(decl->params.data);
+        free(decl->init_actions.data);
     }
     free(ast->declarations.data);
     free(ast->bindings.data);
@@ -102,6 +111,18 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
     if (expr == NULL) { indent(out, depth); fputs("<null>\n", out); return; }
     indent(out, depth);
     switch (expr->kind) {
+        case EX_INIT_LIST:
+            fprintf(out, "initializer-list entries=%zu\n", expr->as.initializer.entries.len);
+            for (size_t i = 0U; i < expr->as.initializer.entries.len; ++i) {
+                const CinderInitEntry *entry = &expr->as.initializer.entries.data[i];
+                for (size_t d = 0U; d < entry->designators.len; ++d) {
+                    const CinderInitDesignator *designator = &entry->designators.data[d]; indent(out, depth + 1U);
+                    if (designator->member != NULL) fprintf(out, "designator .%s\n", designator->member);
+                    else { fputs("designator index\n", out); dump_expr(designator->index, out, depth + 2U); }
+                }
+                dump_expr(entry->value, out, depth + 1U);
+            }
+            break;
         case EX_INT: fprintf(out, "int %lld\n", (long long)expr->as.integer); break;
         case EX_FLOAT: fprintf(out, "double %.17g\n", expr->as.floating); break;
         case EX_CHAR: fprintf(out, "char %lld\n", (long long)expr->as.integer); break;

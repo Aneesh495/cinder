@@ -1,6 +1,6 @@
 # Build status
 
-Updated: 2026-10-05
+Updated: 2026-10-06
 
 ## Repository and publication
 
@@ -344,3 +344,51 @@ Binary32 rounds at each typed operation; integer conversion bounds are checked.
 Boolean object and function addresses fold without using a host address.
 Integer constant expression rules remain separate for enum/array requirements.
 The source suite adds 36 individually authored conversion and rounding cases.
+
+## Subobject initialization
+
+Nested brace lists, array/member designators, brace elision, inferred bounds,
+and omitted-element zeroing now lower into explicit typed initialization
+operations. Scalar, string, pointer, callback, and local aggregate-copy
+initializers reach the independent object interpreter and original x86 encoder.
+Repeated subarray/struct initializers clear omitted elements from earlier
+initializers; overlapping global writes remove stale pointer relocations.
+Const initialization has separate effects from subsequent ordinary stores.
+Authored source cases cover these paths, invalid initializer constraints,
+uninitialized self-reads, expired pointers, and writes to const subobjects.
+Canonical IR mutations check initializer operand, effect, and extent contracts.
+General aggregate expression results and argument/return ABI remain open.
+The prior scalar constant checkpoint passed native Linux validation in run
+`37407723011`; this increment needs its own native validation after publication.
+
+The GCC 15 macOS reference rejected a repeated implicit address-to-boolean
+initializer in one aggregate although its single-scalar form and explicit
+conversion compiled. Clang compiled all forms. The minimized sources and raw
+reference outcomes are retained under `.agent-local/boolean-list-reference`.
+The equality fixture uses an explicit `_Bool` conversion for the repeated
+address; implicit conversion is still covered by separate scalar and member
+cases. This reference difference is not counted as a Cinder divergence or a
+successful cross-reference execution.
+
+Assembly emission now orders a private copy of section fixups, so valid
+out-of-order designated pointer initializers remain representable. The focused
+initializer runner compares actual encoded text/data/readonly bytes and resolved
+local section/value relocation targets against independently assembled output.
+It retains named external/global symbol references instead of normalizing them
+away. Reference compilation is bounded to four independent case workers.
+Text assembly uses explicit ELF relocation directives and zero displacement
+fields, preserving references that an assembler could otherwise resolve early
+within the text section. This keeps the emitted assembly tied to the original
+machine object's relocation contract, including local callbacks.
+
+Two aggregate-copy/partial-designator cases retain GCC's different results.
+[WG14 issue 0413](https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0413.html),
+fixed in C17, states that implicit zeroing preserves prior explicit
+initialization. Cinder and Clang retain the copied sibling fields; GCC zeroes
+them in the observed versions. `tests/reference_deviations.json` binds each
+adjudication to the exact source hash, reference family, standard result, and
+observed reference result. Changed inputs and unknown outcomes still fail.
+Raw executions remain in the reports, and these cases cannot contribute to a
+GCC/Clang agreement count. Cinder's interpreter and native outputs must always
+match the standard result. This adjudication does not satisfy the full
+differential acceptance campaign.

@@ -335,6 +335,43 @@ static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **nam
 static CinderExpr *parse_expression(CinderAst *ast);
 static CinderExpr *parse_assignment(CinderAst *ast);
 
+static CinderExpr *parse_initializer(CinderAst *ast, unsigned depth) {
+    if (!is(ast, '{')) return parse_assignment(ast);
+    CinderExpr *expr = new_expr(ast, EX_INIT_LIST, peek(ast)->loc);
+    if (depth >= 64U) {
+        cinder_diag(ast->diags, CINDER_ERROR, expr->loc, "initializer nesting exceeds the profile limit");
+        size_t braces = 0U;
+        do {
+            if (take(ast, '{')) ++braces;
+            else if (take(ast, '}')) --braces;
+            else if (!is(ast, TOK_EOF)) ++ast->cursor;
+        } while (braces != 0U && !is(ast, TOK_EOF));
+        return expr;
+    }
+    (void)take(ast, '{');
+    if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, expr->loc, "empty initializer list is outside C17");
+    while (!is(ast, '}') && !is(ast, TOK_EOF)) {
+        CinderInitEntry entry; memset(&entry, 0, sizeof(entry));
+        while (is(ast, '.') || is(ast, '[')) {
+            CinderInitDesignator designator; memset(&designator, 0, sizeof(designator));
+            if (take(ast, '.')) {
+                CinderToken *name = expect(ast, TOK_IDENTIFIER, "initializer member name");
+                if (name != NULL) designator.member = cinder_arena_strndup(&ast->arena, name->text, name->length);
+            } else {
+                (void)take(ast, '['); designator.index = parse_conditional(ast); (void)expect(ast, ']', "']'");
+            }
+            cinder_vec_push((CinderVec *)&entry.designators, &designator);
+        }
+        if (entry.designators.len != 0U) (void)expect(ast, '=', "'=' after initializer designator");
+        size_t before = ast->cursor;
+        entry.value = parse_initializer(ast, depth + 1U);
+        cinder_vec_push((CinderVec *)&expr->as.initializer.entries, &entry);
+        if (ast->cursor == before && !is(ast, TOK_EOF)) ++ast->cursor;
+        if (!take(ast, ',')) break;
+    }
+    (void)expect(ast, '}', "'}'"); expr->parse_index = ast->cursor; return expr;
+}
+
 static CinderExpr *parse_primary(CinderAst *ast) {
     CinderToken *token = peek(ast);
     if (take(ast, TOK_NUMBER)) {
@@ -555,7 +592,7 @@ static CinderDecl *parse_local_decl(CinderAst *ast) {
         decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
         decl->declaration_complete = type->complete;
         bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
-        if (take(ast, '=')) { decl->initializer = parse_assignment(ast); decl->initializer_index = ast->cursor; if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer"); }
+        if (take(ast, '=')) { decl->initializer = parse_initializer(ast, 0U); decl->initializer_index = ast->cursor; if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer"); }
         if (tail == NULL) first = decl; else tail->next = decl;
         tail = decl;
     } while (take(ast, ','));
@@ -649,7 +686,7 @@ int cinder_parse(CinderAst *ast) {
                     ast->bindings.len = saved;
                 }
             } else if (take(ast, '=')) {
-                decl->initializer = parse_assignment(ast);
+                decl->initializer = parse_initializer(ast, 0U);
                 decl->initializer_index = ast->cursor;
                 if (alias) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef cannot have an initializer");
             }

@@ -1,0 +1,1 @@
+int a[][3]={[2][1]=9,10}; int main(void) { return sizeof(a); }

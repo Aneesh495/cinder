@@ -211,7 +211,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     InterpValue address = cinder_interp_address(context, context->globals[index]);
                     if (inst->op == IR_GLOBAL_ADDRESS) result = address;
                     else if (inst->op == IR_GLOBAL_LOAD) { if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto done; }
-                    else if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], inst->loc)) goto done;
+                    else if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], false, inst->loc)) goto done;
                     break;
                 }
                 case IR_FUNCTION_ADDRESS: {
@@ -239,19 +239,20 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto done;
                     break;
                 }
-                case IR_LOCAL_STORE: {
+                case IR_LOCAL_STORE: case IR_LOCAL_INIT: {
                     InterpValue address = cinder_interp_address(context, locals[inst->slot]);
-                    InterpObject *object = &context->objects.data[locals[inst->slot] - 1U];
-                    const CinderType *declared = object->type; CinderType initialization_type = *declared; initialization_type.qualifiers = 0U;
-                    object->type = &initialization_type;
-                    bool stored = cinder_interp_store(context, address.address, inst->type, &values[inst->left], inst->loc);
-                    object->type = declared; if (!stored) goto done; break;
+                    if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], inst->op == IR_LOCAL_INIT, inst->loc)) goto done;
+                    break;
                 }
-                case IR_MEMORY_LOAD: case IR_MEMORY_STORE: case IR_POINTER_OFFSET: case IR_POINTER_MEMBER: case IR_POINTER_DIFF: {
+                case IR_ZERO_INIT:
+                    if (!values[inst->left].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "zero initializer has no pointer provenance"); goto done; }
+                    if (!cinder_interp_zero(context, values[inst->left].address, (size_t)inst->integer, inst->loc)) goto done;
+                    break;
+                case IR_MEMORY_LOAD: case IR_MEMORY_STORE: case IR_MEMORY_INIT: case IR_POINTER_OFFSET: case IR_POINTER_MEMBER: case IR_POINTER_DIFF: {
                     const InterpValue *pointer = &values[inst->left];
                     if (!pointer->pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer has no object provenance"); goto done; }
                     if (inst->op == IR_MEMORY_LOAD) { if (!cinder_interp_load(context, pointer->address, inst->type, &result, inst->loc)) goto done; }
-                    else if (inst->op == IR_MEMORY_STORE) { if (!cinder_interp_store(context, pointer->address, inst->type, &values[inst->right], inst->loc)) goto done; }
+                    else if ((inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT)) { if (!cinder_interp_store(context, pointer->address, inst->type, &values[inst->right], inst->op == IR_MEMORY_INIT, inst->loc)) goto done; }
                     else if (inst->op == IR_POINTER_OFFSET) {
                         const CinderType *index_type = cinder_ir_value_type(function, inst->right);
                         if (index_type->is_unsigned && values[inst->right].integer < 0) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, inst->loc, "unsigned pointer index exceeds the object domain"); goto done; }

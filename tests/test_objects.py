@@ -57,7 +57,8 @@ def inspect(path, strict=True):
         for i in range(reloc[5] // 24):
             offset, info, addend = struct.unpack_from('<QQq', data, reloc[4] + i * 24)
             assert offset + width <= by_name[target][5] and info >> 32 < len(symbols) and (info & 0xffffffff) in kinds and (name != '.rela.text' or not strict or addend == -4), path
-            relocations.append(dict(section=target, offset=offset, symbol=symbols[info >> 32]['name'], type=info & 0xffffffff, addend=addend))
+            symbol = symbols[info >> 32]
+            relocations.append(dict(section=target, offset=offset, symbol=symbol['name'], symbol_index=info >> 32, symbol_section=symbol['section'], symbol_value=symbol['value'], symbol_binding=symbol['binding'], type=info & 0xffffffff, addend=addend))
     return dict(sha256=digest(path), sections={name: dict(size=value[5], alignment=value[8]) for name, value in by_name.items()}, symbols=symbols, relocations=relocations)
 
 
