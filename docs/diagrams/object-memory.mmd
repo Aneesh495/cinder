@@ -15,3 +15,8 @@ flowchart TD
     ZERO --> CHECK
     INIT --> CHECK
     PLAN --> STATIC[Global bytes and pointer relocations]
+    VALUE[Aggregate assignment, conditional, comma result] --> SNAPSHOT[Typed automatic object snapshot]
+    SNAPSHOT --> COPY[Copy bytes, initialization state, pointer metadata]
+    COPY --> FREEZE[Freeze completed temporary]
+    FREEZE --> VM
+    FULL[Full expression ends] --> DEAD

@@ -511,7 +511,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderIRInst *inst = &block->instructions.data[i];
             switch (inst->op) {
-                case IR_NOP: case IR_LOCAL_BEGIN: case IR_LOCAL_END: break;
+                case IR_NOP: case IR_LOCAL_BEGIN: case IR_LOCAL_END: case IR_LOCAL_FREEZE: break;
                 case IR_CONST: emit_mov_rax_imm(object, inst->integer); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_FCONST: store_float_constant(object, function, allocation, inst->dst, inst->floating); break;
                 case IR_GLOBAL_LOAD: emit_global_load(object, function, allocation, inst); break;

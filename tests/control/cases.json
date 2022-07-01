@@ -1942,5 +1942,117 @@
   {
     "source": "../initializers/global_pointer_subarray_reset.c",
     "exit": 9
+  },
+  {
+    "source": "../aggregates/assignment.c",
+    "exit": 9
+  },
+  {
+    "source": "../aggregates/array_assignment.c",
+    "exit": 22
+  },
+  {
+    "source": "../aggregates/pointer_assignment.c",
+    "exit": 11
+  },
+  {
+    "source": "../aggregates/callback_assignment.c",
+    "exit": 10
+  },
+  {
+    "source": "../aggregates/union_assignment.c",
+    "exit": 17
+  },
+  {
+    "source": "../aggregates/global_assignment.c",
+    "exit": 15
+  },
+  {
+    "source": "../aggregates/member_assignment.c",
+    "exit": 16
+  },
+  {
+    "source": "../aggregates/assignment_member_result.c",
+    "exit": 9
+  },
+  {
+    "source": "../aggregates/assignment_chain.c",
+    "exit": 18
+  },
+  {
+    "source": "../aggregates/assignment_target_once.c",
+    "exit": 17
+  },
+  {
+    "source": "../aggregates/conditional_initializer.c",
+    "exit": 5
+  },
+  {
+    "source": "../aggregates/conditional_member.c",
+    "exit": 6
+  },
+  {
+    "source": "../aggregates/conditional_effect.c",
+    "exit": 5
+  },
+  {
+    "source": "../aggregates/conditional_condition_once.c",
+    "exit": 8
+  },
+  {
+    "source": "../aggregates/comma_member.c",
+    "exit": 4
+  },
+  {
+    "source": "../aggregates/comma_initializer.c",
+    "exit": 6
+  },
+  {
+    "source": "../aggregates/assignment_snapshot.c",
+    "exit": 11
+  },
+  {
+    "source": "../aggregates/conditional_snapshot.c",
+    "exit": 16
+  },
+  {
+    "source": "../aggregates/comma_snapshot.c",
+    "exit": 14
+  },
+  {
+    "source": "../aggregates/nested_member_result.c",
+    "exit": 16
+  },
+  {
+    "source": "../aggregates/self_assignment.c",
+    "exit": 7
+  },
+  {
+    "source": "../aggregates/const_source_assignment.c",
+    "exit": 9
+  },
+  {
+    "source": "../aggregates/pointee_const_assignment.c",
+    "exit": 10
+  },
+  {
+    "source": "../aggregates/conditional_loop.c",
+    "exit": 12
+  },
+  {
+    "source": "../aggregates/large_assignment.c",
+    "exit": 22
+  },
+  {
+    "source": "../aggregates/union_conditional.c",
+    "exit": 9
+  },
+  {
+    "source": "../aggregates/assignment_initializer.c",
+    "exit": 9
+  },
+  {
+    "source": "../aggregates/conditional_in_list.c",
+    "exit": 10
   }
 ]

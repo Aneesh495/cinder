@@ -170,5 +170,57 @@
   {
     "source": "initializer_literal_write.undefined.c",
     "classification": 12
+  },
+  {
+    "source": "aggregate_assignment_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_conditional_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_comma_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_temporary_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "aggregate_temporary_init_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "aggregate_comma_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "aggregate_uninitialized_copy.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "aggregate_pointer_expired_copy.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_if_condition_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_while_condition_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_do_condition_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_for_step_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_return_temporary_expired.undefined.c",
+    "classification": 10
   }
 ]

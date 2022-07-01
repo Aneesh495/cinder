@@ -31,7 +31,7 @@ print(f'memory: {len(cases)} authored undefined cases classified at both optimiz
 # Change contracts on real memory instructions while preserving the rest of
 # each canonical module. Every rejection must leave a previous output intact.
 seeds = {}
-for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces'):
+for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces', '../aggregates/assignment'):
     path = base / (pathlib.Path(name).name + '.cir')
     result = subprocess.run([str(compiler), '--serialize-ir', '-O0', 'tests/memory/' + name + '.c', '-o', str(path)], capture_output=True, timeout=10)
     assert result.returncode == 0, result
@@ -64,6 +64,10 @@ mutations = [
     ('local_const_array_list', 'memory.init', {7: 'none'}),
     ('local_const_array_list', 'memory.init', {1: 'memory.store'}),
     ('local_scalar_braces', 'memory.init', {2: 'none'}),
+    ('assignment', 'local.freeze', {10: '-1'}),
+    ('assignment', 'local.freeze', {5: '0'}),
+    ('assignment', 'local.freeze', {6: '0'}),
+    ('assignment', 'local.freeze', {2: 'none'}),
 ]
 for index, (seed, opcode, edits) in enumerate(mutations):
     lines = seeds[seed].splitlines()
@@ -71,7 +75,9 @@ for index, (seed, opcode, edits) in enumerate(mutations):
     for line_index, line in enumerate(lines):
         columns = line.split()
         if columns[:2] == ['inst', opcode]:
+            original = columns.copy()
             for column, value in edits.items(): columns[column] = value
+            assert columns != original, (seed, opcode, edits, 'mutation changes nothing')
             lines[line_index] = ' '.join(columns)
             found = True
             break

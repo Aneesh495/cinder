@@ -51,6 +51,7 @@ static bool value_compatible(const CinderType *target, const CinderType *value) 
 
 static CinderExpr *convert_expr(CinderSema *sema, CinderExpr *value, CinderType *type) {
     if (value == NULL || cinder_type_equal(value->type, type)) return value;
+    if ((type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) && value_compatible(type, value->type)) return value;
     CinderExpr *cast = cinder_arena_alloc(&sema->ast->arena, sizeof(*cast), _Alignof(CinderExpr));
     memset(cast, 0, sizeof(*cast)); cast->kind = EX_CAST; cast->loc = value->loc; cast->type = type; cast->parse_index = value->parse_index;
     cast->as.cast.cast_type = type; cast->as.cast.value = value;
@@ -107,6 +108,14 @@ static bool string_array_initializer(CinderSema *sema, CinderDecl *decl) {
 typedef struct { CinderType *type; size_t index; size_t offset; } InitFrame;
 
 static bool aggregate_type(const CinderType *type) { return type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION; }
+
+static bool contains_const(const CinderType *type, unsigned depth) {
+    if ((type->qualifiers & 1U) != 0U || depth >= 64U) return true;
+    if (type->kind == TYPE_ARRAY) return contains_const(type->base, depth + 1U);
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION)
+        for (size_t f = 0U; f < type->fields.len; ++f) if (contains_const(type->fields.data[f].type, depth + 1U)) return true;
+    return false;
+}
 
 static size_t init_child_count(const CinderType *type) {
     if (type->kind == TYPE_ARRAY) return type->complete ? type->array_len : SIZE_MAX;
@@ -397,7 +406,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         }
         case EX_ASSIGN: {
             CinderType *target = sema_expr(sema, expr->as.assign.target, scope); CinderType *value = sema_value(sema, &expr->as.assign.value, scope);
-            if (!expr->as.assign.target->is_lvalue || target->kind == TYPE_ARRAY || target->kind == TYPE_FUNCTION || (target->qualifiers & 1U) != 0U) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment requires a modifiable lvalue");
+            if (!expr->as.assign.target->is_lvalue || target->kind == TYPE_ARRAY || target->kind == TYPE_FUNCTION || contains_const(target, 0U)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment requires a modifiable lvalue");
             if (expr->as.assign.op == '=' && !assignment_compatible(sema, target, expr->as.assign.value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment types are incompatible");
             if (expr->as.assign.op == '=') expr->as.assign.value = convert_expr(sema, expr->as.assign.value, target);
             else if (target->kind == TYPE_POINTER && pointer_step_type(target, expr->parse_index) && integer_type(value) && (expr->as.assign.op == TOK_PLUSEQ || expr->as.assign.op == TOK_MINUSEQ)) {

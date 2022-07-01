@@ -14,7 +14,9 @@ from reference_policy import identify, adjudicate
 
 compiler = pathlib.Path(sys.argv[1]).resolve()
 identity = hashlib.sha256(compiler.read_bytes()).hexdigest()
-base = pathlib.Path('.agent-local/initializers') / identity
+group = sys.argv[2] if len(sys.argv) > 2 else 'initializers'
+assert group in ('initializers', 'aggregates')
+base = pathlib.Path('.agent-local') / group / identity
 base.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
 references = [shutil.which('gcc-15') or shutil.which('gcc'), shutil.which('clang')]
@@ -26,7 +28,7 @@ for reference in references:
     identities[reference] = identify(reference)
     versions[reference] = identities[reference]['version']
 by_source = {pathlib.Path('tests/control', case['source']).resolve(): case for case in json.loads(pathlib.Path('tests/control/cases.json').read_text())}
-sources = sorted(pathlib.Path('tests/initializers').glob('*.c'))
+sources = sorted(pathlib.Path('tests', group).glob('*.c'))
 assert sources and all(path.resolve() in by_source for path in sources), 'every initializer source needs an authored observation'
 cases = [by_source[path.resolve()] for path in sources]
 def probe(item):
@@ -41,8 +43,11 @@ def probe(item):
             assert result.returncode == 0, (argv, result)
             observed = subprocess.run([str(executable.resolve())], capture_output=True, timeout=5)
             assert observed.stdout == b'' and observed.stderr == b'', (source, reference, level, observed)
-            verdict = adjudicate(source, case['exit'], observed.returncode, identities[reference])
-            row['references'].append(dict(argv=argv, exit=observed.returncode, verdict=verdict, executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(), compile_stderr=result.stderr.decode(errors='replace')))
+            reference_row = dict(argv=argv, exit=observed.returncode, executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(), compile_stderr=result.stderr.decode(errors='replace'))
+            row['references'].append(reference_row)
+            (base / f'reference-observations-{index}.json').write_text(json.dumps(row, indent=2)+'\n')
+            reference_row['verdict'] = adjudicate(source, case['exit'], observed.returncode, identities[reference])
+    row['differential_eligible'] = all(reference['verdict']['eligible'] for reference in row['references'])
     for level in ('-O0', '-O2'):
         obj = base / f'owned-{index}{level}.o'
         assembly = base / f'owned-{index}{level}.s'
@@ -96,4 +101,5 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         (base / 'observations.json').write_text(json.dumps(dict(compiler_sha256=identity, reference_versions=versions, native=native, cases=records), indent=2)+'\n')
 assert hashlib.sha256(compiler.read_bytes()).hexdigest() == identity, 'compiler changed during initializer checks'
 disagreements = sum(not reference['verdict']['agreement'] for row in records for reference in row['references'])
-print(f'initializers: {len(cases)} authored cases and object/assembly pairs passed; {disagreements} adjudicated reference discrepancies retained; native={native}')
+eligible = sum(row['differential_eligible'] for row in records)
+print(f'{group}: {len(cases)} authored cases and object/assembly pairs passed; {eligible} reference-agreement cases, {disagreements} triaged reference discrepancies; native={native}')

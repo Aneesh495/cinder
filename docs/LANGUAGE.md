@@ -14,7 +14,8 @@ Scalar conversions, float32/double operations and scalar ABI boundaries, pruned
 SSA promotion, cyclic phi edge transfers, scoped typedefs/enums/tags, nested
 declarators, fixed array layout, and canonical IR round trips are implemented.
 See `CONVERSIONS.md`, `DECLARATIONS.md`, and `IR.md` for tested boundaries.
-Aggregate values/ABI, complete variadic
+Aggregate assignment, conditional/comma results, and temporary member reads
+use explicit object transfers. Aggregate argument/return ABI, complete variadic
 state, bitfields, debug information, and advanced C11/C17 constructs remain open.
 Long double, complex, atomics, thread-local execution, variable-length arrays,
 GNU inline assembly/vector extensions, and C++ input are excluded and diagnosed.
