@@ -23,5 +23,5 @@ def adjudicate(source, expected, observed, reference):
             return dict(agreement=True, eligible=False, resolution=entry['resolution'], ruling=entry['ruling'])
         return dict(agreement=True, eligible=True)
     assert entry and digest == entry['source_sha256'], (source, reference, expected, observed, 'unadjudicated reference disagreement')
-    assert expected == entry['expected_exit'] and reference['family'] == entry['family'] and observed == entry['reference_exit'], (source, reference, expected, observed, 'unexpected reference outcome')
+    assert expected == entry['expected_exit'] and reference['family'] in entry['families'] and observed == entry['reference_exit'], (source, reference, expected, observed, 'unexpected reference outcome')
     return dict(agreement=False, eligible=False, resolution=entry['resolution'], ruling=entry['ruling'], reference_exit=observed, profile_exit=expected)

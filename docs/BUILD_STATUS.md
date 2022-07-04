@@ -422,3 +422,11 @@ Aggregate argument/return classification, hosted variadics, the remaining
 language families, debugging, self-hosting, full applications, and final
 acceptance remain open. The next implementation step is complete System V
 aggregate value transfer through calls and returns.
+
+Linux run `37551883978` executed all 514 source observations and 1,028
+IR/native comparisons successfully, then rejected a new reference observation:
+Clang 18 returned 18 for `comma_snapshot.c`, while local newer Clang returned
+14. The retained storage-identity probe remains ineligible for equality counts;
+its policy now records the same exact aliasing outcome for both reference
+families. This is a reference-policy correction, with the original failure
+retained. Full native workflow completion requires a fresh run.
