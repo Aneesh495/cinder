@@ -21,7 +21,7 @@ Updated: 2026-10-06
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 - Eight authored application fixtures and a deterministic defined-program generator are now part of the local workload suite.
 
-The current native implementation covers scalar integer/float operations, mixed scalar SysV argument lists, and indirect calls. Complete C01-C48 coverage, aggregate expression/ABI classification, the full callback ABI campaign, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
+The current native implementation covers scalar integer/float operations, aggregate value transfers, mixed INTEGER/SSE/MEMORY SysV argument lists and returns, and indirect calls. Complete C01-C48 coverage, the full ABI acceptance campaign, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
 
 ## Commands and results
 
@@ -429,4 +429,34 @@ Clang 18 returned 18 for `comma_snapshot.c`, while local newer Clang returned
 14. The retained storage-identity probe remains ineligible for equality counts;
 its policy now records the same exact aliasing outcome for both reference
 families. This is a reference-policy correction, with the original failure
-retained. Full native workflow completion requires a fresh run.
+retained. The policy correction passed the full native workflow in run
+`37552433250` for `41670e1`.
+
+## Aggregate calling convention continuation
+
+The original classifier and encoder now implement fixed struct/union arguments
+and results, including mixed integer/SSE eightbytes, whole-argument rollback,
+stack copies, and hidden result pointers. The interpreter copies parameters
+into independent objects and transfers returns before ending callee lifetimes.
+The verifier checks both call signatures, aggregate storage, and return effects.
+
+Strict GCC and Clang sanitizer builds passed. Current checks passed 538 authored
+source observations, 1,076 canonical IR/backend comparisons, 112 source
+rejections, 60 memory classifications, and 42 malformed storage/call contracts.
+The 24 new defined ABI inputs agree with GCC and Clang at both optimization
+levels; owned objects match independently assembled bytes and relocations.
+All 48 owned ABI objects also executed with the expected results in the scoped
+x86-64 Linux VM. The initial 32 generated aggregate signatures passed local
+GCC/Clang O0/O2 reference execution and owned object generation in both call
+directions. A larger native campaign and the hosted Linux workflow remain
+required before claiming this checkpoint fully validated.
+
+The IR campaign rejected its recursive-call family because its builder put a
+scalar type in the new actual-signature field. Both recursive calls now carry
+their actual function type; the verifier contract remains strict. The rejected
+run is retained. After the repair, all 100,000 typed IR round trips and
+optimizer comparisons passed, with 97,501 defined executions and 2,499 separately
+classified outcomes. The 1,000 SSA/critical-edge cases also passed.
+
+Hosted variadic state, remaining language families, self-hosting, debugging,
+the full applications, performance thresholds, and final acceptance remain open.

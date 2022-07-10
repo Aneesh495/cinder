@@ -42,6 +42,7 @@ set(CINDER_SOURCES
   source/liveness.c
   source/alloc_check.c
   source/x86_64.c
+  source/abi.c
   source/elf64.c
   source/assembly.c
   source/driver.c

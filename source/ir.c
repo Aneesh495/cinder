@@ -84,6 +84,13 @@ static CinderDecl *find_global_decl(const CinderIRFunction *function, const char
 static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr);
 static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr);
 static CinderValueId lower_aggregate(LowerContext *context, CinderExpr *expr);
+static CinderValueId aggregate_snapshot(LowerContext *context, CinderValueId source, CinderType *type, CinderLoc loc);
+static CinderValueId aggregate_temporary(LowerContext *context, CinderType *type, CinderLoc loc, int *slot);
+static void freeze_temporary(LowerContext *context, int slot, CinderLoc loc);
+
+static bool aggregate_value(const CinderType *type) {
+    return type != NULL && (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION);
+}
 
 bool cinder_ir_floating(const CinderType *type) {
     return type != NULL && (type->kind == TYPE_FLOAT || type->kind == TYPE_DOUBLE);
@@ -125,21 +132,31 @@ static CinderValueId lower_call(LowerContext *context, CinderExpr *expr) {
     CinderValueId callee_value = direct ? CINDER_INVALID_VALUE : lower_expr(context, expr->as.call.callee);
     CINDER_VEC_TYPE(CinderValueId) lowered = {NULL, 0U, 0U};
     CINDER_VEC_TYPE(bool) lowered_floats = {NULL, 0U, 0U};
+    CinderParamVec actual = {NULL, 0U, 0U};
+    int result_slot = -1;
+    if (aggregate_value(expr->type)) (void)aggregate_temporary(context, expr->type, expr->loc, &result_slot);
     for (size_t i = 0U; i < expr->as.call.args.len; ++i) {
         CinderValueId arg = lower_expr(context, expr->as.call.args.data[i]);
+        CinderType *type = expr->as.call.args.data[i]->type;
+        if (aggregate_value(type)) arg = aggregate_snapshot(context, arg, type, expr->as.call.args.data[i]->loc);
+        CinderParam parameter = {NULL, type}; cinder_vec_push((CinderVec *)&actual, &parameter);
         bool is_float = expr->as.call.args.data[i]->type != NULL && (expr->as.call.args.data[i]->type->kind == TYPE_FLOAT || expr->as.call.args.data[i]->type->kind == TYPE_DOUBLE);
         cinder_vec_push((CinderVec *)&lowered, &arg); cinder_vec_push((CinderVec *)&lowered_floats, &is_float);
     }
     CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CALL, expr->loc);
     inst->dst = expr->type != NULL && expr->type->kind == TYPE_VOID ? CINDER_INVALID_VALUE : new_value(context->function); inst->floating_result = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
-    inst->type = expr->type;
+    inst->type = aggregate_value(expr->type) ? cinder_type_pointer(context->function->types, expr->type) : expr->type;
+    inst->slot = result_slot;
+    inst->source_type = cinder_type_function(context->function->types, expr->type, &actual);
     inst->callee_type = expr->as.call.callee->type;
     if (inst->callee_type->kind == TYPE_POINTER) inst->callee_type = inst->callee_type->base;
     if (direct) inst->callee = cinder_strndup(expr->as.call.callee->as.name, strlen(expr->as.call.callee->as.name));
     else inst->left = callee_value;
     for (size_t i = 0U; i < lowered.len; ++i) { cinder_vec_push((CinderVec *)&inst->args, &lowered.data[i]); cinder_vec_push((CinderVec *)&inst->arg_floats, &lowered_floats.data[i]); }
-    free(lowered.data); free(lowered_floats.data);
-    return inst->dst;
+    free(lowered.data); free(lowered_floats.data); free(actual.data);
+    CinderValueId result = inst->dst;
+    if (result_slot >= 0) freeze_temporary(context, result_slot, expr->loc);
+    return result;
 }
 
 static CinderBlockId create_block(LowerContext *context, const char *name) {
@@ -331,6 +348,7 @@ static CinderValueId aggregate_snapshot(LowerContext *context, CinderValueId sou
 
 static CinderValueId lower_aggregate(LowerContext *context, CinderExpr *expr) {
     if (expr->is_lvalue || expr->kind == EX_MEMBER) return lower_address(context, expr);
+    if (expr->kind == EX_CALL) return lower_call(context, expr);
     if (expr->kind == EX_ASSIGN) {
         CinderValueId destination = lower_address(context, expr->as.assign.target);
         CinderValueId source = lower_aggregate(context, expr->as.assign.value);
@@ -625,7 +643,14 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             break;
         }
         case ST_RETURN: {
-            CinderValueId value = stmt->as.ret.value == NULL ? CINDER_INVALID_VALUE : lower_full_expression(context, stmt->as.ret.value, false, stmt->loc);
+            CinderValueId value = CINDER_INVALID_VALUE;
+            if (aggregate_value(context->function->type->return_type) && stmt->as.ret.value != NULL) {
+                size_t mark = context->expression_temporaries.len;
+                CinderValueId source = lower_aggregate(context, stmt->as.ret.value);
+                CinderIRInst *copy = add_inst_ptr(context->function, context->current, IR_AGG_RETURN, stmt->loc);
+                copy->left = source; copy->type = context->function->type->return_type;
+                end_expression(context, mark, stmt->loc);
+            } else if (stmt->as.ret.value != NULL) value = lower_full_expression(context, stmt->as.ret.value, false, stmt->loc);
             end_scope(context, 0U, stmt->loc);
             CinderIRBlock *block = block_at(context->function, context->current);
             block->terminator.kind = TERM_RETURN; block->terminator.value = value; block->terminator.loc = stmt->loc; break;
@@ -807,11 +832,17 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
         CinderIRBlock entry = make_block(&function, "entry"); cinder_vec_push((CinderVec *)&function.blocks, &entry);
         LowerContext context; memset(&context, 0, sizeof(context)); context.function = &function; context.module = module; context.diags = diags; context.current = 0U; context.locals.data = NULL; context.locals.len = 0U; context.locals.cap = 0U; context.break_blocks.data = NULL; context.break_blocks.len = 0U; context.break_blocks.cap = 0U; context.continue_blocks.data = NULL; context.continue_blocks.len = 0U; context.continue_blocks.cap = 0U; context.va_index = 0U;
         size_t integer_param_count = 0U;
-        for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; cinder_vec_push((CinderVec *)&context.locals, &local); bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
+        for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; cinder_vec_push((CinderVec *)&context.locals, &local); if (aggregate_value(param->type)) { CinderIRInst *copy = add_inst_ptr(&function, 0U, IR_AGG_ARG, param->loc); copy->slot = local.slot; copy->operator_code = (int)p; copy->type = param->type; ++integer_param_count; continue; } bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
         lower_stmt(&context, decl->body);
         if (block_at(&function, context.current)->terminator.kind == TERM_UNREACHABLE) {
             CinderValueId returned = CINDER_INVALID_VALUE;
-            if (function.type->return_type->kind != TYPE_VOID) {
+            if (aggregate_value(function.type->return_type)) {
+                int slot = new_local(&context, function.type->return_type);
+                CinderIRInst *address = add_inst_ptr(&function, context.current, IR_LOCAL_ADDRESS, decl->loc);
+                address->slot = slot; address->type = cinder_type_pointer(function.types, function.type->return_type); address->dst = new_value(&function);
+                CinderValueId source = address->dst;
+                CinderIRInst *copy = add_inst_ptr(&function, context.current, IR_AGG_RETURN, decl->loc); copy->left = source; copy->type = function.type->return_type;
+            } else if (function.type->return_type->kind != TYPE_VOID) {
                 CinderIRInst *value = add_inst_ptr(&function, context.current, strcmp(function.name, "main") == 0 ? IR_CONST : IR_UNDEF, decl->loc);
                 value->type = function.type->return_type; value->dst = new_value(&function); returned = value->dst;
             }
@@ -824,7 +855,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
 }
 
 const char *cinder_ir_op_name(CinderIROp op) {
-    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","function.address","object.copy","object.init","local.init","memory.init","zero.init","local.freeze","undef"};
+    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","function.address","object.copy","object.init","local.init","memory.init","zero.init","local.freeze","aggregate.arg","aggregate.return","undef"};
     return op < CINDER_ARRAY_LEN(names) ? names[op] : "unknown";
 }
 

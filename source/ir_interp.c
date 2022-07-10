@@ -169,7 +169,7 @@ static bool phi_inputs(InterpContext *context, const CinderIRBlock *block, Cinde
     return true;
 }
 
-static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const InterpValue *args, size_t arg_count, InterpValue *returned) {
+static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const InterpValue *args, size_t arg_count, InterpValue *returned, const InterpValue *aggregate_return) {
     if (context->depth >= 256U) { cinder_interp_fail(context, INTERP_RESOURCE_LIMIT, (CinderLoc){0}, "call-depth limit exceeded"); return false; }
     ++context->depth;
     size_t value_count = function->value_count == 0U ? 1U : function->value_count;
@@ -203,6 +203,17 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "function argument is unavailable"); goto done;
                     }
                     result = args[inst->slot]; break;
+                case IR_AGG_ARG: {
+                    size_t parameter = (size_t)inst->operator_code;
+                    if (parameter >= arg_count || !args[parameter].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate argument is unavailable"); goto done; }
+                    InterpValue destination = cinder_interp_address(context, locals[inst->slot]);
+                    if (!cinder_interp_object_copy(context, destination.address, args[parameter].address, inst->type, true, inst->loc)) goto done;
+                    break;
+                }
+                case IR_AGG_RETURN:
+                    if (aggregate_return == NULL || !aggregate_return->pointer || !values[inst->left].pointer) { cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "aggregate return storage is unavailable"); goto done; }
+                    if (!cinder_interp_object_copy(context, aggregate_return->address, values[inst->left].address, inst->type, true, inst->loc)) goto done;
+                    break;
                 case IR_GLOBAL_LOAD: case IR_GLOBAL_STORE: case IR_GLOBAL_ADDRESS: {
                     size_t index = global_index(context->module, inst->callee);
                     if (index == SIZE_MAX || context->module->globals.data[index].is_extern) {
@@ -317,7 +328,10 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         if (!require_defined(context, values, inst->args.data[a], inst->loc)) { ready = false; break; }
                         arguments[a] = values[inst->args.data[a]];
                     }
-                    bool called = ready && interpret_function(context, callee, arguments, inst->args.len, &result);
+                    InterpValue destination = {.defined = true};
+                    bool aggregate = callee->type->return_type->kind == TYPE_STRUCT || callee->type->return_type->kind == TYPE_UNION;
+                    if (aggregate) destination = cinder_interp_address(context, locals[inst->slot]);
+                    bool called = ready && interpret_function(context, callee, arguments, inst->args.len, &result, aggregate ? &destination : NULL);
                     free(arguments);
                     if (!called) goto done;
                     break;
@@ -344,7 +358,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
             if (term->value != CINDER_INVALID_VALUE) {
                 if (!require_defined(context, values, term->value, term->loc)) goto done;
                 *returned = values[term->value];
-            } else *returned = (InterpValue){.defined = true};
+            } else *returned = aggregate_return != NULL ? *aggregate_return : (InterpValue){.defined = true};
             success = true; break;
         }
         previous = block_id;
@@ -413,7 +427,7 @@ CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *fu
     InterpValue *arguments = cinder_alloc(argument_storage * sizeof(*arguments)); memset(arguments, 0, argument_storage * sizeof(*arguments));
     for (size_t a = 0U; a < arg_count; ++a) { arguments[a].integer = args[a]; arguments[a].defined = true; }
     InterpValue returned = {0};
-    result.valid = ready && interpret_function(&context, function, arguments, arg_count, &returned);
+    result.valid = ready && interpret_function(&context, function, arguments, arg_count, &returned, NULL);
     result.floating_result = returned.fp; result.value = returned.integer; result.floating = returned.floating;
     result.classification = context.classification;
     free(arguments); cinder_interp_memory_destroy(&context); free(globals); return result;

@@ -31,7 +31,7 @@ print(f'memory: {len(cases)} authored undefined cases classified at both optimiz
 # Change contracts on real memory instructions while preserving the rest of
 # each canonical module. Every rejection must leave a previous output intact.
 seeds = {}
-for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces', '../aggregates/assignment'):
+for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces', '../aggregates/assignment', '../aggregate_abi/integer_sse'):
     path = base / (pathlib.Path(name).name + '.cir')
     result = subprocess.run([str(compiler), '--serialize-ir', '-O0', 'tests/memory/' + name + '.c', '-o', str(path)], capture_output=True, timeout=10)
     assert result.returncode == 0, result
@@ -68,6 +68,17 @@ mutations = [
     ('assignment', 'local.freeze', {5: '0'}),
     ('assignment', 'local.freeze', {6: '0'}),
     ('assignment', 'local.freeze', {2: 'none'}),
+    ('integer_sse', 'aggregate.arg', {10: '-1'}),
+    ('integer_sse', 'aggregate.arg', {11: '-1'}),
+    ('integer_sse', 'aggregate.arg', {11: '1'}),
+    ('integer_sse', 'aggregate.arg', {2: 'none'}),
+    ('integer_sse', 'aggregate.arg', {5: '0'}),
+    ('integer_sse', 'aggregate.return', {6: 'none'}),
+    ('integer_sse', 'aggregate.return', {2: 'none'}),
+    ('integer_sse', 'aggregate.return', {5: '0'}),
+    ('integer_sse', 'call', {3: 'none'}),
+    ('integer_sse', 'call', {10: '-1'}),
+    ('integer_sse', 'call', {10: '99999'}),
 ]
 for index, (seed, opcode, edits) in enumerate(mutations):
     lines = seeds[seed].splitlines()

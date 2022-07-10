@@ -125,13 +125,13 @@ static Expected recursion(CinderIRModule *module, unsigned index) {
     CinderIRInst argument = instruction(IR_ARG, 0U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); argument.slot = 0; argument.operator_code = 0; add(&helper, 0U, argument);
     constant(&helper, 0U, 1U, type, 0, 0.0); add(&helper, 0U, instruction(IR_CMP_LE_S, 2U, 0U, 1U, type)); branch(&helper, 0U, 2U, 1U, 2U); returned(&helper, 1U, 1U);
     constant(&helper, 2U, 3U, type, 1, 0.0); add(&helper, 2U, instruction(IR_SUB, 4U, 0U, 3U, type));
-    CinderIRInst call = instruction(IR_CALL, 5U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); call.callee_type = helper.type; call.callee = cinder_strndup("sum", 3U); CinderValueId input = 4U; bool fp = false;
+    CinderIRInst call = instruction(IR_CALL, 5U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); call.callee_type = helper.type; call.source_type = helper.type; call.callee = cinder_strndup("sum", 3U); CinderValueId input = 4U; bool fp = false;
     cinder_vec_push((CinderVec *)&call.args, &input); cinder_vec_push((CinderVec *)&call.arg_floats, &fp); add(&helper, 2U, call);
     add(&helper, 2U, instruction(IR_ADD, 6U, 0U, 5U, type)); returned(&helper, 2U, 6U);
     CinderIRFunction main_fn = function(module, "main", type); block(&main_fn);
     int64_t n = index % 53U == 0U ? 300 : (int64_t)(random_bits() % 12U);
     constant(&main_fn, 0U, 0U, type, n, 0.0);
-    call = instruction(IR_CALL, 1U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); call.callee_type = helper.type; call.callee = cinder_strndup("sum", 3U); input = 0U;
+    call = instruction(IR_CALL, 1U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); call.callee_type = helper.type; call.source_type = helper.type; call.callee = cinder_strndup("sum", 3U); input = 0U;
     cinder_vec_push((CinderVec *)&call.args, &input); cinder_vec_push((CinderVec *)&call.arg_floats, &fp); add(&main_fn, 0U, call); returned(&main_fn, 0U, 1U);
     cinder_vec_push((CinderVec *)&module->functions, &helper); cinder_vec_push((CinderVec *)&module->functions, &main_fn);
     return (Expected){n * (n + 1) / 2, n == 300 ? INTERP_RESOURCE_LIMIT : INTERP_DEFINED};
