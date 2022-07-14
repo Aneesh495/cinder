@@ -231,4 +231,5 @@ bool cinder_interp_compare(InterpContext *context, CinderIROp op, const InterpVa
 void cinder_interp_memory_destroy(InterpContext *context) {
     for (size_t i = 0U; i < context->objects.len; ++i) cinder_interp_retire(context, (uint32_t)i + 1U);
     free(context->objects.data); context->objects.data = NULL; context->objects.len = 0U; context->objects.cap = 0U;
+    free(context->va_states.data); context->va_states.data = NULL; context->va_states.len = 0U; context->va_states.cap = 0U;
 }

@@ -169,9 +169,10 @@ static bool phi_inputs(InterpContext *context, const CinderIRBlock *block, Cinde
     return true;
 }
 
-static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const InterpValue *args, size_t arg_count, InterpValue *returned, const InterpValue *aggregate_return) {
+static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const InterpValue *args, size_t arg_count, InterpValue *returned, const InterpValue *aggregate_return, const CinderType *actual_signature) {
     if (context->depth >= 256U) { cinder_interp_fail(context, INTERP_RESOURCE_LIMIT, (CinderLoc){0}, "call-depth limit exceeded"); return false; }
     ++context->depth;
+    uint64_t frame = ++context->frames;
     size_t value_count = function->value_count == 0U ? 1U : function->value_count;
     size_t local_count = function->local_count == 0U ? 1U : function->local_count;
     InterpValue *values = cinder_alloc(value_count * sizeof(*values));
@@ -194,15 +195,37 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
             if (inst->left != CINDER_INVALID_VALUE && !require_defined(context, values, inst->left, inst->loc)) goto done;
             if (inst->right != CINDER_INVALID_VALUE && !require_defined(context, values, inst->right, inst->loc)) goto done;
             InterpValue result = {.fp = cinder_ir_floating(inst->type), .defined = true};
+            if ((inst->op == IR_VA_START || inst->op == IR_VA_COPY || inst->op == IR_VA_END || inst->op == IR_VA_ARG) &&
+                (!values[inst->left].pointer || (inst->op == IR_VA_COPY && !values[inst->right].pointer))) {
+                cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "va_list lacks object provenance"); goto done;
+            }
             switch (inst->op) {
                 case IR_UNDEF: result.defined = false; break;
                 case IR_CONST: result.integer = cinder_interp_integer((uint64_t)inst->integer, inst->type); result.pointer = inst->type->kind == TYPE_POINTER && result.integer == 0; break;
                 case IR_FCONST: result.floating = inst->floating; break;
-                case IR_ARG: case IR_FARG: case IR_VA_ARG:
+                case IR_ARG: case IR_FARG:
                     if (inst->slot < 0 || (size_t)inst->slot >= arg_count) {
                         cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "function argument is unavailable"); goto done;
                     }
                     result = args[inst->slot]; break;
+                case IR_VA_START:
+                    if (!cinder_interp_va_start(context, values[inst->left].address, args, arg_count, actual_signature, function->params.len, frame, inst->loc)) goto done;
+                    break;
+                case IR_VA_COPY:
+                    if (!cinder_interp_va_copy(context, values[inst->left].address, values[inst->right].address, frame, inst->loc)) goto done;
+                    break;
+                case IR_VA_END:
+                    if (!cinder_interp_va_end(context, values[inst->left].address, frame, inst->loc)) goto done;
+                    break;
+                case IR_VA_ARG:
+                    if (!cinder_interp_va_arg(context, values[inst->left].address, inst->source_type, &result, inst->loc)) goto done;
+                    if (inst->slot >= 0) {
+                        InterpValue destination = cinder_interp_address(context, locals[inst->slot]);
+                        if (!result.pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate variadic argument lacks object provenance"); goto done; }
+                        if (!cinder_interp_object_copy(context, destination.address, result.address, inst->source_type, true, inst->loc)) goto done;
+                        result = destination;
+                    }
+                    break;
                 case IR_AGG_ARG: {
                     size_t parameter = (size_t)inst->operator_code;
                     if (parameter >= arg_count || !args[parameter].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate argument is unavailable"); goto done; }
@@ -331,7 +354,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     InterpValue destination = {.defined = true};
                     bool aggregate = callee->type->return_type->kind == TYPE_STRUCT || callee->type->return_type->kind == TYPE_UNION;
                     if (aggregate) destination = cinder_interp_address(context, locals[inst->slot]);
-                    bool called = ready && interpret_function(context, callee, arguments, inst->args.len, &result, aggregate ? &destination : NULL);
+                    bool called = ready && interpret_function(context, callee, arguments, inst->args.len, &result, aggregate ? &destination : NULL, inst->source_type);
                     free(arguments);
                     if (!called) goto done;
                     break;
@@ -369,6 +392,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
         } else { cinder_interp_fail(context, INTERP_MALFORMED, term->loc, "reached an unterminated block"); goto done; }
     }
 done:
+    success = cinder_interp_va_finish(context, frame, success, (CinderLoc){0});
     for (size_t slot = 0U; slot < function->local_count; ++slot) cinder_interp_retire(context, locals[slot]);
     free(locals); free(snapshot); free(values); --context->depth;
     return success;
@@ -427,7 +451,7 @@ CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *fu
     InterpValue *arguments = cinder_alloc(argument_storage * sizeof(*arguments)); memset(arguments, 0, argument_storage * sizeof(*arguments));
     for (size_t a = 0U; a < arg_count; ++a) { arguments[a].integer = args[a]; arguments[a].defined = true; }
     InterpValue returned = {0};
-    result.valid = ready && interpret_function(&context, function, arguments, arg_count, &returned, NULL);
+    result.valid = ready && interpret_function(&context, function, arguments, arg_count, &returned, NULL, function->type);
     result.floating_result = returned.fp; result.value = returned.integer; result.floating = returned.floating;
     result.classification = context.classification;
     free(arguments); cinder_interp_memory_destroy(&context); free(globals); return result;

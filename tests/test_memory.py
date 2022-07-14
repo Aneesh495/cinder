@@ -31,7 +31,7 @@ print(f'memory: {len(cases)} authored undefined cases classified at both optimiz
 # Change contracts on real memory instructions while preserving the rest of
 # each canonical module. Every rejection must leave a previous output intact.
 seeds = {}
-for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces', '../aggregates/assignment', '../aggregate_abi/integer_sse'):
+for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces', '../aggregates/assignment', '../aggregate_abi/integer_sse', '../variadic/copy_cursor', '../variadic/aggregate_mixed'):
     path = base / (pathlib.Path(name).name + '.cir')
     result = subprocess.run([str(compiler), '--serialize-ir', '-O0', 'tests/memory/' + name + '.c', '-o', str(path)], capture_output=True, timeout=10)
     assert result.returncode == 0, result
@@ -79,6 +79,21 @@ mutations = [
     ('integer_sse', 'call', {3: 'none'}),
     ('integer_sse', 'call', {10: '-1'}),
     ('integer_sse', 'call', {10: '99999'}),
+    ('copy_cursor', 'va.start', {6: 'none'}),
+    ('copy_cursor', 'va.start', {5: '0'}),
+    ('copy_cursor', 'va.start', {2: 'none'}),
+    ('copy_cursor', 'va.start', {10: '0'}),
+    ('copy_cursor', 'va.copy', {6: 'none'}),
+    ('copy_cursor', 'va.copy', {7: 'none'}),
+    ('copy_cursor', 'va.copy', {3: '0'}),
+    ('copy_cursor', 'va.end', {6: 'none'}),
+    ('copy_cursor', 'va.end', {7: '0'}),
+    ('copy_cursor', 'va_arg', {6: 'none'}),
+    ('copy_cursor', 'va_arg', {3: 'none'}),
+    ('copy_cursor', 'va_arg', {10: '0'}),
+    ('aggregate_mixed', 'va_arg', {10: '-1'}),
+    ('aggregate_mixed', 'va_arg', {10: '99999'}),
+    ('aggregate_mixed', 'va_arg', {3: 'none'}),
 ]
 for index, (seed, opcode, edits) in enumerate(mutations):
     lines = seeds[seed].splitlines()

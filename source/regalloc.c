@@ -127,7 +127,8 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     }
     unsigned saved = 0U;
     for (unsigned bit = 0U; bit < 4U; ++bit) if ((allocation->saved_gpr_mask & (1U << bit)) != 0U) ++saved;
-    allocation->frame_size = (allocation->local_bytes + (allocation->spill_slots + saved + 14U) * 8U + 15U) & ~(size_t)15U;
+    size_t variadic = function->type->variadic ? 22U : 0U;
+    allocation->frame_size = (allocation->local_bytes + (allocation->spill_slots + saved + 14U + variadic) * 8U + 15U) & ~(size_t)15U;
     free(slot_end); free(calls.data); free(intervals); cinder_liveness_destroy(&live);
     return 0;
 }

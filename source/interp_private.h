@@ -35,9 +35,23 @@ typedef struct {
 } InterpObject;
 
 typedef struct {
+    InterpPointer location;
+    const InterpValue *arguments;
+    const CinderType *signature;
+    size_t count;
+    size_t index;
+    uint64_t argument_frame;
+    uint64_t initializing_frame;
+    bool active;
+    bool frame_alive;
+} InterpVaState;
+
+typedef struct {
     const CinderIRModule *module;
     uint32_t *globals;
     CINDER_VEC_TYPE(InterpObject) objects;
+    CINDER_VEC_TYPE(InterpVaState) va_states;
+    uint64_t frames;
     size_t live_bytes;
     unsigned steps;
     unsigned limit;
@@ -61,4 +75,9 @@ bool cinder_interp_member(InterpContext *context, InterpPointer pointer, size_t 
 bool cinder_interp_difference(InterpContext *context, InterpPointer left, InterpPointer right, size_t stride, int64_t *value, CinderLoc loc);
 bool cinder_interp_compare(InterpContext *context, CinderIROp op, const InterpValue *left, const InterpValue *right, int64_t *value, CinderLoc loc);
 void cinder_interp_memory_destroy(InterpContext *context);
+bool cinder_interp_va_start(InterpContext *context, InterpPointer list, const InterpValue *arguments, size_t count, const CinderType *signature, size_t first, uint64_t frame, CinderLoc loc);
+bool cinder_interp_va_copy(InterpContext *context, InterpPointer destination, InterpPointer source, uint64_t frame, CinderLoc loc);
+bool cinder_interp_va_arg(InterpContext *context, InterpPointer list, const CinderType *type, InterpValue *value, CinderLoc loc);
+bool cinder_interp_va_end(InterpContext *context, InterpPointer list, uint64_t frame, CinderLoc loc);
+bool cinder_interp_va_finish(InterpContext *context, uint64_t frame, bool success, CinderLoc loc);
 #endif

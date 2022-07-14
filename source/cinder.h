@@ -502,6 +502,7 @@ typedef struct {
     CinderDiagnostics *diags;
     CinderScope globals;
     CinderStmt *function_body;
+    CinderDecl *function;
 } CinderSema;
 
 void cinder_sema_init(CinderSema *sema, CinderAst *ast, CinderTypeContext *types, CinderDiagnostics *diags);
@@ -584,6 +585,9 @@ typedef enum {
     IR_LOCAL_FREEZE,
     IR_AGG_ARG,
     IR_AGG_RETURN,
+    IR_VA_START,
+    IR_VA_COPY,
+    IR_VA_END,
     IR_UNDEF,
 } CinderIROp;
 
@@ -866,6 +870,7 @@ typedef struct {
 } CinderABIArgument;
 bool cinder_abi_classify(const CinderType *type, CinderABIValue *value);
 bool cinder_abi_place(const CinderType *type, CinderABIState *state, CinderABIArgument *argument);
+bool cinder_va_pointer_type(const CinderType *type);
 int cinder_write_elf64(const CinderMachineObject *object, const char *path, CinderDiagnostics *diags);
 int cinder_write_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags);
 

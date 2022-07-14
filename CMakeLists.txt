@@ -35,6 +35,7 @@ set(CINDER_SOURCES
   source/ssa.c
   source/ir_interp.c
   source/interp_memory.c
+  source/interp_variadic.c
   source/opt.c
   source/mir.c
   source/regalloc.c
@@ -52,6 +53,7 @@ set(CINDER_SOURCES
 function(cinder_target_profile target)
   target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
   target_compile_definitions(${target} PRIVATE CINDER_VERSION="0.1.0")
+  target_compile_definitions(${target} PRIVATE CINDER_RUNTIME_INCLUDE="${CMAKE_CURRENT_SOURCE_DIR}/runtime/include")
   target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Werror)
   if(CINDER_SANITIZE)
     target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)

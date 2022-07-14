@@ -238,5 +238,53 @@
   {
     "source": "aggregate_argument_uninitialized.undefined.c",
     "classification": 4
+  },
+  {
+    "source": "va_arg_ended.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_arg_exhausted.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_arg_float_request.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_arg_unsigned_negative.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_arg_unstarted.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_arg_wrong_promoted.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_copy_ended.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_end_missing.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_end_twice.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_start_twice.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_start_no_provenance.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "va_end_other_function.undefined.c",
+    "classification": 11
   }
 ]

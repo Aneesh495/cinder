@@ -1,0 +1,16 @@
+flowchart LR
+  Types[Promoted actual argument signature] --> Call[Original SysV caller staging]
+  Call --> Save[Six GPR and eight SSE save slots]
+  Named[Named arguments and hidden result pointer] --> Start[va.start initial offsets]
+  Save --> Start
+  Start --> Read[va_arg runtime bank checks]
+  Read --> Registers[Both banks fit: reconstruct value]
+  Read --> Stack[Whole argument overflow stack]
+  Registers --> Advance[Advance used offsets]
+  Stack --> Advance
+  Advance --> Read
+  Start --> Copy[va.copy independent cursor]
+  Copy --> Read
+  Advance --> End[va.end]
+  Types --> VM[Independent source-order VM cursor]
+  VM --> Check[Type, lifetime, exhaustion checks]

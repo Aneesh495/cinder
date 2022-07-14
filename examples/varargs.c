@@ -1,5 +1,6 @@
+#include <stdarg.h>
 int sum(int count, ...) {
-    int ap;
+    va_list ap;
     va_start(ap, count);
     int first = va_arg(ap, int);
     int second = va_arg(ap, int);

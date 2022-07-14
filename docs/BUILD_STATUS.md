@@ -21,7 +21,8 @@ Updated: 2026-10-06
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 - Eight authored application fixtures and a deterministic defined-program generator are now part of the local workload suite.
 
-The current native implementation covers scalar integer/float operations, aggregate value transfers, mixed INTEGER/SSE/MEMORY SysV argument lists and returns, and indirect calls. Complete C01-C48 coverage, the full ABI acceptance campaign, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
+The current native implementation covers scalar integer/float operations, aggregate value transfers, mixed INTEGER/SSE/MEMORY SysV argument lists and returns, and indirect calls. Complete C01-C48 coverage, the full ABI acceptance campaign, DWARF and self-hosting remain open. Hosted variadic state is implemented;
+its full native interchange campaign is being validated. Passing incremental suites does not satisfy final acceptance.
 
 ## Commands and results
 
@@ -37,7 +38,7 @@ The current native implementation covers scalar integer/float operations, aggreg
 | `make test-ir` | pass, dominators, loop headers, nonvacuous forwarding/dead-code/phi counters, verifier and allocation dump | `tests/run_ir.sh` |
 | `make test-parallel-copy` | pass, standalone cycle and phi plan checks | `tests/run_parallel_copy.sh` |
 | `make test-float` | pass, decimal literals, float IR/interpreter, SSE2 byte oracle, and ELF output | `tests/run_float.sh` |
-| `make test-varargs` | pass, integer variadic fixed-ordinal reads and stack arguments; full `va_list` ABI remains incomplete | `tests/run_varargs.sh` |
+| `make test-varargs` | pass, integer variadic smoke using authored `stdarg.h`; dynamic state has separate authored and interchange checks | `tests/run_varargs.sh` |
 | `make test-apps` | pass, eight authored applications | `tests/run_apps.sh` |
 | `make test-generated` | pass, 1,200 defined interpreter cases and 100 host-reference executions | `.agent-local/generated-summary.json` |
 | `make test-abi` | pass for the declared scalar encoder/stack-frame smoke; cross-toolchain ABI gate unverified | `tests/run_abi.sh` |
@@ -460,3 +461,17 @@ classified outcomes. The 1,000 SSA/critical-edge cases also passed.
 
 Hosted variadic state, remaining language families, self-hosting, debugging,
 the full applications, performance thresholds, and final acceptance remain open.
+
+## Dynamic variadic state increment
+
+The aggregate ABI checkpoint passed all native Linux checks in
+[run 37554013720](https://github.com/Aneesh495/cinder/actions/runs/37554013720).
+Variadic lowering now uses runtime cursor state, register-save storage, separate
+GP/SSE offsets, whole-aggregate rollback, overflow stack arguments, `va_copy`,
+and `va_end`. Authored `stdarg.h` is supplied by the compiler. The independent
+VM tracks argument types and cursor lifetime in source order.
+
+Local sanitizer checks passed 557 authored source observations and 1,114 IR
+round trips. The focused variadic corpus and generated GCC/Clang interchange
+checks retain their raw observations under `.agent-local`. Full native runs
+and audited acceptance remain required; no complete-project claim is made.

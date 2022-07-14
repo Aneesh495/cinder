@@ -53,7 +53,8 @@ int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnosti
     if (allocation->local_bytes != local_extent) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocated local area has incorrect size");
     unsigned preserved = 0U;
     for (unsigned bit = 0U; bit < 4U; ++bit) if ((allocation->saved_gpr_mask & (1U << bit)) != 0U) ++preserved;
-    if ((allocation->saved_gpr_mask & ~15U) != 0U || allocation->frame_size < local_extent + (allocation->spill_slots + preserved + 14U) * 8U) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation does not own all spill, preservation, and incoming argument storage");
+    size_t variadic = function->type->variadic ? 22U : 0U;
+    if ((allocation->saved_gpr_mask & ~15U) != 0U || allocation->frame_size < local_extent + (allocation->spill_slots + preserved + 14U + variadic) * 8U) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation does not own all spill, preservation, and incoming argument storage");
     if ((allocation->frame_size & 15U) != 0U)
         cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation frame is not 16-byte aligned");
     if (count != 0U && blocks > (128U * 1024U * 1024U) / count) {

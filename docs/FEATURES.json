@@ -965,12 +965,64 @@
       "name": "Variadic calls/functions",
       "required_boundary": "Default promotions and supported va_* behavior",
       "status": "partial",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "valid_cases": [
+        "tests/variadic/aggregate_integer.c",
+        "tests/variadic/aggregate_memory.c",
+        "tests/variadic/aggregate_mixed.c",
+        "tests/variadic/aggregate_rollback.c",
+        "tests/variadic/aggregate_short.c",
+        "tests/variadic/aggregate_sse.c",
+        "tests/variadic/copied_helper.c",
+        "tests/variadic/copy_cursor.c",
+        "tests/variadic/copy_stack_cursor.c",
+        "tests/variadic/default_promotions.c",
+        "tests/variadic/double_loop.c",
+        "tests/variadic/integer_loop.c",
+        "tests/variadic/interleaved.c",
+        "tests/variadic/pointer_helper.c",
+        "tests/variadic/pointer_value.c",
+        "tests/variadic/restart_after_end.c",
+        "tests/variadic/signed_unsigned_exception.c",
+        "tests/variadic/sret_named.c",
+        "tests/variadic/void_character_exception.c"
+      ],
+      "boundary_cases": [
+        "tests/test_abi_variadic.py",
+        "tests/test_abi_aggregates.py"
+      ],
+      "negative_cases": [
+        "tests/constraints/va_arg_array.c",
+        "tests/constraints/va_arg_incomplete.c",
+        "tests/constraints/va_copy_wrong_source.c",
+        "tests/constraints/va_start_nonvariadic.c",
+        "tests/constraints/va_start_wrong_last.c",
+        "tests/constraints/va_start_wrong_storage.c",
+        "tests/memory/va_arg_ended.undefined.c",
+        "tests/memory/va_arg_exhausted.undefined.c",
+        "tests/memory/va_arg_float_request.undefined.c",
+        "tests/memory/va_arg_unsigned_negative.undefined.c",
+        "tests/memory/va_arg_unstarted.undefined.c",
+        "tests/memory/va_arg_wrong_promoted.undefined.c",
+        "tests/memory/va_copy_ended.undefined.c",
+        "tests/memory/va_end_missing.undefined.c",
+        "tests/memory/va_end_other_function.undefined.c",
+        "tests/memory/va_end_twice.undefined.c",
+        "tests/memory/va_start_no_provenance.undefined.c",
+        "tests/memory/va_start_twice.undefined.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Source-bound native full-signature campaign and audited acceptance reader.",
+        "Installed runtime header discovery and whole-compiler self-hosting."
+      ],
+      "implementation": [
+        "runtime/include/stdarg.h",
+        "source/abi.c",
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_variadic.c",
+        "source/x86_64.c"
       ]
     },
     {

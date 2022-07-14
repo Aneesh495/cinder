@@ -221,7 +221,6 @@ static void emit_float_compare(CinderMachineObject *object, const CinderIRFuncti
     emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); store_value_alloc(object, function, allocation, inst->dst);
 }
 
-static void emit_arg_from_stack(CinderMachineObject *object, unsigned index) { emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x85U); emit32(object, (uint32_t)(16U + (index - 6U) * 8U)); }
 
 static void emit_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
     load_value_alloc(object, function, allocation, inst->left);
@@ -424,6 +423,82 @@ static void emit_aggregate_return(CinderMachineObject *object, const CinderIRFun
     }
 }
 
+static void r10_store_rax(CinderMachineObject *object, unsigned offset) {
+    emit8(object, 0x49U); emit8(object, 0x89U); emit8(object, 0x82U); emit32(object, offset);
+}
+
+static void emit_va_start(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst, const CinderABIState *named) {
+    load_value_to_r10(object, function, allocation, inst->left);
+    emit8(object, 0x41U); emit8(object, 0xC7U); emit8(object, 0x82U); emit32(object, 0U); emit32(object, named->gpr * 8U);
+    emit8(object, 0x41U); emit8(object, 0xC7U); emit8(object, 0x82U); emit32(object, 4U); emit32(object, 48U + named->sse * 16U);
+    address_rbp(object, 0U, (int)(16U + named->stack)); r10_store_rax(object, 8U);
+    address_rbp(object, 0U, -(int)allocation->frame_size); r10_store_rax(object, 16U);
+}
+
+static void patch_here(CinderMachineObject *object, size_t offset) {
+    cinder_bytes_patch32(&object->text, offset, (uint32_t)(object->text.len - offset - 4U));
+}
+
+static int emit_va_arg(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst, CinderDiagnostics *diags) {
+    CinderABIValue value;
+    if (!cinder_abi_classify(inst->source_type, &value)) { cinder_diag(diags, CINDER_FATAL, inst->loc, "unsupported va_arg layout"); return 1; }
+    bool aggregate = aggregate_type(inst->source_type);
+    unsigned gpr = 0U, sse = 0U;
+    for (unsigned p = 0U; p < value.count; ++p) {
+        if (value.classes[p] == ABI_INTEGER) ++gpr;
+        else if (value.classes[p] == ABI_SSE) ++sse;
+    }
+    load_value_to_r10(object, function, allocation, inst->left);
+    size_t gp_stack = SIZE_MAX, fp_stack = SIZE_MAX, done = SIZE_MAX;
+    if (!value.memory) {
+        if (gpr != 0U) {
+            emit8(object, 0x41U); emit8(object, 0x8BU); emit8(object, 0x8AU); emit32(object, 0U);
+            emit8(object, 0x81U); emit8(object, 0xF9U); emit32(object, 48U - gpr * 8U);
+            emit8(object, 0x0FU); emit8(object, 0x87U); gp_stack = object->text.len; emit32(object, 0U);
+        }
+        if (sse != 0U) {
+            emit8(object, 0x41U); emit8(object, 0x8BU); emit8(object, 0x92U); emit32(object, 4U);
+            emit8(object, 0x81U); emit8(object, 0xFAU); emit32(object, 176U - sse * 16U);
+            emit8(object, 0x0FU); emit8(object, 0x87U); fp_stack = object->text.len; emit32(object, 0U);
+        }
+        emit8(object, 0x4DU); emit8(object, 0x8BU); emit8(object, 0x9AU); emit32(object, 16U);
+        if (aggregate) address_rbp(object, 7U, local_offset(allocation, inst->slot));
+        for (unsigned p = 0U; p < value.count; ++p) {
+            if (value.classes[p] != ABI_INTEGER && value.classes[p] != ABI_SSE) continue;
+            emit8(object, 0x49U); emit8(object, 0x8BU); emit8(object, 0x04U); emit8(object, value.classes[p] == ABI_INTEGER ? 0x0BU : 0x13U);
+            emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, value.classes[p] == ABI_INTEGER ? 0xC1U : 0xC2U); emit8(object, value.classes[p] == ABI_INTEGER ? 8U : 16U);
+            if (aggregate) { emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x87U); emit32(object, p * 8U); }
+        }
+        if (gpr != 0U) { emit8(object, 0x41U); emit8(object, 0x89U); emit8(object, 0x8AU); emit32(object, 0U); }
+        if (sse != 0U) { emit8(object, 0x41U); emit8(object, 0x89U); emit8(object, 0x92U); emit32(object, 4U); }
+        emit8(object, 0xE9U); done = object->text.len; emit32(object, 0U);
+    }
+    if (gp_stack != SIZE_MAX) patch_here(object, gp_stack);
+    if (fp_stack != SIZE_MAX) patch_here(object, fp_stack);
+    emit8(object, 0x49U); emit8(object, 0x8BU); emit8(object, 0xB2U); emit32(object, 8U);
+    if (value.align > 8U) {
+        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xC6U); emit8(object, 15U);
+        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xE6U); emit8(object, 0xF0U);
+    }
+    if (aggregate) {
+        address_rbp(object, 7U, local_offset(allocation, inst->slot)); copy_bytes(object, value.size);
+        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xC6U); emit8(object, 7U);
+        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xE6U); emit8(object, 0xF8U);
+    } else {
+        emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x06U);
+        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xC6U); emit8(object, 8U);
+    }
+    emit8(object, 0x49U); emit8(object, 0x89U); emit8(object, 0xB2U); emit32(object, 8U);
+    if (done != SIZE_MAX) patch_here(object, done);
+    if (aggregate) { address_rbp(object, 0U, local_offset(allocation, inst->slot)); store_value_alloc(object, function, allocation, inst->dst); }
+    else if (cinder_ir_floating(inst->type)) {
+        emit8(object, 0x66U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0x6EU); emit8(object, 0xC0U);
+        if (inst->type->kind == TYPE_FLOAT) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
+        store_float_value(object, function, allocation, inst->dst);
+    } else { normalize_incoming_scalar(object, inst->type); store_value_alloc(object, function, allocation, inst->dst); }
+    return 0;
+}
+
 static void symbol_displacement(CinderMachineObject *object, const char *name) {
     size_t offset = object->text.len; emit32(object, 0U);
     CinderFixup fix = {offset, cinder_strndup(name, strlen(name)), R_X86_64_PC32, -4, 0U};
@@ -598,6 +673,16 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         emit8(object, (uint8_t)(0x85U | (a << 3U)));
         emit32(object, (uint32_t)(-(int)((incoming_base + 7U + a) * 8U)));
     }
+    if (function->type->variadic) {
+        int area = -(int)allocation->frame_size;
+        for (unsigned a = 0U; a < 6U; ++a) {
+            emit_mov_rax_mem(object, -(int)((incoming_base + a + 1U) * 8U)); emit_mov_mem_rax(object, area + (int)(a * 8U));
+        }
+        for (unsigned a = 0U; a < 8U; ++a) {
+            emit_mov_rax_mem(object, -(int)((incoming_base + a + 7U) * 8U)); emit_mov_mem_rax(object, area + (int)(48U + a * 16U));
+            emit_mov_rax_imm(object, 0); emit_mov_mem_rax(object, area + (int)(56U + a * 16U));
+        }
+    }
     CINDER_VEC_TYPE(BranchFixup) branches = {NULL, 0U, 0U};
     size_t *labels = cinder_alloc((function->blocks.len == 0U ? 1U : function->blocks.len) * sizeof(*labels));
     for (size_t i = 0U; i < function->blocks.len; ++i) labels[i] = SIZE_MAX;
@@ -622,9 +707,15 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     store_float_value(object, function, allocation, inst->dst); break;
                 case IR_AGG_ARG: emit_aggregate_argument(object, allocation, inst, &parameters[inst->operator_code], incoming_base); break;
                 case IR_AGG_RETURN: emit_aggregate_return(object, function, allocation, inst, &result, incoming_base); break;
+                case IR_VA_START: emit_va_start(object, function, allocation, inst, &state); break;
+                case IR_VA_COPY:
+                    load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 7U, 0U);
+                    load_value_alloc(object, function, allocation, inst->right); emit_mov_reg_reg(object, 6U, 0U);
+                    copy_bytes(object, 24U); break;
+                case IR_VA_END: break;
                 case IR_VA_ARG:
-                    if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_mem(object, -(int)((incoming_base + (size_t)inst->slot + 1U) * 8U)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
+                    if (emit_va_arg(object, function, allocation, inst, diags) != 0) { free(parameters); free(labels); free(branches.data); return 1; }
+                    break;
                 case IR_UNDEF:
                     if (cinder_ir_floating(inst->type)) {
                         emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x57U); emit8(object, 0xC0U);
