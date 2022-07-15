@@ -38,6 +38,9 @@ static bool floating_value(const CinderIRFunction *function, CinderValueId value
 
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     const CinderIRFunction *function = allocation->ir;
+    if (function == NULL || function->type == NULL || function->type->kind != TYPE_FUNCTION) {
+        cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation requires a function signature"); return 1;
+    }
     if (cinder_layout_stack(allocation, diags) != 0) return 1;
     CinderLiveness live;
     if (cinder_liveness_build(function, &live, diags) != 0) return 1;

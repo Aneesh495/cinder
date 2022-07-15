@@ -141,6 +141,7 @@ int main(int argc, char **argv) {
     CinderType floating; memset(&floating, 0, sizeof(floating)); floating.kind = TYPE_DOUBLE; floating.size = 8U; floating.align = 8U; floating.complete = true;
     CinderType array = integer; array.kind = TYPE_ARRAY; array.size = 37U; array.align = 1U;
     CinderType aggregate = integer; aggregate.kind = TYPE_STRUCT; aggregate.size = 48U; aggregate.align = 16U;
+    CinderType signature; memset(&signature, 0, sizeof(signature)); signature.kind = TYPE_FUNCTION; signature.return_type = &integer; signature.align = 1U; signature.complete = true;
     unsigned mutations = 0U;
     for (size_t test = 0U; test < count; ++test) {
         state = UINT64_C(0x62762dcf87102) + test * UINT64_C(0x9e3779b97f4a7c15);
@@ -150,6 +151,12 @@ int main(int argc, char **argv) {
         cinder_vec_push((CinderVec *)&function.local_types, &first_type); cinder_vec_push((CinderVec *)&function.local_types, &second_type);
         CinderDiagnostics diagnostics; cinder_diags_init(&diagnostics);
         CinderAllocation allocation; cinder_alloc_init(&allocation, &function);
+        if (test == 0U) {
+            CinderDiagnostics invalid; cinder_diags_init(&invalid);
+            if (cinder_allocate(&allocation, &invalid) == 0 || cinder_verify_allocation(&allocation, &invalid) == 0 || invalid.errors != 2U) return 1;
+            cinder_diags_destroy(&invalid);
+        }
+        signature.variadic = test % 2U != 0U; function.type = &signature;
         if (cinder_allocate(&allocation, &diagnostics) != 0 || cinder_verify_allocation(&allocation, &diagnostics) != 0) {
             fprintf(stderr, "allocation failed seed=%zu errors=%u\n", test, diagnostics.errors); return 1;
         }
@@ -157,7 +164,7 @@ int main(int argc, char **argv) {
             if (!rejected_mutation(&allocation, (unsigned)(test % 10U))) { fprintf(stderr, "checker accepted mutation %zu\n", test); return 1; }
             ++mutations;
         }
-        printf("{\"seed\":%zu,\"blocks\":%zu,\"values\":%zu,\"spills\":%u,\"slots\":%zu,\"frame\":%zu,\"checker\":true}\n", test, function.blocks.len, function.value_count, allocation.spills, allocation.spill_slots, allocation.frame_size);
+        printf("{\"seed\":%zu,\"blocks\":%zu,\"values\":%zu,\"spills\":%u,\"slots\":%zu,\"frame\":%zu,\"variadic\":%s,\"checker\":true}\n", test, function.blocks.len, function.value_count, allocation.spills, allocation.spill_slots, allocation.frame_size, signature.variadic ? "true" : "false");
         cinder_alloc_destroy(&allocation); cinder_diags_destroy(&diagnostics); destroy_graph(&function);
     }
     fprintf(stderr, "allocation: %zu graphs and %u rejected mutations passed\n", count, mutations);
