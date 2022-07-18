@@ -286,5 +286,33 @@
   {
     "source": "va_end_other_function.undefined.c",
     "classification": 11
+  },
+  {
+    "source": "compound_expired_block.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "compound_expired_body.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "compound_return_address.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "compound_const_cast.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "compound_unbraced_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "compound_condition_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "compound_loop_expired.undefined.c",
+    "classification": 10
   }
 ]

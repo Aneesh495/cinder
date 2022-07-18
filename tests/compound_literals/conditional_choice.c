@@ -1,0 +1,1 @@
+struct S { int a,b; }; int calls; int tick(void) { calls+=1; return calls; } int main(void) { int yes=1; struct S s=yes ? (struct S){tick(),7} : (struct S){tick(),11}; return calls!=1 || s.a!=1 || s.b!=7; }

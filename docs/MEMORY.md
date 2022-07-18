@@ -33,8 +33,7 @@ reference execution, IR interpretation, emitted objects, and native Linux
 execution. `make test-memory` records separate UB classes through serialized
 IR and never executes emitted undefined programs.
 
-Bitfields, compound literals,
-allocated storage/library models, restrict contracts, and goto scope entry
+Bitfields, allocated storage/library models, restrict contracts, and goto scope entry
 remain open. The abstract VM does not expose host addresses or padding values
 as differential equality oracles.
 
@@ -94,3 +93,9 @@ snapshots. Tests that mutate the source object while reading a temporary within
 one full expression expose GCC/Clang storage-identity differences. They check
 Cinder's declared snapshot behavior, retain both reference results, and remain
 ineligible for cross-reference equality accounting.
+
+Compound literal lvalues own static file-scope storage or automatic block
+storage. Explicit selection/iteration and associated-substatement scopes retain
+runtime object identity across repeated evaluation and retire it at scope exit.
+Their initializer actions run whenever the expression is evaluated; a scope
+entry begins the lifetime independently. See `COMPOUND_LITERALS.md`.

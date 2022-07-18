@@ -86,6 +86,7 @@ static CinderValueId lower_aggregate(LowerContext *context, CinderExpr *expr);
 static CinderValueId aggregate_snapshot(LowerContext *context, CinderValueId source, CinderType *type, CinderLoc loc);
 static CinderValueId aggregate_temporary(LowerContext *context, CinderType *type, CinderLoc loc, int *slot);
 static void freeze_temporary(LowerContext *context, int slot, CinderLoc loc);
+static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int slot);
 
 static bool aggregate_value(const CinderType *type) {
     return type != NULL && (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION);
@@ -258,6 +259,20 @@ static char *literal_storage(LowerContext *context, CinderType *type, const Cind
 }
 
 static CinderValueId lower_address(LowerContext *context, CinderExpr *target) {
+    if (target->kind == EX_COMPOUND_LITERAL) {
+        CinderDecl *decl = target->as.compound_literal;
+        if (decl->is_static) {
+            if (!cinder_lower_static_object(context->module, context->function->ast, decl, context->diags)) return CINDER_INVALID_VALUE;
+        } else {
+            if (decl->lowering_slot < 0) { cinder_diag(context->diags, CINDER_FATAL, target->loc, "compound literal has no enclosing storage scope"); return CINDER_INVALID_VALUE; }
+            lower_initializer_plan(context, decl, decl->lowering_slot);
+        }
+        CinderIRInst *address = add_inst_ptr(context->function, context->current, decl->is_static ? IR_GLOBAL_ADDRESS : IR_LOCAL_ADDRESS, target->loc);
+        address->dst = new_value(context->function); address->type = cinder_type_pointer(context->function->types, decl->type);
+        if (decl->is_static) address->callee = cinder_strndup(decl->name, strlen(decl->name));
+        else address->slot = decl->lowering_slot;
+        return address->dst;
+    }
     if (target->kind == EX_STRING) {
         char *name = literal_storage(context, target->type, target); if (name == NULL) return CINDER_INVALID_VALUE;
         CinderIRInst *address = add_inst_ptr(context->function, context->current, IR_GLOBAL_ADDRESS, target->loc);
@@ -435,6 +450,7 @@ static CinderIROp compound_operation(int op, bool floating, bool unsig) {
 
 static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
     if (expr == NULL) return CINDER_INVALID_VALUE;
+    if (expr->kind == EX_COMPOUND_LITERAL) return load_address(context, lower_address(context, expr), expr->type, expr->loc);
     if (expr->kind == EX_INT || expr->kind == EX_CHAR) {
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc);
         inst->dst = new_value(context->function); inst->integer = expr->as.integer; return inst->dst;
@@ -636,6 +652,8 @@ static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int 
 
 static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
     if (stmt == NULL) return;
+    size_t literal_mark = context->active_slots.len;
+    for (size_t i = 0U; i < stmt->literal_objects.len; ++i) begin_declarations(context, stmt->literal_objects.data[i]);
     switch (stmt->kind) {
         case ST_EMPTY: break;
         case ST_EXPR: (void)lower_full_expression(context, stmt->as.expr, false, stmt->loc); break;
@@ -734,6 +752,10 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
         }
         case ST_BREAK: if (context->break_blocks.len > 0U) { end_scope(context, context->loop_scopes.data[context->loop_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->break_blocks.data[context->break_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
         case ST_CONTINUE: if (context->continue_blocks.len > 0U) { end_scope(context, context->loop_scopes.data[context->loop_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->continue_blocks.data[context->continue_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
+    }
+    if (stmt->literal_objects.len != 0U) {
+        if (block_at(context->function, context->current)->terminator.kind == TERM_UNREACHABLE) end_scope(context, literal_mark, stmt->loc);
+        context->active_slots.len = literal_mark;
     }
 }
 
@@ -842,7 +864,15 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     cinder_vec_push((CinderVec *)&module->globals, &global);
 }
 
+bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags) {
+    for (size_t g = 0U; g < module->globals.len; ++g) if (strcmp(module->globals.data[g].name, decl->name) == 0) return true;
+    unsigned before = diags->errors;
+    lower_global_decl(module, ast, decl, diags);
+    return diags->errors == before;
+}
+
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
+    for (size_t i = 0U; i < ast->static_literals.len; ++i) (void)cinder_lower_static_object(module, ast, ast->static_literals.data[i], diags);
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         CinderDecl *decl = ast->declarations.data[i];
         if (decl->kind == DECL_VAR) { if (decl->canonical == decl) lower_global_decl(module, ast, decl, diags); continue; }
