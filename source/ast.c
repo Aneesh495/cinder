@@ -18,6 +18,7 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
     ast->static_literals.data = NULL; ast->static_literals.len = 0U; ast->static_literals.cap = 0U;
     ast->scope_depth = 0U; ast->declarator_depth = 0U;
     ast->literal_scope = NULL; ast->literal_count = 0U;
+    ast->current_function = NULL;
 }
 
 static void free_expr(CinderExpr *expr) {
@@ -106,7 +107,7 @@ void cinder_ast_destroy(CinderAst *ast) {
     }
     free(ast->declarations.data);
     free(ast->bindings.data);
-    for (size_t i = 0U; i < ast->constant_exprs.len; ++i) free_expr(ast->constant_exprs.data[i]);
+    for (size_t i = 0U; i < ast->constant_exprs.len; ++i) free_expr(ast->constant_exprs.data[i].expression);
     free(ast->constant_exprs.data);
     free(ast->static_literals.data);
     cinder_arena_destroy(&ast->arena);

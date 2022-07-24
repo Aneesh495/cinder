@@ -653,7 +653,8 @@ static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int 
 static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
     if (stmt == NULL) return;
     size_t literal_mark = context->active_slots.len;
-    for (size_t i = 0U; i < stmt->literal_objects.len; ++i) begin_declarations(context, stmt->literal_objects.data[i]);
+    for (size_t i = 0U; i < stmt->literal_objects.len; ++i)
+        if (stmt->literal_objects.data[i]->literal_evaluated) begin_declarations(context, stmt->literal_objects.data[i]);
     switch (stmt->kind) {
         case ST_EMPTY: break;
         case ST_EXPR: (void)lower_full_expression(context, stmt->as.expr, false, stmt->loc); break;

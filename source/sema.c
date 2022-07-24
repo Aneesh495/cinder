@@ -19,7 +19,7 @@ CinderSymbol *cinder_scope_lookup(CinderScope *scope, const char *name) {
 }
 
 void cinder_sema_init(CinderSema *sema, CinderAst *ast, CinderTypeContext *types, CinderDiagnostics *diags) {
-    sema->ast = ast; sema->types = types; sema->diags = diags; sema->function_body = NULL; sema->function = NULL;
+    sema->ast = ast; sema->types = types; sema->diags = diags; sema->function_body = NULL; sema->function = NULL; sema->unevaluated_depth = 0U;
     sema->globals.symbols.data = NULL; sema->globals.symbols.len = 0U; sema->globals.symbols.cap = 0U; sema->globals.parent = NULL;
 }
 
@@ -105,7 +105,6 @@ static bool string_array_initializer(CinderSema *sema, CinderDecl *decl) {
     return true;
 }
 
-typedef struct { CinderType *type; size_t index; size_t offset; } InitFrame;
 
 static bool aggregate_type(const CinderType *type) { return type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION; }
 
@@ -115,29 +114,6 @@ static bool contains_const(const CinderType *type, unsigned depth) {
     if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION)
         for (size_t f = 0U; f < type->fields.len; ++f) if (contains_const(type->fields.data[f].type, depth + 1U)) return true;
     return false;
-}
-
-static size_t init_child_count(const CinderType *type) {
-    if (type->kind == TYPE_ARRAY) return type->complete ? type->array_len : SIZE_MAX;
-    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) return type->fields.len;
-    return 1U;
-}
-
-static CinderType *init_child(InitFrame frame, size_t *offset) {
-    *offset = frame.offset;
-    if (frame.type->kind == TYPE_ARRAY) { *offset += frame.index * frame.type->base->size; return frame.type->base; }
-    if (frame.type->kind == TYPE_STRUCT || frame.type->kind == TYPE_UNION) { *offset += frame.type->fields.data[frame.index].offset; return frame.type->fields.data[frame.index].type; }
-    return frame.type;
-}
-
-static void init_advance(InitFrame *frames, size_t *depth) {
-    while (*depth != 0U) {
-        InitFrame *frame = &frames[*depth - 1U];
-        if (frame->type->kind == TYPE_UNION) frame->index = frame->type->fields.len;
-        else ++frame->index;
-        if (frame->index < init_child_count(frame->type) || *depth == 1U) return;
-        --*depth;
-    }
 }
 
 static void init_action(CinderDecl *decl, size_t offset, CinderType *type, CinderExpr *value) {
@@ -207,14 +183,14 @@ static void sema_init_object(CinderSema *sema, CinderDecl *decl, CinderExpr **ex
             if (old->offset >= offset && old->offset - offset <= type->size && old->type->size <= type->size - (old->offset - offset)) { old->value = NULL; old->zero = false; }
         }
     }
-    InitFrame frames[64]; size_t depth = 1U; frames[0] = (InitFrame){type, 0U, offset};
+    CinderInitFrame frames[64]; size_t depth = 1U; frames[0] = (CinderInitFrame){type, 0U, offset};
     bool inferred = type->kind == TYPE_ARRAY && !type->complete; size_t extent = 0U;
     for (size_t e = 0U; e < expr->as.initializer.entries.len; ++e) {
         CinderInitEntry *entry = &expr->as.initializer.entries.data[e];
         if (entry->designators.len != 0U) {
-            depth = 1U; frames[0] = (InitFrame){type, 0U, offset};
+            depth = 1U; frames[0] = (CinderInitFrame){type, 0U, offset};
             for (size_t d = 0U; d < entry->designators.len; ++d) {
-                CinderInitDesignator *designator = &entry->designators.data[d]; InitFrame *frame = &frames[depth - 1U];
+                CinderInitDesignator *designator = &entry->designators.data[d]; CinderInitFrame *frame = &frames[depth - 1U];
                 if (designator->member != NULL && (frame->type->kind == TYPE_STRUCT || frame->type->kind == TYPE_UNION)) {
                     size_t field = 0U;
                     while (field < frame->type->fields.len && (frame->type->fields.data[field].name == NULL || strcmp(frame->type->fields.data[field].name, designator->member) != 0)) ++field;
@@ -222,29 +198,30 @@ static void sema_init_object(CinderSema *sema, CinderDecl *decl, CinderExpr **ex
                     frame->index = field;
                 } else if (designator->index != NULL && frame->type->kind == TYPE_ARRAY) {
                     int64_t index; CinderType *index_type;
-                    if (!cinder_constant_integer(sema->ast, designator->index, &index, &index_type) || index < 0 || (uint64_t)index >= init_child_count(frame->type) || frame->type->base->size == 0U || (uint64_t)index > 64U * 1024U * 1024U / frame->type->base->size) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "array designator requires an in-range constant index"); break; }
+                    (void)sema_expr(sema, designator->index, scope);
+                    if (!cinder_constant_integer(sema->ast, designator->index, &index, &index_type) || index < 0 || (uint64_t)index >= cinder_init_child_count(frame->type) || frame->type->base->size == 0U || (uint64_t)index > 64U * 1024U * 1024U / frame->type->base->size) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "array designator requires an in-range constant index"); break; }
                     frame->index = (size_t)index;
                 } else { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator does not match its object"); break; }
                 if (d + 1U < entry->designators.len) {
-                    size_t child_offset; CinderType *child = init_child(*frame, &child_offset);
+                    size_t child_offset; CinderType *child = cinder_init_child(*frame, &child_offset);
                     if (!aggregate_type(child) || depth == CINDER_ARRAY_LEN(frames)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator path is too deep or not an aggregate"); break; }
-                    frames[depth++] = (InitFrame){child, 0U, child_offset};
+                    frames[depth++] = (CinderInitFrame){child, 0U, child_offset};
                 }
             }
         }
         if (sema->diags->errors != 0U) return;
-        if (frames[depth - 1U].index >= init_child_count(frames[depth - 1U].type)) { cinder_diag(sema->diags, CINDER_ERROR, entry->value->loc, "initializer has excess elements"); continue; }
+        if (frames[depth - 1U].index >= cinder_init_child_count(frames[depth - 1U].type)) { cinder_diag(sema->diags, CINDER_ERROR, entry->value->loc, "initializer has excess elements"); continue; }
         if (inferred && frames[0].index >= extent) extent = frames[0].index + 1U;
-        size_t child_offset; CinderType *child = init_child(frames[depth - 1U], &child_offset);
+        size_t child_offset; CinderType *child = cinder_init_child(frames[depth - 1U], &child_offset);
         if (entry->value->kind != EX_INIT_LIST && !(entry->value->kind == EX_STRING && child->kind == TYPE_ARRAY && child->base->kind == TYPE_CHAR)) {
             (void)sema_expr(sema, entry->value, scope);
             while (aggregate_type(child) && !value_compatible(child, entry->value->type)) {
-                if (depth == CINDER_ARRAY_LEN(frames) || init_child_count(child) == 0U || (!child->complete && child != type)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer requires a complete aggregate subobject"); return; }
-                frames[depth++] = (InitFrame){child, 0U, child_offset}; child = init_child(frames[depth - 1U], &child_offset);
+                if (depth == CINDER_ARRAY_LEN(frames) || cinder_init_child_count(child) == 0U || (!child->complete && child != type)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer requires a complete aggregate subobject"); return; }
+                frames[depth++] = (CinderInitFrame){child, 0U, child_offset}; child = cinder_init_child(frames[depth - 1U], &child_offset);
             }
         }
         if (child_offset > 64U * 1024U * 1024U || child->size > 64U * 1024U * 1024U - child_offset) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer exceeds the target object limit"); return; }
-        sema_init_object(sema, decl, &entry->value, child, child_offset, scope, nesting + 1U); init_advance(frames, &depth);
+        sema_init_object(sema, decl, &entry->value, child, child_offset, scope, nesting + 1U); cinder_init_advance(frames, &depth);
     }
     if (inferred) {
         if (extent == 0U || type->base->size == 0U || extent > 64U * 1024U * 1024U / type->base->size) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer cannot infer a bounded complete array"); return; }
@@ -328,6 +305,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
     switch (expr->kind) {
         case EX_COMPOUND_LITERAL: {
             CinderDecl *decl = expr->as.compound_literal;
+            if (sema->unevaluated_depth == 0U) decl->literal_evaluated = true;
             if (!decl->initializer_checked) {
                 decl->initializer_checked = true;
                 bool inferred = decl->type->kind == TYPE_ARRAY && !decl->type->complete && decl->type->base->complete;
@@ -509,12 +487,72 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         }
         case EX_ALIGNOF: case EX_SIZEOF: {
             CinderType *queried = expr->queried_type;
-            if (queried == NULL) queried = sema_expr(sema, expr->as.unary.value, scope);
+            if (queried == NULL) {
+                ++sema->unevaluated_depth;
+                queried = sema_expr(sema, expr->as.unary.value, scope);
+                --sema->unevaluated_depth;
+            }
             if (queried == NULL || !queried->complete || queried->completion_index > expr->parse_index || queried->kind == TYPE_VOID || queried->kind == TYPE_FUNCTION) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "size/alignment requires a complete object type");
             expr->queried_type = queried; expr->type = sema->types->ulong_type; return expr->type;
         }
     }
     return sema->types->error_type;
+}
+
+/* Bound/enumerator expressions outlive their parser scopes. Each name carries
+ * its source-point binding type; reconstruct only those visible bindings.
+ * This validates unevaluated operands without admitting later declarations. */
+static bool constant_scope(CinderExpr *expr, CinderScope *scope, unsigned depth) {
+    if (expr == NULL) return true;
+    if (depth >= 256U) return false;
+    switch (expr->kind) {
+        case EX_NAME:
+            if (expr->name_visible && expr->type != NULL && scope_here(scope, expr->as.name) == NULL)
+                scope_add(scope, expr->as.name, expr->type, NULL, expr->type->kind == TYPE_FUNCTION);
+            return true;
+        case EX_BINARY: return constant_scope(expr->as.binary.left, scope, depth + 1U) && constant_scope(expr->as.binary.right, scope, depth + 1U);
+        case EX_ASSIGN: return constant_scope(expr->as.assign.target, scope, depth + 1U) && constant_scope(expr->as.assign.value, scope, depth + 1U);
+        case EX_UNARY: case EX_DECAY: return constant_scope(expr->as.unary.value, scope, depth + 1U);
+        case EX_SIZEOF: case EX_ALIGNOF: return expr->queried_type != NULL || constant_scope(expr->as.unary.value, scope, depth + 1U);
+        case EX_CAST: return constant_scope(expr->as.cast.value, scope, depth + 1U);
+        case EX_VA_ARG: return constant_scope(expr->as.va_arg.list, scope, depth + 1U);
+        case EX_CALL:
+            if (!constant_scope(expr->as.call.callee, scope, depth + 1U)) return false;
+            for (size_t i = 0U; i < expr->as.call.args.len; ++i)
+                if (!constant_scope(expr->as.call.args.data[i], scope, depth + 1U)) return false;
+            return true;
+        case EX_CONDITIONAL: return constant_scope(expr->as.conditional.condition, scope, depth + 1U) && constant_scope(expr->as.conditional.yes, scope, depth + 1U) && constant_scope(expr->as.conditional.no, scope, depth + 1U);
+        case EX_INDEX: return constant_scope(expr->as.index.base, scope, depth + 1U) && constant_scope(expr->as.index.index, scope, depth + 1U);
+        case EX_MEMBER: return constant_scope(expr->as.member.base, scope, depth + 1U);
+        case EX_COMPOUND_LITERAL: return constant_scope(expr->as.compound_literal->initializer, scope, depth + 1U);
+        case EX_INIT_LIST:
+            for (size_t i = 0U; i < expr->as.initializer.entries.len; ++i) {
+                CinderInitEntry *entry = &expr->as.initializer.entries.data[i];
+                if (!constant_scope(entry->value, scope, depth + 1U)) return false;
+                for (size_t d = 0U; d < entry->designators.len; ++d)
+                    if (!constant_scope(entry->designators.data[d].index, scope, depth + 1U)) return false;
+            }
+            return true;
+        case EX_INT: case EX_FLOAT: case EX_CHAR: case EX_STRING: return true;
+    }
+    return false;
+}
+
+static void sema_constants(CinderSema *sema) {
+    for (size_t i = 0U; i < sema->ast->constant_exprs.len; ++i) {
+        CinderConstantExpr *constant = &sema->ast->constant_exprs.data[i];
+        CinderScope scope = {{NULL, 0U, 0U}, NULL};
+        if (!constant_scope(constant->expression, &scope, 0U)) cinder_diag(sema->diags, CINDER_ERROR, constant->expression->loc, "constant expression nesting exceeds the profile limit");
+        else {
+            sema->function = constant->function;
+            (void)sema_expr(sema, constant->expression, &scope);
+            sema->function = NULL;
+            int64_t value; CinderType *type;
+            if (sema->diags->errors == 0U && (!cinder_constant_integer(sema->ast, constant->expression, &value, &type) || value != constant->value)) cinder_diag(sema->diags, CINDER_ERROR, constant->expression->loc, "constant expression disagrees after semantic typing");
+        }
+        for (size_t n = 0U; n < scope.symbols.len; ++n) free(scope.symbols.data[n].name);
+        free(scope.symbols.data);
+    }
 }
 
 int cinder_sema_run(CinderSema *sema) {
@@ -580,6 +618,7 @@ int cinder_sema_run(CinderSema *sema) {
             free(scope.symbols.data);
         }
     }
+    sema_constants(sema);
     for (size_t i = 0U; i < sema->globals.symbols.len; ++i) {
         CinderSymbol *symbol = &sema->globals.symbols.data[i]; CinderDecl *decl = symbol->decl;
         if (decl->kind == DECL_VAR && decl->tentative && !decl->has_definition && !decl->type->complete && decl->type->kind == TYPE_ARRAY && decl->type->base->complete) {

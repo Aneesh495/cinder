@@ -34,7 +34,15 @@ lifetime and const-access fixtures run only through classified interpretation.
 The contracts follow sections 6.5.2.5, 6.8.4, and 6.8.5 of the primary WG14
 drafts [N1570](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf)
 and [N1539](https://www.open-std.org/jtc1/SC22/wg14/www/docs/n1539.pdf).
-Bound evaluation before semantic completion of inferred literal arrays, goto
-scope entry, and the final feature-family acceptance reader remain open.
+Initializer shape queries complete unknown array bounds without evaluating
+initializer values. Array-bound and enumerator expressions retain their
+source-point bindings and enclosing function for full semantic checking,
+including invalid expressions inside unevaluated initializers. The initializer
+planner and shape queries share their subobject continuation cursor. Named
+array definitions also complete at the end of their initializer, so later
+constant bounds can use their size. Unevaluated automatic literals do not
+reserve runtime storage, including large and nested literal operands.
+
+Goto scope entry and the final feature-family acceptance reader remain open.
 
 The editable storage diagram is `diagrams/compound-literal-storage.mmd`.
