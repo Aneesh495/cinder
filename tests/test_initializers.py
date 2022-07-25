@@ -11,14 +11,16 @@ import struct
 import sys
 from test_objects import inspect
 from reference_policy import identify, adjudicate
+from native_profile import configure_stack
 
 compiler = pathlib.Path(sys.argv[1]).resolve()
 identity = hashlib.sha256(compiler.read_bytes()).hexdigest()
 group = sys.argv[2] if len(sys.argv) > 2 else 'initializers'
-assert group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals')
+assert group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions')
 base = pathlib.Path('.agent-local') / group / identity
 base.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
+stack_profile = configure_stack()
 references = [shutil.which('gcc-15') or shutil.which('gcc'), shutil.which('clang')]
 assert all(references), 'GCC and Clang references are required'
 records = []
@@ -98,7 +100,7 @@ def probe(item):
 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
     for row in pool.map(probe, enumerate(cases)):
         records.append(row)
-        (base / 'observations.json').write_text(json.dumps(dict(compiler_sha256=identity, reference_versions=versions, native=native, cases=records), indent=2)+'\n')
+        (base / 'observations.json').write_text(json.dumps(dict(compiler_sha256=identity, reference_versions=versions, native=native, stack_profile=stack_profile, cases=records), indent=2)+'\n')
 assert hashlib.sha256(compiler.read_bytes()).hexdigest() == identity, 'compiler changed during initializer checks'
 disagreements = sum(not reference['verdict']['agreement'] for row in records for reference in row['references'])
 eligible = sum(row['differential_eligible'] for row in records)

@@ -528,6 +528,14 @@ The sanitizer IR campaign passed 100,000 round trips and optimized execution
 comparisons, with 97,501 defined cases and 2,499 independently classified
 cases. Raw records are under `.agent-local/compound_literals`,
 `.agent-local/constraints`, `.agent-local/ir-campaign`, and
-`.agent-local/linux-vm/share/type-completion-final`. Full source IR round
-trips are still running at publication; hosted Linux CI validates the whole
-source and native suite after push. Full acceptance remains incomplete.
+`.agent-local/linux-vm/share/type-completion-final`. Clang ASan/UBSan also passed all 1,242 source IR round trips and 36 malformed
+IR rejection mutations. Full acceptance remains incomplete.
+
+Hosted run 37695187093 passed all 1,242 native IR round trips, the 100,000-case
+IR campaign, and 1,000 SSA/copy cases, then failed a GCC 13 reference program
+on the large unevaluated literal. Its stack page probes exhausted the default
+8 MiB runtime stack. The retained original binary and an independent GCC 15
+reproduction establish failure at 8 MiB and success at 64 MiB. Authored native
+runners now declare and record the same 64 MiB stack budget for GCC, Clang,
+and Cinder executables. See `docs/NATIVE_TEST_PROFILE.md`. Subsequent full
+hosted validation is pending publication of this process-profile repair.
