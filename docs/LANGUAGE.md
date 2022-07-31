@@ -8,7 +8,7 @@ The default object mode is non-PIC, non-PIE. `-fPIC` is rejected until a complet
 
 ## Supported profile boundary
 
-The current implementation is intentionally staged. Required semantic families are tracked in `docs/FEATURES.json`; a family is only marked complete after source, semantic, native, and negative evidence exists. The initial end-to-end slice includes preprocessing macros, integer literals and expressions, scalar locals, typed pointer and object operations, function declarations/definitions, calls, returns, conditionals, loops, constant globals, inline struct/union layout, string-backed global arrays, aggregate initializer lists, compound literal lvalues, and local copy initialization, separate object emission, and direct x86-64 integer code generation.
+The current implementation is intentionally staged. Required semantic families are tracked in `docs/FEATURES.json`; a family is only marked complete after source, semantic, native, and negative evidence exists. The initial end-to-end slice includes preprocessing macros, integer literals and expressions, scalar locals, typed pointer and object operations, function declarations/definitions, calls, returns, conditionals, loops, constant globals, inline struct/union layout, string-backed global arrays, aggregate initializer lists, compound literal lvalues, `_Static_assert` declarations, and local copy initialization, separate object emission, and direct x86-64 integer code generation.
 
 Scalar conversions, float32/double operations and scalar ABI boundaries, pruned
 SSA promotion, cyclic phi edge transfers, scoped typedefs/enums/tags, nested

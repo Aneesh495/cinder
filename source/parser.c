@@ -62,6 +62,7 @@ static bool is_type_start(CinderAst *ast, const CinderToken *token) {
 static CinderType *parse_type_specifier(CinderAst *ast);
 static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, CinderDecl **function_decl);
 static CinderExpr *parse_conditional(CinderAst *ast);
+static void parse_static_assert(CinderAst *ast);
 
 static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
     CinderTypeKind kind = is_union ? TYPE_UNION : TYPE_STRUCT;
@@ -84,6 +85,7 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
     if (type->complete) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate tag is already defined");
     if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
+        if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); continue; }
         CinderType *field_base = parse_type_specifier(ast);
         do {
             char *field_name = NULL; CinderLoc field_loc = peek(ast)->loc;
@@ -96,7 +98,7 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
         (void)expect(ast, ';', "';'");
     }
     (void)expect(ast, '}', "'}'");
-    (void)keyword;
+    if (type->fields.len == 0U) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     (void)cinder_type_layout_aggregate(type, ast->diags, type->tag == NULL ? cinder_loc(CINDER_NO_FILE, 0U, 0U) : peek(ast)->loc);
     type->completion_index = ast->cursor;
     for (size_t t = 0U; t < ast->types->all_types.len; ++t) {
@@ -581,6 +583,38 @@ static CinderExpr *parse_expression(CinderAst *ast) {
 
 static CinderStmt *parse_statement(CinderAst *ast);
 
+static void parse_static_assert(CinderAst *ast) {
+    CinderToken *keyword = expect(ast, TOK_KW_STATIC_ASSERT, "'_Static_assert'");
+    CinderLoc loc = keyword == NULL ? peek(ast)->loc : keyword->loc;
+    (void)expect(ast, '(', "'('");
+    CinderExpr *expr = parse_conditional(ast);
+    int64_t value = 0; CinderType *type;
+    bool constant = cinder_constant_integer(ast, expr, &value, &type);
+    CinderConstantExpr retained = {expr, ast->current_function, value};
+    cinder_vec_push((CinderVec *)&ast->constant_exprs, &retained);
+    (void)expect(ast, ',', "','");
+    CinderExpr *message = NULL;
+    if (is(ast, TOK_STRING)) message = parse_primary(ast);
+    else cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "static assertion requires a string literal message");
+    (void)expect(ast, ')', "')'"); (void)expect(ast, ';', "';'");
+    if (!constant) cinder_diag(ast->diags, CINDER_ERROR, loc, "static assertion requires an integer constant expression");
+    else if (value == 0) {
+        CinderBytes text = {NULL, 0U, 0U};
+        if (message != NULL) for (size_t i = 0U; i < message->literal_length; ++i) {
+            unsigned char byte = (unsigned char)message->as.string[i];
+            if (byte >= 32U && byte <= 126U) cinder_bytes_put8(&text, byte);
+            else {
+                const char digits[] = "0123456789abcdef";
+                cinder_bytes_put8(&text, '\\'); cinder_bytes_put8(&text, 'x');
+                cinder_bytes_put8(&text, (uint8_t)digits[byte >> 4U]); cinder_bytes_put8(&text, (uint8_t)digits[byte & 15U]);
+            }
+        }
+        cinder_bytes_put8(&text, 0U);
+        cinder_diag(ast->diags, CINDER_ERROR, loc, "static assertion failed: %s", (char *)text.data);
+        free(text.data);
+    }
+}
+
 static CinderStmt *parse_compound(CinderAst *ast) {
     CinderLoc loc = peek(ast)->loc;
     (void)expect(ast, '{', "'{'");
@@ -599,6 +633,7 @@ static CinderStmt *parse_compound(CinderAst *ast) {
 }
 
 static CinderStmt *parse_associated(CinderAst *ast) {
+    if (is_type_start(ast, peek(ast)) || is(ast, TOK_KW_STATIC_ASSERT) || is(ast, TOK_KW_TYPEDEF) || is(ast, TOK_KW_STATIC) || is(ast, TOK_KW_EXTERN) || is(ast, TOK_KW_AUTO) || is(ast, TOK_KW_REGISTER)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "associated substatement cannot be a declaration");
     if (is(ast, '{')) return parse_compound(ast);
     CinderStmt *scope = new_stmt(ast, ST_BLOCK, peek(ast)->loc);
     CinderStmt *outer = ast->literal_scope; ast->literal_scope = scope;
@@ -641,6 +676,7 @@ static CinderStmt *parse_statement(CinderAst *ast) {
     CinderToken *token = peek(ast);
     if (is(ast, '{')) return parse_compound(ast);
     if (take(ast, ';')) return new_stmt(ast, ST_EMPTY, token->loc);
+    if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); return new_stmt(ast, ST_EMPTY, token->loc); }
     if (is_type_start(ast, token) || token->kind == TOK_KW_TYPEDEF || token->kind == TOK_KW_STATIC || token->kind == TOK_KW_EXTERN || token->kind == TOK_KW_AUTO || token->kind == TOK_KW_REGISTER) {
         CinderStmt *stmt = new_stmt(ast, ST_DECL, token->loc); stmt->as.decl = parse_local_decl(ast);
         if (stmt->as.decl == NULL) stmt->kind = ST_EMPTY;
@@ -694,6 +730,7 @@ static CinderStmt *parse_statement(CinderAst *ast) {
 
 int cinder_parse(CinderAst *ast) {
     while (!is(ast, TOK_EOF)) {
+        if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); continue; }
         bool is_static = false, is_extern = false, alias = false;
         while (is(ast, TOK_KW_STATIC) || is(ast, TOK_KW_EXTERN) || is(ast, TOK_KW_TYPEDEF) || is(ast, TOK_KW_INLINE) || is(ast, TOK_KW_NORETURN)) {
             CinderTokenKind kind = peek(ast)->kind; ++ast->cursor;

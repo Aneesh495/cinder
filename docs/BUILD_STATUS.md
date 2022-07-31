@@ -539,3 +539,31 @@ reproduction establish failure at 8 MiB and success at 64 MiB. Authored native
 runners now declare and record the same 64 MiB stack budget for GCC, Clang,
 and Cinder executables. See `docs/NATIVE_TEST_PROFILE.md`. Subsequent full
 hosted validation is pending publication of this process-profile repair.
+
+## Static assertion declarations
+
+`_Static_assert` declarations now work at file, block, and aggregate member
+scope, reuse the typed target constant evaluator, and retain their operands
+for full semantic validation. Failed assertions include decoded, concatenated
+message text; embedded NUL bytes are escaped so later text remains visible.
+They create no member or runtime effect. Declarations used as unbraced
+associated statements and aggregates containing no object member are rejected.
+
+Both GCC Release and Clang ASan/UBSan builds passed 18 authored assertion
+programs against GCC/Clang at O0/O2 with exact object/assembly comparisons.
+All 36 owned objects passed actual x86 Linux execution. The sanitizer build
+passed 1,278 full source IR round trips and 36 malformed IR rejections. All
+153 invalid source cases were rejected, including required assertion messages
+and preservation of prior artifacts. Raw assertion records are under
+`.agent-local/static_assertions` and
+`.agent-local/linux-vm/share/static-assertions`.
+
+The repaired stack-profile run 37695954175 passed all 621 native source
+observations and 1,242 native CIR comparisons, then stopped because GCC 13
+accepted `va_start` in an unevaluated nonvariadic operand. This library
+Description rule does not require a host diagnostic. The exact source is
+now adjudicated in the diagnostic policy; Cinder rejection remains mandatory.
+Every non-mandatory reference diagnostic entry now has a checked source hash.
+A changed-source probe failed that check. The original failed artifacts
+remain under `.agent-local/native-failure-11d2fd8`. Whole hosted validation
+will rerun after publication. Full acceptance remains incomplete.

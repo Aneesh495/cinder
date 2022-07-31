@@ -1,18 +1,27 @@
 {
   "global_static_incomplete_tentative.c": {
     "require_reference_rejection": false,
-    "rule": "N1570 6.9.2 paragraph 3, Semantics; clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation."
+    "rule": "N1570 6.9.2 paragraph 3, Semantics; clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation.",
+    "source_sha256": "83020763671961a92a4d0de5d5180da578d8477d59f851e929044c1503676f23"
   },
   "global_static_tentative_before_tag_complete.c": {
     "require_reference_rejection": false,
-    "rule": "N1570 6.9.2 paragraph 3, Semantics; clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation."
+    "rule": "N1570 6.9.2 paragraph 3, Semantics; clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation.",
+    "source_sha256": "63f8668114f868e7a410d23c4131b9b9eaa8275dd6f57d30b6e0e679e6832193"
   },
   "va_arg_array.c": {
     "require_reference_rejection": false,
-    "rule": "N1570 7.16.1.1 paragraph 2, Description: a requested array type cannot match a promoted argument and is outside the specified type form. Clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation."
+    "rule": "N1570 7.16.1.1 paragraph 2, Description: a requested array type cannot match a promoted argument and is outside the specified type form. Clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation.",
+    "source_sha256": "2a9dfbb2e4fd1f0a22575bff549aa9b1ee38e878949501b38655d6b8fe98ecaa"
   },
   "va_start_wrong_last.c": {
     "require_reference_rejection": false,
-    "rule": "N1570 7.16.1.4 paragraph 4, Description: parmN must identify the rightmost named parameter. Clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation."
+    "rule": "N1570 7.16.1.4 paragraph 4, Description: parmN must identify the rightmost named parameter. Clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic. Cinder diagnoses the violation.",
+    "source_sha256": "df9c8b8dbc49b4099a73d3a70f08c76ab8dad4d2bf11e324e4975068a07783c9"
+  },
+  "compound_bound_bad_va_start.c": {
+    "require_reference_rejection": false,
+    "rule": "N1570 7.16.1.4 paragraph 4, Description: parmN identifies the final named variadic parameter. Cinder checks builtin declaration context in unevaluated operands; GCC may omit this diagnostic there. Clause 4 paragraph 2 and 5.1.1.3 paragraph 1 do not require a diagnostic for this Description rule.",
+    "source_sha256": "67ca32816ef7349cfd2146d55d4913705d4e11253b23cb19722979da87683d03"
   }
 }

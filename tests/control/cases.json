@@ -2482,5 +2482,77 @@
   {
     "source": "../compound_literals/bound_arrow_array.c",
     "exit": 0
+  },
+  {
+    "source": "../static_assertions/file_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/file_size_align.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/block_local_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/block_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/struct_member_declaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/union_member_declaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/enum_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/macro_assertion.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/unsigned_arithmetic.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/signed_boundary.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/cast_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/inferred_literal_shape.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/local_unevaluated_effect.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/local_named_inferred.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/local_large_literal.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/message_concatenation.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/message_escaped.c",
+    "exit": 0
+  },
+  {
+    "source": "../static_assertions/nested_blocks.c",
+    "exit": 0
   }
 ]
