@@ -259,6 +259,10 @@ static char *literal_storage(LowerContext *context, CinderType *type, const Cind
 }
 
 static CinderValueId lower_address(LowerContext *context, CinderExpr *target) {
+    if (target->kind == EX_GENERIC) {
+        if (target->as.generic.selected >= target->as.generic.associations.len) { cinder_diag(context->diags, CINDER_FATAL, target->loc, "unresolved generic address expression"); return CINDER_INVALID_VALUE; }
+        return lower_address(context, target->as.generic.associations.data[target->as.generic.selected].value);
+    }
     if (target->kind == EX_COMPOUND_LITERAL) {
         CinderDecl *decl = target->as.compound_literal;
         if (decl->is_static) {
@@ -381,6 +385,10 @@ static CinderValueId aggregate_snapshot(LowerContext *context, CinderValueId sou
 }
 
 static CinderValueId lower_aggregate(LowerContext *context, CinderExpr *expr) {
+    if (expr->kind == EX_GENERIC) {
+        if (expr->as.generic.selected >= expr->as.generic.associations.len) { cinder_diag(context->diags, CINDER_FATAL, expr->loc, "unresolved generic aggregate expression"); return CINDER_INVALID_VALUE; }
+        return lower_aggregate(context, expr->as.generic.associations.data[expr->as.generic.selected].value);
+    }
     if (expr->is_lvalue || expr->kind == EX_MEMBER) return lower_address(context, expr);
     if (expr->kind == EX_CALL) return lower_call(context, expr);
     if (expr->kind == EX_VA_ARG) return lower_va_arg(context, expr);
@@ -450,6 +458,10 @@ static CinderIROp compound_operation(int op, bool floating, bool unsig) {
 
 static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
     if (expr == NULL) return CINDER_INVALID_VALUE;
+    if (expr->kind == EX_GENERIC) {
+        if (expr->as.generic.selected >= expr->as.generic.associations.len) { cinder_diag(context->diags, CINDER_FATAL, expr->loc, "unresolved generic value expression"); return CINDER_INVALID_VALUE; }
+        return lower_expr(context, expr->as.generic.associations.data[expr->as.generic.selected].value);
+    }
     if (expr->kind == EX_COMPOUND_LITERAL) return load_address(context, lower_address(context, expr), expr->type, expr->loc);
     if (expr->kind == EX_INT || expr->kind == EX_CHAR) {
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc);

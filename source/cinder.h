@@ -333,6 +333,8 @@ typedef struct CinderExpr CinderExpr;
 typedef struct CinderStmt CinderStmt;
 typedef struct CinderDecl CinderDecl;
 
+typedef struct { CinderType *type; CinderExpr *value; size_t parse_index; } CinderGenericAssociation;
+
 typedef struct {
     char *member;
     CinderExpr *index;
@@ -370,6 +372,7 @@ typedef enum {
     EX_MEMBER,
     EX_INIT_LIST,
     EX_COMPOUND_LITERAL,
+    EX_GENERIC,
 } CinderExprKind;
 
 typedef enum {
@@ -417,6 +420,7 @@ struct CinderExpr {
         struct { CinderExpr *base; char *name; size_t field; bool arrow; } member;
         struct { CINDER_VEC_TYPE(CinderInitEntry) entries; } initializer;
         CinderDecl *compound_literal;
+        struct { CinderExpr *control; CINDER_VEC_TYPE(CinderGenericAssociation) associations; size_t selected; } generic;
     } as;
 };
 
@@ -483,6 +487,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderDecl *) static_literals;
     unsigned scope_depth;
     unsigned declarator_depth;
+    unsigned generic_depth;
     CinderStmt *literal_scope;
     size_t literal_count;
     CinderDecl *current_function;
@@ -497,6 +502,7 @@ CinderType *cinder_init_child(CinderInitFrame frame, size_t *offset);
 void cinder_init_advance(CinderInitFrame *frames, size_t *depth);
 bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned depth);
 CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsigned depth);
+size_t cinder_generic_selection(const CinderType *control, const CinderExpr *expr);
 void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *out);
 
 /* ---------- semantic analysis ---------- */

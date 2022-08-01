@@ -52,6 +52,7 @@ static bool string_address(AddressContext *context, const CinderExpr *expr, Cind
 
 static bool lvalue_address(AddressContext *context, const CinderExpr *expr, CinderIRAddress *address, unsigned depth) {
     if (depth >= 256U) return false;
+    if (expr->kind == EX_GENERIC) return expr->as.generic.selected < expr->as.generic.associations.len && lvalue_address(context, expr->as.generic.associations.data[expr->as.generic.selected].value, address, depth + 1U);
     if (expr->kind == EX_NAME) return named_address(context, expr, address);
     if (expr->kind == EX_STRING) return string_address(context, expr, address);
     if (expr->kind == EX_COMPOUND_LITERAL) {
@@ -84,6 +85,7 @@ static bool lvalue_address(AddressContext *context, const CinderExpr *expr, Cind
 
 static bool value_address(AddressContext *context, const CinderExpr *expr, CinderIRAddress *address, unsigned depth) {
     if (expr == NULL || depth >= 256U) return false;
+    if (expr->kind == EX_GENERIC) return expr->as.generic.selected < expr->as.generic.associations.len && value_address(context, expr->as.generic.associations.data[expr->as.generic.selected].value, address, depth + 1U);
     if (expr->kind == EX_CAST) {
         int64_t zero; CinderType *type;
         if (cinder_constant_integer(context->ast, expr->as.cast.value, &zero, &type) && zero == 0) return true;

@@ -42,10 +42,27 @@ static CinderType *value_type(CinderAst *ast, CinderType *type) {
     return type;
 }
 
+size_t cinder_generic_selection(const CinderType *control, const CinderExpr *expr) {
+    if (control == NULL || expr == NULL || expr->kind != EX_GENERIC) return SIZE_MAX;
+    CinderType converted = *control; converted.qualifiers = 0U;
+    size_t selected = SIZE_MAX, fallback = SIZE_MAX;
+    for (size_t i = 0U; i < expr->as.generic.associations.len; ++i) {
+        const CinderType *type = expr->as.generic.associations.data[i].type;
+        if (type == NULL) { if (fallback != SIZE_MAX) return SIZE_MAX; fallback = i; }
+        else if (cinder_type_compatible(&converted, type)) { if (selected != SIZE_MAX) return SIZE_MAX; selected = i; }
+    }
+    return selected == SIZE_MAX ? fallback : selected;
+}
+
 CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsigned depth) {
     if (expr == NULL || depth >= 256U) return NULL;
     if (expr->kind == EX_COMPOUND_LITERAL && !cinder_infer_initializer_shape(ast, expr->as.compound_literal, depth + 1U)) return NULL;
     if (expr->type != NULL) return expr->type;
+    if (expr->kind == EX_GENERIC) {
+        CinderType *control = value_type(ast, cinder_expression_type(ast, expr->as.generic.control, depth + 1U));
+        size_t selected = cinder_generic_selection(control, expr);
+        return selected < expr->as.generic.associations.len ? cinder_expression_type(ast, expr->as.generic.associations.data[selected].value, depth + 1U) : NULL;
+    }
     if (expr->kind == EX_CAST) return expr->as.cast.cast_type;
     if (expr->kind == EX_CHAR) return ast->types->int_type;
     if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) return ast->types->ulong_type;
@@ -183,6 +200,11 @@ static bool binary(CinderAst *ast, const CinderExpr *expr, IntegerConstant *resu
 
 static bool evaluate(CinderAst *ast, const CinderExpr *expr, IntegerConstant *result, unsigned depth) {
     if (expr == NULL || depth >= 256U) return false;
+    if (expr->kind == EX_GENERIC) {
+        CinderType *control = value_type(ast, cinder_expression_type(ast, expr->as.generic.control, depth + 1U));
+        size_t selected = cinder_generic_selection(control, expr);
+        return selected < expr->as.generic.associations.len && evaluate(ast, expr->as.generic.associations.data[selected].value, result, depth + 1U);
+    }
     if (expr->kind == EX_INT || expr->kind == EX_CHAR) {
         result->type = expr->type == NULL ? ast->types->int_type : expr->type;
         if (!integer_type(result->type)) return false;
@@ -253,6 +275,10 @@ static bool scalar_conversion(ScalarConstant *value, CinderType *target) {
 
 static bool scalar_evaluate(CinderAst *ast, const CinderExpr *expr, ScalarConstant *value, unsigned depth) {
     if (expr == NULL || depth >= 256U) return false;
+    if (expr->kind == EX_GENERIC) {
+        size_t selected = expr->as.generic.selected;
+        return selected < expr->as.generic.associations.len && scalar_evaluate(ast, expr->as.generic.associations.data[selected].value, value, depth + 1U);
+    }
     int64_t integer; CinderType *type;
     if (cinder_constant_integer(ast, expr, &integer, &type)) { *value = (ScalarConstant){type, (uint64_t)integer, 0.0, false}; return true; }
     if (expr->kind == EX_FLOAT) { *value = (ScalarConstant){expr->type, 0U, expr->as.floating, true}; return scalar_conversion(value, expr->type); }

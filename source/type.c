@@ -173,6 +173,9 @@ bool cinder_type_equal(const CinderType *a, const CinderType *b) {
 
 bool cinder_type_compatible(const CinderType *a, const CinderType *b) {
     if (cinder_type_equal(a, b)) return true;
+    /* The declared enumeration representation is signed 32-bit int.
+     * Distinct enumeration tags remain distinct from one another. */
+    if (a != NULL && b != NULL && ((a->kind == TYPE_ENUM && b->kind == TYPE_INT) || (b->kind == TYPE_ENUM && a->kind == TYPE_INT))) return a->qualifiers == b->qualifiers && a->size == 4U && b->size == 4U && !a->is_unsigned && !b->is_unsigned;
     if (a == NULL || b == NULL || a->kind != b->kind || a->qualifiers != b->qualifiers || a->is_unsigned != b->is_unsigned || a->plain_char != b->plain_char) return false;
     if (a->kind == TYPE_POINTER) return cinder_type_compatible(a->base, b->base);
     if (a->kind == TYPE_ARRAY) return (!a->complete || !b->complete || a->array_len == b->array_len) && cinder_type_compatible(a->base, b->base);

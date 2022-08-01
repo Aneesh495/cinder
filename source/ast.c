@@ -16,14 +16,18 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
     ast->bindings.data = NULL; ast->bindings.len = 0U; ast->bindings.cap = 0U;
     ast->constant_exprs.data = NULL; ast->constant_exprs.len = 0U; ast->constant_exprs.cap = 0U;
     ast->static_literals.data = NULL; ast->static_literals.len = 0U; ast->static_literals.cap = 0U;
-    ast->scope_depth = 0U; ast->declarator_depth = 0U;
+    ast->scope_depth = 0U; ast->declarator_depth = 0U; ast->generic_depth = 0U;
     ast->literal_scope = NULL; ast->literal_count = 0U;
     ast->current_function = NULL;
 }
 
 static void free_expr(CinderExpr *expr) {
     if (expr == NULL) return;
-    if (expr->kind == EX_BINARY) {
+    if (expr->kind == EX_GENERIC) {
+        free_expr(expr->as.generic.control);
+        for (size_t i = 0U; i < expr->as.generic.associations.len; ++i) free_expr(expr->as.generic.associations.data[i].value);
+        free(expr->as.generic.associations.data);
+    } else if (expr->kind == EX_BINARY) {
         free_expr(expr->as.binary.left);
         free_expr(expr->as.binary.right);
     } else if (expr->kind == EX_UNARY || expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF || expr->kind == EX_DECAY) {
@@ -119,6 +123,14 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
     if (expr == NULL) { indent(out, depth); fputs("<null>\n", out); return; }
     indent(out, depth);
     switch (expr->kind) {
+        case EX_GENERIC:
+            fprintf(out, "generic selected=%zu : %s%s\n", expr->as.generic.selected, cinder_type_name(expr->type), expr->is_lvalue ? " lvalue" : "");
+            dump_expr(expr->as.generic.control, out, depth + 1U);
+            for (size_t i = 0U; i < expr->as.generic.associations.len; ++i) {
+                indent(out, depth + 1U); fprintf(out, "association %s\n", expr->as.generic.associations.data[i].type == NULL ? "default" : cinder_type_name(expr->as.generic.associations.data[i].type));
+                dump_expr(expr->as.generic.associations.data[i].value, out, depth + 2U);
+            }
+            break;
         case EX_COMPOUND_LITERAL:
             fprintf(out, "compound-literal %s : %s %s-storage lvalue\n", expr->as.compound_literal->name, cinder_type_name(expr->type), expr->as.compound_literal->is_static ? "static" : "automatic");
             dump_expr(expr->as.compound_literal->initializer, out, depth + 1U); break;

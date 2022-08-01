@@ -567,3 +567,32 @@ Every non-mandatory reference diagnostic entry now has a checked source hash.
 A changed-source probe failed that check. The original failed artifacts
 remain under `.agent-local/native-failure-11d2fd8`. Whole hosted validation
 will rerun after publication. Full acceptance remains incomplete.
+
+## Generic selection
+
+`_Generic` now applies the C17 control conversions without integer
+promotion, checks every association, and preserves the selected expression's
+type and value category. Lowering, constant evaluation, initializer shape
+queries, and static relocations evaluate only the selected expression.
+Unevaluated control and unselected literals reserve no automatic storage.
+The target's signed 32-bit enumeration types are compatible with `int`.
+
+GCC Release and Clang ASan/UBSan both passed 48 authored programs against
+GCC/Clang at O0/O2 with exact object/assembly comparisons and all 168 invalid
+source rejections. All 96 owned objects passed native x86 Linux execution.
+The sanitizer IR campaign passed 100,000 comparisons, with 97,501 defined
+and 2,499 independently classified cases. Raw records are under
+`.agent-local/generic`, `.agent-local/constraints`, `.agent-local/ir-campaign`,
+and `.agent-local/linux-vm/share/generic`.
+The sanitizer build also passed all 1,374 source CIR round trips/backend
+comparisons and 36 malformed CIR mutations. Nested generic probes compiled
+at depth 64 and rejected depths 129 and 1,024 with diagnostics, preserving
+prior output and reporting no sanitizer failure.
+
+The prior hosted run 37696602274 passed 639 native source observations,
+1,278 native CIR comparisons, and the IR and SSA campaigns, then Clang 18
+rejected a block enumeration using an unevaluated compound literal. The
+declared hosted reference is now Clang 22, which passed the unchanged
+regressions with GCC on the Linux development VM. Original failed evidence
+is retained. See `docs/NATIVE_TEST_PROFILE.md`; full hosted validation will
+run after publication. Full acceptance remains incomplete.
