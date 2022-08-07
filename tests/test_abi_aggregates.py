@@ -32,6 +32,9 @@ LAYOUTS = {
     'L3': ('struct L3 { long x[3]; };', [(f'x[{i}]', 'long') for i in range(3)]),
     'NF': ('struct Cell { float x[2]; }; struct NF { struct Cell cells[2]; };', [(f'cells[{i}].x[{j}]', 'float') for i in range(2) for j in range(2)]),
     'U8': ('union U8 { double fraction; long whole; };', [('whole', 'long')]),
+    'AI': ('struct AI { _Alignas(16) int x; };', [('x', 'int')]),
+    'AD': ('struct AD { _Alignas(16) double x; };', [('x', 'double')]),
+    'AM': ('struct AM { char x; _Alignas(16) double y; int z; };', [('x', 'char'), ('y', 'double'), ('z', 'int')]),
 }
 SCALARS = ('long', 'int', 'float', 'double', '_Bool')
 COMMON = '\n'.join(value[0] + '\n' + f'typedef {"union" if name == "U8" else "struct"} {name} {name};' for name, value in LAYOUTS.items()) + '\n'
@@ -79,8 +82,9 @@ def specification(seed):
     body.append(f'{result} result;')
     expected = []
     for j, (member, scalar) in enumerate(leaves(result)):
-        base = total % 61 + j * 3 if scalar == 'unsigned char' else total + j * 3
-        expression = f'(sum % 61L) + {j * 3}L' if scalar == 'unsigned char' else f'sum + {j * 3}L'
+        byte_scalar = scalar in ('unsigned char', 'char')
+        base = total % 61 + j * 3 if byte_scalar else total + j * 3
+        expression = f'(sum % 61L) + {j * 3}L' if byte_scalar else f'sum + {j * 3}L'
         if scalar in ('float', 'double'):
             expression = f'({scalar})({expression}) + ({scalar})0.25'
             bits = struct.unpack('<I' if scalar == 'float' else '<Q', struct.pack('<f' if scalar == 'float' else '<d', base + 0.25))[0]

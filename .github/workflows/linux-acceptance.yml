@@ -36,6 +36,8 @@ jobs:
         run: make test-static-assert
       - name: Generic selections
         run: make test-generic
+      - name: Object and member alignment
+        run: make test-alignment
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -76,6 +78,8 @@ jobs:
             .agent-local/compound_literals
             .agent-local/static_assertions
             .agent-local/generic
+            .agent-local/alignment
+            .agent-local/alignment-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks

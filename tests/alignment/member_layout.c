@@ -1,0 +1,1 @@
+struct P{char a; _Alignas(16) int x; char z;}; int main(void){struct P p={3,7,5}; return _Alignof(struct P)!=16 || sizeof p!=32 || (unsigned long)&p.x-(unsigned long)&p!=16 || p.a!=3 || p.x!=7 || p.z!=5;}

@@ -75,7 +75,7 @@ static void data_labels(const CinderMachineObject *object, FILE *out, unsigned s
 }
 
 static void data_section(const CinderMachineObject *object, FILE *out, unsigned section, const char *name, const unsigned char *data, size_t size) {
-    fprintf(out, ".section %s\n.p2align 3\n", name);
+    fprintf(out, ".section %s\n.p2align 4\n", name);
     size_t offset = 0U, relocation = section_relocation(object, 0U, section);
     while (offset < size) {
         data_labels(object, out, section, offset);

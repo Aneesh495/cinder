@@ -2746,5 +2746,137 @@
   {
     "source": "../generic/inline_association_tag.c",
     "exit": 0
+  },
+  {
+    "source": "../alignment/local_scalar.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/local_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/local_neighbors.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/local_multiple.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/local_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/local_type_name.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/local_order.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_data.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_bss.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_const.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_extern_redeclaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_aligned_redeclaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/global_tentative.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/member_layout.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/member_multiple.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/member_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/member_typedef.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/union_layout.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/aggregate_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/aggregate_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/aggregate_return_small.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/aggregate_return_large.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/aggregate_callback.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/compound_literal.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/constant_enum.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/constant_generic.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/unevaluated_effects.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/alignof_fundamentals.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/alignof_derived.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/for_declaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../alignment/bare_tag_no_effect.c",
+    "exit": 0
   }
 ]

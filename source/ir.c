@@ -120,6 +120,8 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
 static int new_local(LowerContext *context, CinderType *type) {
     int slot = (int)context->function->local_count++;
     cinder_vec_push((CinderVec *)&context->function->local_types, &type);
+    size_t alignment = 0U;
+    cinder_vec_push((CinderVec *)&context->function->local_alignments, &alignment);
     return slot;
 }
 
@@ -601,6 +603,7 @@ static void begin_declarations(LowerContext *context, CinderDecl *first) {
     for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
         if (decl->kind != DECL_VAR || decl->name == NULL) continue;
         decl->lowering_slot = new_local(context, decl->type);
+        context->function->local_alignments.data[decl->lowering_slot] = decl->alignment;
         CinderIRInst *begin = add_inst_ptr(context->function, context->current, IR_LOCAL_BEGIN, decl->loc); begin->slot = decl->lowering_slot; begin->type = decl->type;
         cinder_vec_push((CinderVec *)&context->active_slots, &decl->lowering_slot);
     }
@@ -778,7 +781,7 @@ void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types) {
 
 static void destroy_inst(CinderIRInst *inst) { free(inst->callee); free(inst->args.data); free(inst->arg_floats.data); free(inst->phi_blocks.data); }
 static void destroy_function(CinderIRFunction *function) {
-    free(function->name); free(function->params.data); free(function->local_types.data);
+    free(function->name); free(function->params.data); free(function->local_types.data); free(function->local_alignments.data);
     for (size_t b = 0U; b < function->blocks.len; ++b) { CinderIRBlock *block = &function->blocks.data[b]; free(block->name); for (size_t i = 0U; i < block->instructions.len; ++i) destroy_inst(&block->instructions.data[i]); free(block->instructions.data); free(block->predecessors.data); free(block->successors.data); }
     free(function->blocks.data);
 }
@@ -843,6 +846,7 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     memset(&global, 0, sizeof(global));
     global.name = cinder_strndup(decl->name, strlen(decl->name));
     global.type = canonical->type;
+    global.alignment = canonical->alignment;
     global.read_only = (global.type->qualifiers & 1U) != 0U;
     for (CinderType *element = global.type; element->kind == TYPE_ARRAY; element = element->base) if ((element->base->qualifiers & 1U) != 0U) global.read_only = true;
     global.global = !canonical->is_static;
