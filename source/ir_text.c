@@ -88,7 +88,7 @@ static void write_inst(FILE *out, const TypeTable *table, const CinderIRInst *in
     fprintf(out, "inst %s ", cinder_ir_op_name(inst->op)); write_type_ref(out, table, inst->type); fputc(' ', out); write_type_ref(out, table, inst->source_type); fputc(' ', out); write_type_ref(out, table, inst->callee_type);
     fputc(' ', out); write_value(out, inst->dst); fputc(' ', out); write_value(out, inst->left); fputc(' ', out); write_value(out, inst->right);
     fprintf(out, " %016" PRIx64 " %016" PRIx64 " %d %d ", (uint64_t)inst->integer, float_bits(inst->floating), inst->slot, inst->operator_code);
-    write_string(out, inst->callee); fprintf(out, " %u args %zu", inst->floating_result ? 1U : 0U, inst->args.len);
+    write_string(out, inst->callee); fprintf(out, " %u noreturn %u args %zu", inst->floating_result ? 1U : 0U, inst->noreturn_call ? 1U : 0U, inst->args.len);
     for (size_t a = 0U; a < inst->args.len; ++a) { fputc(' ', out); write_value(out, inst->args.data[a]); }
     fprintf(out, " classes %zu", inst->arg_floats.len);
     for (size_t a = 0U; a < inst->arg_floats.len; ++a) fprintf(out, " %u", inst->arg_floats.data[a] ? 1U : 0U);
@@ -101,7 +101,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
     if (cinder_verify_ir(module, diags) != 0) return 1;
     TypeTable table = {NULL, 0U, 0U};
     if (!collect_module(&table, module)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR serialization type graph exceeds limits"); free(table.data); return 1; }
-    fprintf(out, "cinder-ir 3 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
+    fprintf(out, "cinder-ir 4 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
     for (size_t t = 0U; t < table.len; ++t) write_type(out, &table, t);
     fprintf(out, "globals %zu\n", module->globals.len);
     for (size_t g = 0U; g < module->globals.len; ++g) {
@@ -124,7 +124,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
     for (size_t f = 0U; f < module->functions.len; ++f) {
         const CinderIRFunction *function = &module->functions.data[f];
         fputs("function ", out); write_string(out, function->name); fputc(' ', out); write_type_ref(out, &table, function->type);
-        fprintf(out, " %u %zu %zu %zu params %zu blocks %zu\n", function->global ? 1U : 0U, function->value_count, function->local_count, function->float_param_count, function->params.len, function->blocks.len);
+        fprintf(out, " %u noreturn %u %zu %zu %zu params %zu blocks %zu\n", function->global ? 1U : 0U, function->is_noreturn ? 1U : 0U, function->value_count, function->local_count, function->float_param_count, function->params.len, function->blocks.len);
         for (size_t l = 0U; l < function->local_types.len; ++l) { fputs("local ", out); write_type_ref(out, &table, function->local_types.data[l]); fprintf(out, " align %zu\n", function->local_alignments.len == 0U ? 0U : function->local_alignments.data[l]); }
         for (size_t p = 0U; p < function->params.len; ++p) { fputs("param ", out); write_string(out, function->params.data[p]->name); fputc(' ', out); write_type_ref(out, &table, function->params.data[p]->type); fputc('\n', out); }
         for (size_t b = 0U; b < function->blocks.len; ++b) {
@@ -397,6 +397,7 @@ static CinderIRInst read_inst(Reader *reader) {
     inst.dst = value_ref(reader); inst.left = value_ref(reader); inst.right = value_ref(reader);
     inst.integer = signed_bits(bits(reader)); inst.floating = float_from_bits(bits(reader)); inst.slot = signed_number(reader); inst.operator_code = signed_number(reader);
     inst.callee = string(reader, true, false); inst.floating_result = boolean(reader);
+    expect(reader, "noreturn"); inst.noreturn_call = boolean(reader);
     expect(reader, "args"); size_t args = (size_t)number(reader, 4096U);
     for (size_t a = 0U; a < args && !reader->failed; ++a) { CinderValueId value = value_ref(reader); cinder_vec_push((CinderVec *)&inst.args, &value); }
     expect(reader, "classes"); size_t classes = (size_t)number(reader, 4096U);
@@ -422,7 +423,7 @@ static void read_functions(Reader *reader) {
     for (size_t f = 0U; f < count && !reader->failed; ++f) {
         expect(reader, "function"); CinderIRFunction function; memset(&function, 0, sizeof(function));
         function.name = string(reader, true, true); function.type = type_ref(reader); function.types = reader->module->types;
-        function.global = boolean(reader); function.value_count = (size_t)number(reader, IR_TABLE_LIMIT); function.local_count = (size_t)number(reader, 65536U); function.float_param_count = (size_t)number(reader, 4096U);
+        function.global = boolean(reader); expect(reader, "noreturn"); function.is_noreturn = boolean(reader); function.value_count = (size_t)number(reader, IR_TABLE_LIMIT); function.local_count = (size_t)number(reader, 65536U); function.float_param_count = (size_t)number(reader, 4096U);
         expect(reader, "params"); size_t params = (size_t)number(reader, 4096U); expect(reader, "blocks"); size_t blocks = (size_t)number(reader, 65536U);
         if (function.type == NULL || function.type->kind != TYPE_FUNCTION || blocks == 0U || params != function.type->params.len) parse_error(reader, "invalid function definition");
         cinder_vec_push((CinderVec *)&reader->module->functions, &function);
@@ -460,7 +461,7 @@ static void read_functions(Reader *reader) {
 int cinder_parse_ir(CinderIRModule *module, const char *text, size_t length, CinderDiagnostics *diags) {
     Reader reader; memset(&reader, 0, sizeof(reader)); reader.text = text; reader.length = length; reader.line = 1U; reader.module = module; reader.diags = diags;
     if (length > IR_TEXT_LIMIT || memchr(text, '\0', length) != NULL || module->functions.len != 0U || module->globals.len != 0U) { parse_error(&reader, "invalid input extent or nonempty destination module"); return 1; }
-    expect(&reader, "cinder-ir"); if (number(&reader, 3U) != 3U) parse_error(&reader, "unsupported IR schema version");
+    expect(&reader, "cinder-ir"); if (number(&reader, 4U) != 4U) parse_error(&reader, "unsupported IR schema version");
     expect(&reader, "lp64-le"); expect(&reader, "sysv-x86-64"); read_types(&reader);
     bool *active = cinder_alloc((reader.types.len == 0U ? 1U : reader.types.len) * sizeof(*active)); memset(active, 0, reader.types.len * sizeof(*active));
     for (size_t t = 0U; t < reader.types.len && !reader.failed; ++t) (void)validate_type(&reader, reader.types.data[t], active, 0U);

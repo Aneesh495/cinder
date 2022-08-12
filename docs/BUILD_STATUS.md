@@ -630,3 +630,33 @@ and SSA campaigns, and 10,000 allocation graphs. It then exposed a standalone
 parallel-copy probe missing the new type/alignment helper from its link inputs.
 The probe now links that authored helper explicitly. The compiler's normal
 build had already linked it correctly. Full hosted validation will rerun.
+
+
+## Nonreturning function declarations
+
+`_Noreturn` contracts now survive compatible file/block redeclarations,
+semantic name resolution, canonical CIR schema 4, and original native
+emission. A bounded diagnostic CFG walk warns on possible returns. The
+independent interpreter classifies a reached marked return as undefined;
+marked native returns and resumed marked calls emit `UD2`.
+The authored `stdnoreturn.h` supplies the standard `noreturn` macro.
+
+GCC Release and Clang ASan/UBSan passed 27 authored reference/object programs,
+9 diagnostic paths, 6 defined libc exit programs, 9 exact trap inspections,
+and 4 malformed contract rejections. No undefined returning-function native
+program was executed. The sanitizer build passed all 1,494 source CIR
+comparisons and 36 malformed CIR mutations, 206 source constraint rejections,
+90 memory UB classifications and 57 corrupt memory contracts, 100,000 IR
+comparisons, and 1,000 SSA cases. External process termination remains an
+explicitly unsupported interpreter service; the native probes validate the
+hosted libc boundary separately. All 132 defined native object/assembly probes passed using the final GCC
+Release compiler in the Linux development VM. The first attempt linked and ran 48 probes before a link timeout; that
+attempt and timeout remain recorded. The unchanged retry completed all probes.
+See `docs/NORETURN.md`; full acceptance remains incomplete.
+
+
+The standalone alignment checker repair `1afe95b` passed the full hosted Linux
+workflow [37702523157](https://github.com/Aneesh495/cinder/actions/runs/37702523157),
+including both complete 512-signature aligned aggregate and variadic callback
+campaigns. Raw hosted artifacts are retained privately. The nonreturning
+function increment will receive its own hosted run after publication.

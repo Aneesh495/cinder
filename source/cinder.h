@@ -403,6 +403,7 @@ struct CinderExpr {
     CinderType *type;
     bool is_lvalue;
     bool name_visible;
+    CinderDecl *function_decl;
     CinderType *queried_type;
     size_t literal_length;
     size_t parse_index;
@@ -451,6 +452,7 @@ struct CinderDecl {
     bool is_definition;
     size_t alignment;
     bool has_alignment;
+    bool is_noreturn;
     CinderExpr *initializer;
     CINDER_VEC_TYPE(CinderDecl *) params;
     CinderStmt *body;
@@ -641,6 +643,7 @@ typedef struct {
     int operator_code;
     char *callee;
     bool floating_result;
+    bool noreturn_call;
     CINDER_VEC_TYPE(CinderValueId) args;
     CINDER_VEC_TYPE(bool) arg_floats;
     CINDER_VEC_TYPE(CinderBlockId) phi_blocks;
@@ -678,6 +681,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderType *) local_types;
     CINDER_VEC_TYPE(size_t) local_alignments;
     bool global;
+    bool is_noreturn;
     CinderAst *ast;
 } CinderIRFunction;
 
@@ -768,6 +772,7 @@ typedef enum {
     INTERP_OBJECT_LIFETIME,
     INTERP_INVALID_ACCESS,
     INTERP_READONLY,
+    INTERP_NORETURN_RETURN,
 } CinderInterpClass;
 
 typedef struct {

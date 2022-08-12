@@ -155,6 +155,9 @@ static CinderValueId lower_call(LowerContext *context, CinderExpr *expr) {
     CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CALL, expr->loc);
     inst->dst = expr->type != NULL && expr->type->kind == TYPE_VOID ? CINDER_INVALID_VALUE : new_value(context->function); inst->floating_result = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
     inst->type = aggregate_value(expr->type) ? cinder_type_pointer(context->function->types, expr->type) : expr->type;
+    CinderDecl *contract = direct ? expr->as.call.callee->function_decl : NULL;
+    if (contract != NULL && contract->canonical != NULL) contract = contract->canonical;
+    inst->noreturn_call = contract != NULL && contract->is_noreturn;
     inst->slot = result_slot;
     inst->source_type = cinder_type_function(context->function->types, expr->type, &actual);
     inst->callee_type = expr->as.call.callee->type;
@@ -888,13 +891,71 @@ bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDe
     return diags->errors == before;
 }
 
+static const CinderIRInst *condition_definition(const CinderIRFunction *function, CinderValueId value) {
+    if (value == CINDER_INVALID_VALUE) return NULL;
+    for (size_t b = 0U; b < function->blocks.len; ++b)
+        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+            const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+            if (inst->dst == value) return inst;
+        }
+    return NULL;
+}
+
+/* Diagnostic reachability only. Do not assume a returning function honors
+ * its contract when deciding whether its own definition needs a warning. */
+static bool constant_condition(const CinderIRFunction *function, CinderValueId value, bool *truth, unsigned depth) {
+    if (depth >= 32U) return false;
+    const CinderIRInst *inst = condition_definition(function, value);
+    if (inst == NULL) return false;
+    if (inst->op == IR_CONST) { *truth = inst->integer != 0; return true; }
+    if (inst->op == IR_FCONST) { *truth = inst->floating != 0.0; return true; }
+    if (inst->op == IR_COPY || (inst->op == IR_CONVERT && inst->type->kind == TYPE_BOOL)) return constant_condition(function, inst->left, truth, depth + 1U);
+    bool equality = inst->op == IR_CMP_EQ || inst->op == IR_FCMP_EQ;
+    if (equality || inst->op == IR_CMP_NE || inst->op == IR_FCMP_NE) {
+        const CinderIRInst *zero = condition_definition(function, inst->right);
+        if (zero == NULL || !((zero->op == IR_CONST && zero->integer == 0) || (zero->op == IR_FCONST && zero->floating == 0.0))) return false;
+        if (!constant_condition(function, inst->left, truth, depth + 1U)) return false;
+        if (equality) *truth = !*truth;
+        return true;
+    }
+    return false;
+}
+
+static bool function_can_return(const CinderIRFunction *function) {
+    size_t count = function->blocks.len;
+    if (count == 0U) return false;
+    bool *seen = cinder_alloc(count * sizeof(*seen)); memset(seen, 0, count * sizeof(*seen));
+    CinderBlockId *work = cinder_alloc(count * sizeof(*work)); size_t pending = 1U;
+    work[0] = 0U; seen[0] = true; bool can_return = false;
+    while (pending > 0U && !can_return) {
+        const CinderIRBlock *block = &function->blocks.data[work[--pending]];
+        bool ends = false;
+        for (size_t i = 0U; i < block->instructions.len; ++i) if (block->instructions.data[i].noreturn_call) { ends = true; break; }
+        if (ends) continue;
+        const CinderTerminator *term = &block->terminator;
+        if (term->kind == TERM_RETURN) { can_return = true; break; }
+        CinderBlockId targets[2]; size_t target_count = 0U;
+        if (term->kind == TERM_JUMP) targets[target_count++] = term->target;
+        else if (term->kind == TERM_BRANCH) {
+            bool truth;
+            if (constant_condition(function, term->condition, &truth, 0U)) targets[target_count++] = truth ? term->yes : term->no;
+            else { targets[target_count++] = term->yes; targets[target_count++] = term->no; }
+        }
+        for (size_t t = 0U; t < target_count; ++t) {
+            CinderBlockId id = targets[t];
+            if (id < count && !seen[id]) { seen[id] = true; work[pending++] = id; }
+        }
+    }
+    free(seen); free(work); return can_return;
+}
+
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
     for (size_t i = 0U; i < ast->static_literals.len; ++i) (void)cinder_lower_static_object(module, ast, ast->static_literals.data[i], diags);
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         CinderDecl *decl = ast->declarations.data[i];
         if (decl->kind == DECL_VAR) { if (decl->canonical == decl) lower_global_decl(module, ast, decl, diags); continue; }
         if (decl->kind != DECL_FUNCTION || !decl->is_definition) continue;
-        CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.ast = ast; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static;
+        CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.ast = ast; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static; function.is_noreturn = decl->canonical != NULL ? decl->canonical->is_noreturn : decl->is_noreturn;
         for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; cinder_vec_push((CinderVec *)&function.params, &param); }
         CinderIRBlock entry = make_block(&function, "entry"); cinder_vec_push((CinderVec *)&function.blocks, &entry);
         LowerContext context; memset(&context, 0, sizeof(context)); context.function = &function; context.module = module; context.diags = diags; context.current = 0U; context.locals.data = NULL; context.locals.len = 0U; context.locals.cap = 0U; context.break_blocks.data = NULL; context.break_blocks.len = 0U; context.break_blocks.cap = 0U; context.continue_blocks.data = NULL; context.continue_blocks.len = 0U; context.continue_blocks.cap = 0U;
@@ -903,18 +964,19 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
         lower_stmt(&context, decl->body);
         if (block_at(&function, context.current)->terminator.kind == TERM_UNREACHABLE) {
             CinderValueId returned = CINDER_INVALID_VALUE;
-            if (aggregate_value(function.type->return_type)) {
+            if (!function.is_noreturn && aggregate_value(function.type->return_type)) {
                 int slot = new_local(&context, function.type->return_type);
                 CinderIRInst *address = add_inst_ptr(&function, context.current, IR_LOCAL_ADDRESS, decl->loc);
                 address->slot = slot; address->type = cinder_type_pointer(function.types, function.type->return_type); address->dst = new_value(&function);
                 CinderValueId source = address->dst;
                 CinderIRInst *copy = add_inst_ptr(&function, context.current, IR_AGG_RETURN, decl->loc); copy->left = source; copy->type = function.type->return_type;
-            } else if (function.type->return_type->kind != TYPE_VOID) {
+            } else if (!function.is_noreturn && function.type->return_type->kind != TYPE_VOID) {
                 CinderIRInst *value = add_inst_ptr(&function, context.current, strcmp(function.name, "main") == 0 ? IR_CONST : IR_UNDEF, decl->loc);
                 value->type = function.type->return_type; value->dst = new_value(&function); returned = value->dst;
             }
             CinderIRBlock *block = block_at(&function, context.current); block->terminator.kind = TERM_RETURN; block->terminator.value = returned;
         }
+        if (function.is_noreturn && function_can_return(&function)) cinder_diag(diags, CINDER_WARNING, decl->loc, "function '%s' declared _Noreturn appears capable of returning", decl->name);
         free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.expression_temporaries.data);
         cinder_vec_push((CinderVec *)&module->functions, &function);
     }
@@ -929,7 +991,7 @@ const char *cinder_ir_op_name(CinderIROp op) {
 void cinder_dump_ir(const CinderIRModule *module, FILE *out) {
     for (size_t g = 0U; g < module->globals.len; ++g) fprintf(out, "global %s : %s%s\n", module->globals.data[g].name, cinder_type_name(module->globals.data[g].type), module->globals.data[g].bytes != NULL ? " string" : "");
     for (size_t f = 0U; f < module->functions.len; ++f) {
-        const CinderIRFunction *function = &module->functions.data[f]; fprintf(out, "function %s() -> %s {\n", function->name, cinder_type_name(function->type->return_type));
+        const CinderIRFunction *function = &module->functions.data[f]; fprintf(out, "function %s() -> %s {\n", function->name, cinder_type_name(function->type->return_type)); if (function->is_noreturn) fputs("    contract _Noreturn\n", out);
         for (size_t b = 0U; b < function->blocks.len; ++b) {
             const CinderIRBlock *block = &function->blocks.data[b]; fprintf(out, "  block %u %s:\n", block->id, block->name);
             for (size_t i = 0U; i < block->instructions.len; ++i) { const CinderIRInst *inst = &block->instructions.data[i]; fprintf(out, "    "); if (inst->dst != CINDER_INVALID_VALUE) fprintf(out, "%%v%u = ", inst->dst); fprintf(out, "%s", cinder_ir_op_name(inst->op)); if (inst->op == IR_CONST) fprintf(out, " %" PRId64, inst->integer); else if (inst->op == IR_GLOBAL_LOAD || inst->op == IR_GLOBAL_STORE) fprintf(out, " %s", inst->callee); else if (inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_ARG || inst->op == IR_FARG) fprintf(out, " slot=%d", inst->slot); else if (inst->op == IR_PHI) { fputs(" <", out); for (size_t a = 0U; a < inst->args.len; ++a) fprintf(out, "block %u:%%v%u%s", inst->phi_blocks.data[a], inst->args.data[a], a + 1U == inst->args.len ? "" : ", "); fputc('>', out); } else if (inst->op == IR_CALL) { if (inst->callee != NULL) fprintf(out, " %s(", inst->callee); else fprintf(out, " %%v%u(", inst->left); for (size_t a = 0U; a < inst->args.len; ++a) fprintf(out, "%%v%u%s", inst->args.data[a], a + 1U == inst->args.len ? "" : ", "); fputc(')', out); } else if (inst->left != CINDER_INVALID_VALUE) { fprintf(out, " %%v%u", inst->left); if (inst->right != CINDER_INVALID_VALUE) fprintf(out, ", %%v%u", inst->right); } fputc('\n', out); }

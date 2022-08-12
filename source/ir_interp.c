@@ -123,7 +123,7 @@ static bool eval_float(const CinderIRInst *inst, double left, double right, doub
 }
 
 const char *cinder_interp_class_name(CinderInterpClass classification) {
-    static const char *names[] = {"defined", "signed_overflow", "division_zero", "invalid_shift", "uninitialized", "conversion_range", "unsupported", "resource_limit", "malformed", "pointer_bounds", "object_lifetime", "invalid_access", "readonly"};
+    static const char *names[] = {"defined", "signed_overflow", "division_zero", "invalid_shift", "uninitialized", "conversion_range", "unsupported", "resource_limit", "malformed", "pointer_bounds", "object_lifetime", "invalid_access", "readonly", "noreturn_return"};
     return (unsigned)classification < CINDER_ARRAY_LEN(names) ? names[classification] : "invalid_classification";
 }
 
@@ -357,6 +357,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     bool called = ready && interpret_function(context, callee, arguments, inst->args.len, &result, aggregate ? &destination : NULL, inst->source_type);
                     free(arguments);
                     if (!called) goto done;
+                    if (inst->noreturn_call) { cinder_interp_fail(context, INTERP_NORETURN_RETURN, inst->loc, "undefined return from a function declared _Noreturn"); goto done; }
                     break;
                 }
                 default:
@@ -378,6 +379,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
         const CinderTerminator *term = &block->terminator;
         if (!tick(context, term->loc)) goto done;
         if (term->kind == TERM_RETURN) {
+            if (function->is_noreturn) { cinder_interp_fail(context, INTERP_NORETURN_RETURN, term->loc, "undefined return from a function declared _Noreturn"); goto done; }
             if (term->value != CINDER_INVALID_VALUE) {
                 if (!require_defined(context, values, term->value, term->loc)) goto done;
                 *returned = values[term->value];

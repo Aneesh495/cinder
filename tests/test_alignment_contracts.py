@@ -53,7 +53,7 @@ for label, column, value in (('aggregate-alignment', 8, '8'), ('aggregate-extra-
     changed = lines.copy()
     words = changed[index].split(); words[column] = value; changed[index] = ' '.join(words)
     mutations.append((label, '\n'.join(changed)+'\n'))
-mutations.append(('old-schema', seeds['local_scalar'].replace('cinder-ir 3', 'cinder-ir 2', 1)))
+mutations.append(('old-schema', seeds['local_scalar'].replace('cinder-ir 4', 'cinder-ir 2', 1)))
 for label, content in mutations:
     fixture = root / (label+'.invalid.cir'); fixture.write_text(content)
     reject(irtool, fixture, label)

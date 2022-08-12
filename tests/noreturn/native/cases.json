@@ -1,0 +1,26 @@
+[
+  {
+    "source": "libc_exit.c",
+    "exit": 24
+  },
+  {
+    "source": "delegated_exit.c",
+    "exit": 31
+  },
+  {
+    "source": "callback_exit.c",
+    "exit": 42
+  },
+  {
+    "source": "generic_exit.c",
+    "exit": 17
+  },
+  {
+    "source": "variadic_exit.c",
+    "exit": 23
+  },
+  {
+    "source": "block_exit.c",
+    "exit": 9
+  }
+]

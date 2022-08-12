@@ -314,5 +314,49 @@
   {
     "source": "compound_loop_expired.undefined.c",
     "classification": 10
+  },
+  {
+    "source": "noreturn_void_return.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_integer_return.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_float_return.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_aggregate_return.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_void_fallthrough.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_integer_fallthrough.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_aggregate_fallthrough.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_late_redeclaration.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_indirect_return.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_block_declaration.undefined.c",
+    "classification": 13
+  },
+  {
+    "source": "noreturn_conditional_return.undefined.c",
+    "classification": 13
   }
 ]
