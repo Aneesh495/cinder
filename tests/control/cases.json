@@ -2986,5 +2986,193 @@
   {
     "source": "../noreturn/block_external_identity.c",
     "exit": 0
+  },
+  {
+    "source": "../block_storage/counter.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/initialized.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/recursive.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/independent_functions.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/nested_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/automatic_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/array.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/unknown_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/aggregate.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/aggregate_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/const_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/string.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/pointer_to_static.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/address_escape.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/callback.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/floating.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/aligned.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_defined.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_repeated.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_internal.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_nested.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_later.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_initializer_enum.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_complete_then_unknown.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_unknown_then_complete.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_auto_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_static_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_other_function.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_internal_repeated.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_aligned.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_loop.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_uninitialized_aggregate.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_self_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_member_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_nested_initializer.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_comma_declarations.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_readonly_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_generic_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_object_distinct_file.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_literal_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_aggregate_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/static_boolean_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_function_internal.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_function_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "../block_storage/extern_void_unused.c",
+    "exit": 0
   }
 ]

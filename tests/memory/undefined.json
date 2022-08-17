@@ -358,5 +358,13 @@
   {
     "source": "noreturn_conditional_return.undefined.c",
     "classification": 13
+  },
+  {
+    "source": "block_static_readonly.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "block_static_readonly_array.undefined.c",
+    "classification": 12
   }
 ]

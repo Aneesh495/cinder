@@ -75,9 +75,11 @@ static int find_local(const LowerContext *context, const char *name) {
     return -1;
 }
 
-static CinderDecl *find_global_decl(const CinderIRFunction *function, const char *name) {
-    for (size_t i = 0U; i < function->ast->declarations.len; ++i) { CinderDecl *decl = function->ast->declarations.data[i]; if (decl->kind == DECL_VAR && strcmp(decl->name, name) == 0) return decl; }
-    return NULL;
+static const char *object_symbol(const CinderExpr *expr) {
+    CinderDecl *decl = expr->resolved_decl;
+    if (decl == NULL || (decl->kind == DECL_VAR && !decl->is_static && !decl->is_extern && decl->canonical == NULL)) return NULL;
+    if (decl->canonical != NULL) decl = decl->canonical;
+    return decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
 }
 
 static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr);
@@ -155,7 +157,7 @@ static CinderValueId lower_call(LowerContext *context, CinderExpr *expr) {
     CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CALL, expr->loc);
     inst->dst = expr->type != NULL && expr->type->kind == TYPE_VOID ? CINDER_INVALID_VALUE : new_value(context->function); inst->floating_result = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
     inst->type = aggregate_value(expr->type) ? cinder_type_pointer(context->function->types, expr->type) : expr->type;
-    CinderDecl *contract = direct ? expr->as.call.callee->function_decl : NULL;
+    CinderDecl *contract = direct ? expr->as.call.callee->resolved_decl : NULL;
     if (contract != NULL && contract->canonical != NULL) contract = contract->canonical;
     inst->noreturn_call = contract != NULL && contract->is_noreturn;
     inst->slot = result_slot;
@@ -289,10 +291,11 @@ static CinderValueId lower_address(LowerContext *context, CinderExpr *target) {
         address->callee = cinder_strndup(name, strlen(name)); return address->dst;
     }
     if (target->kind == EX_NAME) {
-        int slot = find_local(context, target->as.name);
+        const char *symbol = object_symbol(target);
+        int slot = symbol == NULL ? find_local(context, target->as.name) : -1;
         CinderIRInst *address = add_inst_ptr(context->function, context->current, target->type->kind == TYPE_FUNCTION ? IR_FUNCTION_ADDRESS : slot >= 0 ? IR_LOCAL_ADDRESS : IR_GLOBAL_ADDRESS, target->loc);
         address->dst = new_value(context->function); address->type = cinder_type_pointer(context->function->types, target->type); address->slot = slot;
-        if (slot < 0) address->callee = cinder_strndup(target->as.name, strlen(target->as.name));
+        if (slot < 0) { if (symbol == NULL) symbol = target->as.name; address->callee = cinder_strndup(symbol, strlen(symbol)); }
         return address->dst;
     }
     if (target->kind == EX_UNARY && target->as.unary.op == '*') return lower_expr(context, target->as.unary.value);
@@ -323,11 +326,12 @@ static void store_lvalue(LowerContext *context, CinderExpr *target, CinderValueI
         CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_MEMORY_STORE, loc);
         store->left = address; store->right = value; store->type = target->type; return;
     }
-    int slot = find_local(context, target->as.name);
+    const char *symbol = object_symbol(target);
+    int slot = symbol == NULL ? find_local(context, target->as.name) : -1;
     if (slot >= 0) store_slot(context, slot, value, loc);
-    else if (find_global_decl(context->function, target->as.name) != NULL) {
+    else if (symbol != NULL) {
         CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_GLOBAL_STORE, loc);
-        store->left = value; store->type = target->type; store->callee = cinder_strndup(target->as.name, strlen(target->as.name));
+        store->left = value; store->type = target->type; store->callee = cinder_strndup(symbol, strlen(symbol));
     } else cinder_diag(context->diags, CINDER_ERROR, loc, "unknown assignment storage");
 }
 
@@ -483,13 +487,14 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
     }
     if (expr->kind == EX_INDEX || expr->kind == EX_MEMBER) return load_address(context, lower_address(context, expr), expr->type, expr->loc);
     if (expr->kind == EX_NAME) {
-        int slot = find_local(context, expr->as.name);
+        const char *symbol = object_symbol(expr);
+        int slot = symbol == NULL ? find_local(context, expr->as.name) : -1;
         if (slot >= 0) {
             CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_LOCAL_LOAD, expr->loc);
             inst->dst = new_value(context->function); inst->slot = slot; return inst->dst;
         }
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_GLOBAL_LOAD, expr->loc);
-        inst->dst = new_value(context->function); inst->callee = cinder_strndup(expr->as.name, strlen(expr->as.name)); return inst->dst;
+        inst->dst = new_value(context->function); if (symbol == NULL) symbol = expr->as.name; inst->callee = cinder_strndup(symbol, strlen(symbol)); return inst->dst;
     }
     if (expr->kind == EX_VA_ARG) {
         return lower_va_arg(context, expr);
@@ -604,7 +609,7 @@ static void ensure_block_jump(LowerContext *context, CinderBlockId target, Cinde
 
 static void begin_declarations(LowerContext *context, CinderDecl *first) {
     for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
-        if (decl->kind != DECL_VAR || decl->name == NULL) continue;
+        if (decl->kind != DECL_VAR || decl->name == NULL || decl->is_static || decl->is_extern) continue;
         decl->lowering_slot = new_local(context, decl->type);
         context->function->local_alignments.data[decl->lowering_slot] = decl->alignment;
         CinderIRInst *begin = add_inst_ptr(context->function, context->current, IR_LOCAL_BEGIN, decl->loc); begin->slot = decl->lowering_slot; begin->type = decl->type;
@@ -678,7 +683,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
         case ST_EXPR: (void)lower_full_expression(context, stmt->as.expr, false, stmt->loc); break;
         case ST_DECL: {
             for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) {
-                if (decl->kind != DECL_VAR || decl->name == NULL) continue;
+                if (decl->kind != DECL_VAR || decl->name == NULL || decl->is_static || decl->is_extern) continue;
                 if (decl->lowering_slot < 0) begin_declarations(context, decl);
                 int slot = decl->lowering_slot;
                 size_t expression_mark = context->expression_temporaries.len;
@@ -847,7 +852,8 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     if (canonical->emission != NULL) decl = canonical->emission;
     CinderIRGlobal global;
     memset(&global, 0, sizeof(global));
-    global.name = cinder_strndup(decl->name, strlen(decl->name));
+    const char *symbol = decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
+    global.name = cinder_strndup(symbol, strlen(symbol));
     global.type = canonical->type;
     global.alignment = canonical->alignment;
     global.read_only = (global.type->qualifiers & 1U) != 0U;
@@ -856,6 +862,8 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     global.is_extern = !canonical->has_definition && !canonical->tentative;
     global.loc = decl->loc;
     bool numeric = (global.type->kind >= TYPE_BOOL && global.type->kind <= TYPE_DOUBLE) || global.type->kind == TYPE_ENUM;
+    CinderExpr *boolean = decl->initializer;
+    if (boolean != NULL && boolean->kind == EX_CAST && boolean->type->kind == TYPE_BOOL && global.type->kind == TYPE_BOOL) boolean = boolean->as.cast.value;
     if (decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST) lower_global_plan(module, ast, decl, &global, diags);
     else if (decl->initializer != NULL && numeric && cinder_constant_scalar(ast, decl->initializer, global.type, &global.integer, &global.floating)) global.has_initializer = true;
     else if (decl->initializer != NULL && global.type->kind == TYPE_POINTER) {
@@ -867,9 +875,9 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
             global.has_initializer = true;
         }
     }
-    else if (decl->initializer != NULL && global.type->kind == TYPE_BOOL && decl->initializer->type->kind == TYPE_POINTER) {
+    else if (boolean != NULL && global.type->kind == TYPE_BOOL && boolean->type->kind == TYPE_POINTER) {
         CinderIRAddress address;
-        if (!cinder_static_address(module, ast, decl->initializer, &address, diags) || address.addend < 0 || (uint64_t)address.addend < address.domain_begin || (uint64_t)address.addend > address.domain_end) cinder_diag(diags, CINDER_ERROR, decl->loc, "boolean initializer for '%s' is not a supported constant", decl->name);
+        if (!cinder_static_address(module, ast, boolean, &address, diags) || address.addend < 0 || (uint64_t)address.addend < address.domain_begin || (uint64_t)address.addend > address.domain_end) cinder_diag(diags, CINDER_ERROR, decl->loc, "boolean initializer for '%s' is not a supported constant", decl->name);
         else { global.integer = address.symbol != NULL; global.has_initializer = true; }
         free(address.symbol);
     }
@@ -885,7 +893,8 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
 }
 
 bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags) {
-    for (size_t g = 0U; g < module->globals.len; ++g) if (strcmp(module->globals.data[g].name, decl->name) == 0) return true;
+    const char *symbol = decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
+    for (size_t g = 0U; g < module->globals.len; ++g) if (strcmp(module->globals.data[g].name, symbol) == 0) return true;
     unsigned before = diags->errors;
     lower_global_decl(module, ast, decl, diags);
     return diags->errors == before;
@@ -951,6 +960,7 @@ static bool function_can_return(const CinderIRFunction *function) {
 
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
     for (size_t i = 0U; i < ast->static_literals.len; ++i) (void)cinder_lower_static_object(module, ast, ast->static_literals.data[i], diags);
+    for (size_t i = 0U; i < ast->stored_objects.len; ++i) (void)cinder_lower_static_object(module, ast, ast->stored_objects.data[i], diags);
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         CinderDecl *decl = ast->declarations.data[i];
         if (decl->kind == DECL_VAR) { if (decl->canonical == decl) lower_global_decl(module, ast, decl, diags); continue; }

@@ -659,4 +659,31 @@ The standalone alignment checker repair `1afe95b` passed the full hosted Linux
 workflow [37702523157](https://github.com/Aneesh495/cinder/actions/runs/37702523157),
 including both complete 512-signature aligned aggregate and variadic callback
 campaigns. Raw hosted artifacts are retained privately. The nonreturning
-function increment will receive its own hosted run after publication.
+function increment `cad854a` passed the full hosted Linux workflow
+[37704769941](https://github.com/Aneesh495/cinder/actions/runs/37704769941).
+
+
+## Block storage increment
+
+Block-scope static objects now use deterministic local ELF symbols and static
+initialization, retain values across calls and loop re-entry, and preserve
+requested alignment and read-only storage. Name expressions retain their
+resolved declaration into lowering. Compatible block extern declarations share
+translation-unit storage while visible source-point linkage and lexical
+shadowing determine the target. Incomplete and unused extern declarations
+remain real undefined symbols; missing interpreter storage is unsupported.
+
+GCC Release and Clang ASan/UBSan passed 47 authored reference/object/assembly
+programs, seven cross-unit contract profiles, and 229 source rejections.
+The final compiler passed all 244 defined native object/assembly executions in
+the Linux development VM. The sanitizer passed 92 memory UB classifications
+and 57 malformed memory contracts, 100,000 IR execution/round-trip comparisons,
+and 1,000 SSA cases. Two static read-only probes exercise UB solely in the
+independent interpreter. A converted static boolean initializer failure and an
+aligned extern definition failure are retained privately. The full CIR regression
+also caught an explicit pointer-cast initializer affected by boolean unwrapping;
+the narrowed conversion rule passed the complete initializer suite and a fresh
+244-execution native storage run. An unused extern
+void declaration initially mislabeled as invalid was checked against both
+references and the standard, then moved to the authored positive ledger.
+See `docs/BLOCK_STORAGE.md`. Full acceptance remains incomplete.
