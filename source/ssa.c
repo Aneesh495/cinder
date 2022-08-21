@@ -41,7 +41,7 @@ static void local_liveness(const CinderIRFunction *function, const CinderCFGAnal
             const CinderIRInst *inst = &block->instructions.data[i];
             if (inst->slot < 0 || (size_t)inst->slot != slot) continue;
             if (inst->op == IR_LOCAL_LOAD && !definitions[b]) uses[b] = true;
-            if ((inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) || inst->op == IR_LOCAL_BEGIN) definitions[b] = true;
+            if ((inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) || (inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_RESET)) definitions[b] = true;
         }
     }
     bool changed;
@@ -110,7 +110,7 @@ static void rename_slots(CinderIRFunction *function, const CinderCFGAnalysis *cf
                 CinderIRInst *inst = &block->instructions.data[i];
                 if (inst->slot < 0 || (size_t)inst->slot >= function->local_count || !eligible[inst->slot]) continue;
                 size_t slot = (size_t)inst->slot;
-                if (inst->op == IR_LOCAL_BEGIN) {
+                if (inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_RESET) {
                     RenameUndo change = {slot, current[slot]}; cinder_vec_push((CinderVec *)&undo, &change);
                     inst->op = IR_UNDEF; inst->dst = (CinderValueId)function->value_count++; inst->slot = -1;
                     current[slot] = inst->dst; continue;

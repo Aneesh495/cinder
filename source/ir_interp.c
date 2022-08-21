@@ -263,6 +263,11 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     if (locals[inst->slot] == 0U) goto done;
                     break;
                 case IR_LOCAL_END: cinder_interp_retire(context, locals[inst->slot]); break;
+                case IR_LOCAL_RESET: {
+                    if (locals[inst->slot] == 0U || !context->objects.data[locals[inst->slot] - 1U].alive) { cinder_interp_fail(context, INTERP_OBJECT_LIFETIME, inst->loc, "declaration resets an object outside its lifetime"); goto done; }
+                    InterpObject *object = &context->objects.data[locals[inst->slot] - 1U];
+                    memset(object->initialized, 0, object->size); object->pointers.len = 0U; object->readonly = false; break;
+                }
                 case IR_LOCAL_FREEZE: context->objects.data[locals[inst->slot] - 1U].readonly = true; break;
                 case IR_LOCAL_ADDRESS: result = cinder_interp_address(context, locals[inst->slot]); break;
                 case IR_OBJECT_COPY: case IR_OBJECT_INIT:

@@ -29,6 +29,7 @@ set(CINDER_SOURCES
   source/init_shape.c
   source/static_address.c
   source/sema.c
+  source/control.c
   source/ir.c
   source/ir_verify.c
   source/ir_text.c

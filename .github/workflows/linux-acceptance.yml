@@ -42,6 +42,8 @@ jobs:
         run: make test-noreturn
       - name: Block storage and cross-unit linkage
         run: make test-block-storage
+      - name: Labels, jumps, and object lifetimes
+        run: make test-goto
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -88,6 +90,8 @@ jobs:
             .agent-local/noreturn-contracts
             .agent-local/block_storage
             .agent-local/block-storage-contracts
+            .agent-local/goto
+            .agent-local/goto-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks

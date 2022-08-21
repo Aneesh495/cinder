@@ -15,7 +15,7 @@ static CinderToken *expect(CinderAst *ast, CinderTokenKind kind, const char *wha
 
 static void *node_alloc(CinderAst *ast, size_t size) { return cinder_arena_alloc(&ast->arena, size, _Alignof(max_align_t)); }
 static CinderExpr *new_expr(CinderAst *ast, CinderExprKind kind, CinderLoc loc) { CinderExpr *expr = node_alloc(ast, sizeof(*expr)); memset(expr, 0, sizeof(*expr)); expr->kind = kind; expr->loc = loc; expr->parse_index = ast->cursor; return expr; }
-static CinderStmt *new_stmt(CinderAst *ast, CinderStmtKind kind, CinderLoc loc) { CinderStmt *stmt = node_alloc(ast, sizeof(*stmt)); memset(stmt, 0, sizeof(*stmt)); stmt->kind = kind; stmt->loc = loc; return stmt; }
+static CinderStmt *new_stmt(CinderAst *ast, CinderStmtKind kind, CinderLoc loc) { CinderStmt *stmt = node_alloc(ast, sizeof(*stmt)); memset(stmt, 0, sizeof(*stmt)); stmt->kind = kind; stmt->loc = loc; stmt->control_scope = -1; return stmt; }
 static CinderDecl *new_decl(CinderAst *ast, CinderDeclKind kind, CinderLoc loc) { CinderDecl *decl = node_alloc(ast, sizeof(*decl)); memset(decl, 0, sizeof(*decl)); decl->kind = kind; decl->loc = loc; decl->parse_index = ast->cursor; decl->lowering_slot = -1; decl->params.data = NULL; decl->params.len = 0U; decl->params.cap = 0U; return decl; }
 
 static CinderParseBinding *binding_token(CinderAst *ast, const CinderToken *token, bool tag) {
@@ -786,8 +786,34 @@ static CinderDecl *parse_local_decl(CinderAst *ast) {
     return first;
 }
 
+static CinderStmt *parse_statement_impl(CinderAst *ast);
+
 static CinderStmt *parse_statement(CinderAst *ast) {
+    if (ast->statement_depth >= 512U) {
+        CinderLoc loc = peek(ast)->loc;
+        cinder_diag(ast->diags, CINDER_ERROR, loc, "statement nesting exceeds the profile limit");
+        while (!is(ast, ';') && !is(ast, '}') && !is(ast, TOK_EOF)) ++ast->cursor;
+        (void)take(ast, ';'); return new_stmt(ast, ST_EMPTY, loc);
+    }
+    ++ast->statement_depth; CinderStmt *stmt = parse_statement_impl(ast); --ast->statement_depth; return stmt;
+}
+
+static CinderStmt *parse_statement_impl(CinderAst *ast) {
     CinderToken *token = peek(ast);
+    if (token->kind == TOK_IDENTIFIER && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ':') {
+        CinderStmt *stmt = new_stmt(ast, ST_LABEL, token->loc);
+        stmt->as.label.name = cinder_arena_strndup(&ast->arena, token->text, token->length); ast->cursor += 2U;
+        if (ast->label_depth >= 128U) { cinder_diag(ast->diags, CINDER_ERROR, token->loc, "label nesting exceeds the profile limit"); return stmt; }
+        if (declaration_start(ast, peek(ast)) || is(ast, TOK_KW_STATIC_ASSERT) || is(ast, '}') || is(ast, TOK_EOF)) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "C17 label requires a statement");
+        if (!is(ast, '}') && !is(ast, TOK_EOF)) { ++ast->label_depth; stmt->as.label.body = parse_statement(ast); --ast->label_depth; }
+        return stmt;
+    }
+    if (take(ast, TOK_KW_GOTO)) {
+        CinderStmt *stmt = new_stmt(ast, ST_GOTO, token->loc);
+        CinderToken *name = expect(ast, TOK_IDENTIFIER, "label identifier");
+        if (name != NULL) stmt->as.jump.name = cinder_arena_strndup(&ast->arena, name->text, name->length);
+        (void)expect(ast, ';', "';'"); return stmt;
+    }
     if (is(ast, '{')) return parse_compound(ast);
     if (take(ast, ';')) return new_stmt(ast, ST_EMPTY, token->loc);
     if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); return new_stmt(ast, ST_EMPTY, token->loc); }
