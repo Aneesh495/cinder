@@ -1,0 +1,1 @@
+int pick(unsigned long x) { switch(x) { case 0x8000000000000000UL: return 4; case 0xffffffffffffffffUL: return 7; case 0x100000001UL: return 9; default: return 11; } } int main(void) { return pick(0x8000000000000000UL)!=4 || pick(~0UL)!=7 || pick(0x100000001UL)!=9 || pick(1UL)!=11; }

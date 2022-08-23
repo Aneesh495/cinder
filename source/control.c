@@ -8,12 +8,12 @@ void cinder_control_init(CinderControlMap *map) { memset(map, 0, sizeof(*map)); 
 
 void cinder_control_destroy(CinderControlMap *map) {
     for (size_t i = 0U; i < map->scopes.len; ++i) free(map->scopes.data[i].objects.data);
-    free(map->scopes.data); free(map->labels.data); free(map->jumps.data);
+    free(map->scopes.data); free(map->labels.data); free(map->jumps.data); free(map->cases.data);
     memset(map, 0, sizeof(*map));
 }
 
 static bool owns_scope(const CinderStmt *stmt) {
-    return stmt->kind == ST_BLOCK || stmt->kind == ST_IF || stmt->kind == ST_WHILE || stmt->kind == ST_DO || stmt->kind == ST_FOR || stmt->literal_objects.len != 0U;
+    return stmt->kind == ST_BLOCK || stmt->kind == ST_IF || stmt->kind == ST_SWITCH || stmt->kind == ST_WHILE || stmt->kind == ST_DO || stmt->kind == ST_FOR || stmt->literal_objects.len != 0U;
 }
 
 static void scope_object(CinderControlMap *map, int scope, CinderDecl *decl) {
@@ -37,6 +37,10 @@ static void visit(CinderControlMap *map, CinderStmt *stmt, int scope, unsigned d
             cinder_vec_push((CinderVec *)&map->labels, &stmt);
             visit(map, stmt->as.label.body, scope, depth + 1U, diags); break;
         case ST_GOTO: cinder_vec_push((CinderVec *)&map->jumps, &stmt); break;
+        case ST_CASE: case ST_DEFAULT:
+            cinder_vec_push((CinderVec *)&map->cases, &stmt);
+            visit(map, stmt->as.case_label.body, scope, depth + 1U, diags); break;
+        case ST_SWITCH: visit(map, stmt->as.selection.body, scope, depth + 1U, diags); break;
         case ST_DECL:
             for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) scope_object(map, scope, decl);
             break;

@@ -391,6 +391,9 @@ typedef enum {
     ST_DECL,
     ST_LABEL,
     ST_GOTO,
+    ST_SWITCH,
+    ST_CASE,
+    ST_DEFAULT,
 } CinderStmtKind;
 
 typedef enum {
@@ -444,6 +447,8 @@ struct CinderStmt {
         CinderDecl *decl;
         struct { char *name; CinderStmt *body; uint32_t block; } label;
         struct { char *name; CinderStmt *target; } jump;
+        struct { CinderExpr *control; CinderStmt *body; CINDER_VEC_TYPE(CinderStmt *) cases; CinderStmt *default_label; } selection;
+        struct { CinderExpr *expression; int64_t value; CinderStmt *body; uint32_t block; } case_label;
     } as;
 };
 
@@ -533,6 +538,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderControlScope) scopes;
     CINDER_VEC_TYPE(CinderStmt *) labels;
     CINDER_VEC_TYPE(CinderStmt *) jumps;
+    CINDER_VEC_TYPE(CinderStmt *) cases;
 } CinderControlMap;
 
 void cinder_control_init(CinderControlMap *map);

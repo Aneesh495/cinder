@@ -44,6 +44,8 @@ jobs:
         run: make test-block-storage
       - name: Labels, jumps, and object lifetimes
         run: make test-goto
+      - name: Switch dispatch and nested control scopes
+        run: make test-switch
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -92,6 +94,8 @@ jobs:
             .agent-local/block-storage-contracts
             .agent-local/goto
             .agent-local/goto-contracts
+            .agent-local/switch
+            .agent-local/switch-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks

@@ -97,6 +97,9 @@ static void free_stmt(CinderStmt *stmt) {
             break;
         case ST_LABEL: free_stmt(stmt->as.label.body); break;
         case ST_GOTO: break;
+        case ST_SWITCH: free_expr(stmt->as.selection.control); free_stmt(stmt->as.selection.body); free(stmt->as.selection.cases.data); break;
+        case ST_CASE: free_expr(stmt->as.case_label.expression); free_stmt(stmt->as.case_label.body); break;
+        case ST_DEFAULT: free_stmt(stmt->as.case_label.body); break;
         case ST_EMPTY:
         case ST_BREAK:
         case ST_CONTINUE:
@@ -197,6 +200,9 @@ static void dump_stmt(const CinderStmt *stmt, FILE *out, unsigned depth) {
         case ST_CONTINUE: fputs("continue\n", out); break;
         case ST_LABEL: fprintf(out, "label %s\n", stmt->as.label.name); dump_stmt(stmt->as.label.body, out, depth + 1U); break;
         case ST_GOTO: fprintf(out, "goto %s\n", stmt->as.jump.name == NULL ? "<missing>" : stmt->as.jump.name); break;
+        case ST_SWITCH: fputs("switch\n", out); dump_expr(stmt->as.selection.control, out, depth + 1U); dump_stmt(stmt->as.selection.body, out, depth + 1U); break;
+        case ST_CASE: fprintf(out, "case %lld\n", (long long)stmt->as.case_label.value); dump_stmt(stmt->as.case_label.body, out, depth + 1U); break;
+        case ST_DEFAULT: fputs("default\n", out); dump_stmt(stmt->as.case_label.body, out, depth + 1U); break;
         case ST_DECL:
             for (const CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { fprintf(out, "decl %s : %s\n", decl->name, cinder_type_name(decl->type)); dump_expr(decl->initializer, out, depth + 1U); }
             break;

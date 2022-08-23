@@ -306,7 +306,13 @@ static void sema_local_decl(CinderSema *sema, CinderDecl *first, CinderScope *sc
     }
 }
 
-static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, CinderType *return_type, unsigned loop_depth) {
+static int compare_cases(const void *left, const void *right) {
+    const CinderStmt *a = *(CinderStmt *const *)left, *b = *(CinderStmt *const *)right;
+    uint64_t av = (uint64_t)a->as.case_label.value, bv = (uint64_t)b->as.case_label.value;
+    return av < bv ? -1 : av > bv;
+}
+
+static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, CinderType *return_type, unsigned loop_depth, CinderStmt *enclosing_switch) {
     if (stmt == NULL) return;
     switch (stmt->kind) {
         case ST_EXPR: if (stmt->as.expr != NULL) (void)sema_value(sema, &stmt->as.expr, scope); break;
@@ -321,7 +327,7 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
                 CinderStmt *item = stmt->as.block.items.data[i];
                 if (item->kind == ST_DECL) {
                     sema_local_decl(sema, item->as.decl, &child, stmt == sema->function_body ? scope : NULL);
-                } else sema_stmt(sema, item, &child, return_type, loop_depth);
+                } else sema_stmt(sema, item, &child, return_type, loop_depth, enclosing_switch);
             }
             for (size_t i = 0U; i < child.symbols.len; ++i) free(child.symbols.data[i].name);
             free(child.symbols.data);
@@ -329,33 +335,64 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
         }
         case ST_IF:
             if (!scalar_type(sema_value(sema, &stmt->as.if_stmt.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "if condition must be scalar");
-            sema_stmt(sema, stmt->as.if_stmt.then_branch, scope, return_type, loop_depth); sema_stmt(sema, stmt->as.if_stmt.else_branch, scope, return_type, loop_depth); break;
+            sema_stmt(sema, stmt->as.if_stmt.then_branch, scope, return_type, loop_depth, enclosing_switch); sema_stmt(sema, stmt->as.if_stmt.else_branch, scope, return_type, loop_depth, enclosing_switch); break;
         case ST_WHILE:
         case ST_DO:
             if (!scalar_type(sema_value(sema, &stmt->as.loop.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "loop condition must be scalar");
-            sema_stmt(sema, stmt->as.loop.body, scope, return_type, loop_depth + 1U); break;
+            sema_stmt(sema, stmt->as.loop.body, scope, return_type, loop_depth + 1U, enclosing_switch); break;
         case ST_FOR: {
             CinderScope child = {{NULL, 0U, 0U}, scope};
             if (stmt->as.for_stmt.init != NULL) {
                 if (stmt->as.for_stmt.init->kind == ST_DECL) {
                     for (CinderDecl *decl = stmt->as.for_stmt.init->as.decl; decl != NULL; decl = decl->next) if (decl->kind != DECL_VAR || decl->is_static || decl->is_extern) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "for initializer requires an automatic object declaration");
                     sema_local_decl(sema, stmt->as.for_stmt.init->as.decl, &child, NULL);
-                } else sema_stmt(sema, stmt->as.for_stmt.init, &child, return_type, loop_depth);
+                } else sema_stmt(sema, stmt->as.for_stmt.init, &child, return_type, loop_depth, enclosing_switch);
             }
             if (stmt->as.for_stmt.condition != NULL && !scalar_type(sema_value(sema, &stmt->as.for_stmt.condition, &child))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "for condition must be scalar");
             if (stmt->as.for_stmt.step != NULL) (void)sema_expr(sema, stmt->as.for_stmt.step, &child);
-            sema_stmt(sema, stmt->as.for_stmt.body, &child, return_type, loop_depth + 1U);
+            sema_stmt(sema, stmt->as.for_stmt.body, &child, return_type, loop_depth + 1U, enclosing_switch);
             for (size_t i = 0U; i < child.symbols.len; ++i) free(child.symbols.data[i].name);
             free(child.symbols.data);
             break;
         }
+        case ST_SWITCH: {
+            CinderType *type = sema_value(sema, &stmt->as.selection.control, scope);
+            if (!integer_type(type)) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "switch condition must have integer type");
+            else stmt->as.selection.control = convert_expr(sema, stmt->as.selection.control, cinder_integer_promote(sema->types, type));
+            sema_stmt(sema, stmt->as.selection.body, scope, return_type, loop_depth, stmt);
+            if (stmt->as.selection.cases.len > 1U) qsort(stmt->as.selection.cases.data, stmt->as.selection.cases.len, sizeof(*stmt->as.selection.cases.data), compare_cases);
+            for (size_t i = 1U; i < stmt->as.selection.cases.len; ++i) if (stmt->as.selection.cases.data[i - 1U]->as.case_label.value == stmt->as.selection.cases.data[i]->as.case_label.value) cinder_diag(sema->diags, CINDER_ERROR, stmt->as.selection.cases.data[i]->loc, "duplicate case value after conversion to switch type");
+            break;
+        }
+        case ST_CASE:
+            (void)sema_expr(sema, stmt->as.case_label.expression, scope);
+            if (enclosing_switch == NULL) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "case label requires an enclosing switch");
+            else {
+                CinderType *type = enclosing_switch->as.selection.control->type;
+                if (integer_type(type)) {
+                    stmt->as.case_label.expression = convert_expr(sema, stmt->as.case_label.expression, type);
+                    int64_t value; CinderType *constant_type;
+                    if (!cinder_constant_integer(sema->ast, stmt->as.case_label.expression, &value, &constant_type)) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "case label requires an integer constant expression");
+                    else stmt->as.case_label.value = value;
+                }
+                if (enclosing_switch->as.selection.cases.len >= 4096U) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "switch case table exceeds the profile limit");
+                else cinder_vec_push((CinderVec *)&enclosing_switch->as.selection.cases, &stmt);
+            }
+            sema_stmt(sema, stmt->as.case_label.body, scope, return_type, loop_depth, enclosing_switch); break;
+        case ST_DEFAULT:
+            if (enclosing_switch == NULL) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "default label requires an enclosing switch");
+            else if (enclosing_switch->as.selection.default_label != NULL) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "duplicate default label in switch");
+            else enclosing_switch->as.selection.default_label = stmt;
+            sema_stmt(sema, stmt->as.case_label.body, scope, return_type, loop_depth, enclosing_switch); break;
         case ST_BREAK:
+            if (loop_depth == 0U && enclosing_switch == NULL) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "break requires an enclosing loop or switch");
+            break;
         case ST_CONTINUE:
-            if (loop_depth == 0U) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "break/continue is only valid inside a loop");
+            if (loop_depth == 0U) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "continue requires an enclosing loop");
             break;
         case ST_EMPTY:
         case ST_DECL: break;
-        case ST_LABEL: sema_stmt(sema, stmt->as.label.body, scope, return_type, loop_depth); break;
+        case ST_LABEL: sema_stmt(sema, stmt->as.label.body, scope, return_type, loop_depth, enclosing_switch); break;
         case ST_GOTO: break;
     }
 }
@@ -708,7 +745,7 @@ int cinder_sema_run(CinderSema *sema) {
             for (size_t p = 0U; p < decl->params.len; ++p) scope_add(&scope, decl->params.data[p]->name, decl->params.data[p]->type, decl->params.data[p], false);
             sema->function_body = decl->body;
             sema->function = decl;
-            sema_stmt(sema, decl->body, &scope, decl->type->return_type, 0U);
+            sema_stmt(sema, decl->body, &scope, decl->type->return_type, 0U, NULL);
             CinderControlMap control; cinder_control_init(&control);
             (void)cinder_control_build(&control, decl->body, sema->diags); cinder_control_destroy(&control);
             sema->function_body = NULL;

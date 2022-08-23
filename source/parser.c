@@ -741,8 +741,12 @@ static CinderStmt *parse_compound(CinderAst *ast) {
     return stmt;
 }
 
+static bool identifier_label(CinderAst *ast) {
+    return is(ast, TOK_IDENTIFIER) && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ':';
+}
+
 static CinderStmt *parse_associated(CinderAst *ast) {
-    if (declaration_start(ast, peek(ast)) || is(ast, TOK_KW_STATIC_ASSERT)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "associated substatement cannot be a declaration");
+    if ((declaration_start(ast, peek(ast)) && !identifier_label(ast)) || is(ast, TOK_KW_STATIC_ASSERT)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "associated substatement cannot be a declaration");
     if (is(ast, '{')) return parse_compound(ast);
     CinderStmt *scope = new_stmt(ast, ST_BLOCK, peek(ast)->loc);
     CinderStmt *outer = ast->literal_scope; ast->literal_scope = scope;
@@ -800,11 +804,26 @@ static CinderStmt *parse_statement(CinderAst *ast) {
 
 static CinderStmt *parse_statement_impl(CinderAst *ast) {
     CinderToken *token = peek(ast);
-    if (token->kind == TOK_IDENTIFIER && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ':') {
+    if (is(ast, TOK_KW_CASE) || is(ast, TOK_KW_DEFAULT)) {
+        bool is_case = take(ast, TOK_KW_CASE); if (!is_case) ++ast->cursor;
+        CinderStmt *stmt = new_stmt(ast, is_case ? ST_CASE : ST_DEFAULT, token->loc);
+        if (is_case) {
+            CinderExpr *expr = parse_conditional(ast); CinderType *type = NULL; int64_t value = 0;
+            stmt->as.case_label.expression = expr;
+            if (!cinder_constant_integer(ast, expr, &value, &type)) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "case label requires an integer constant expression");
+            stmt->as.case_label.value = value;
+        }
+        (void)expect(ast, ':', "':'");
+        if (ast->label_depth >= 128U) { cinder_diag(ast->diags, CINDER_ERROR, token->loc, "label nesting exceeds the profile limit"); return stmt; }
+        if ((declaration_start(ast, peek(ast)) && !identifier_label(ast)) || is(ast, TOK_KW_STATIC_ASSERT) || is(ast, '}') || is(ast, TOK_EOF)) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "C17 label requires a statement");
+        if (!is(ast, '}') && !is(ast, TOK_EOF)) { ++ast->label_depth; stmt->as.case_label.body = parse_statement(ast); --ast->label_depth; }
+        return stmt;
+    }
+    if (identifier_label(ast)) {
         CinderStmt *stmt = new_stmt(ast, ST_LABEL, token->loc);
         stmt->as.label.name = cinder_arena_strndup(&ast->arena, token->text, token->length); ast->cursor += 2U;
         if (ast->label_depth >= 128U) { cinder_diag(ast->diags, CINDER_ERROR, token->loc, "label nesting exceeds the profile limit"); return stmt; }
-        if (declaration_start(ast, peek(ast)) || is(ast, TOK_KW_STATIC_ASSERT) || is(ast, '}') || is(ast, TOK_EOF)) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "C17 label requires a statement");
+        if ((declaration_start(ast, peek(ast)) && !identifier_label(ast)) || is(ast, TOK_KW_STATIC_ASSERT) || is(ast, '}') || is(ast, TOK_EOF)) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "C17 label requires a statement");
         if (!is(ast, '}') && !is(ast, TOK_EOF)) { ++ast->label_depth; stmt->as.label.body = parse_statement(ast); --ast->label_depth; }
         return stmt;
     }
@@ -832,6 +851,13 @@ static CinderStmt *parse_statement_impl(CinderAst *ast) {
         size_t saved = ast->bindings.len; ++ast->scope_depth;
         (void)expect(ast, '(', "'('"); stmt->as.if_stmt.condition = parse_expression(ast); (void)expect(ast, ')', "')'");
         stmt->as.if_stmt.then_branch = parse_associated(ast); stmt->as.if_stmt.else_branch = take(ast, TOK_KW_ELSE) ? parse_associated(ast) : NULL;
+        --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer; return stmt;
+    }
+    if (take(ast, TOK_KW_SWITCH)) {
+        CinderStmt *stmt = new_stmt(ast, ST_SWITCH, token->loc), *outer = ast->literal_scope; ast->literal_scope = stmt;
+        size_t saved = ast->bindings.len; ++ast->scope_depth;
+        (void)expect(ast, '(', "'('"); stmt->as.selection.control = parse_expression(ast); (void)expect(ast, ')', "')'");
+        stmt->as.selection.body = parse_associated(ast);
         --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer; return stmt;
     }
     if (take(ast, TOK_KW_WHILE)) {

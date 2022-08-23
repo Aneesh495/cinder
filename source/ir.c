@@ -67,6 +67,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderBlockId) continue_blocks;
     CINDER_VEC_TYPE(int) active_slots;
     CINDER_VEC_TYPE(size_t) loop_scopes;
+    CINDER_VEC_TYPE(size_t) break_scopes;
     CINDER_VEC_TYPE(int) expression_temporaries;
     CinderControlMap control;
 } LowerContext;
@@ -643,6 +644,9 @@ static void prepare_control(LowerContext *context, CinderStmt *body) {
     for (size_t l = 0U; l < context->control.labels.len; ++l) {
         CinderStmt *label = context->control.labels.data[l]; label->as.label.block = create_block(context, label->as.label.name);
     }
+    for (size_t l = 0U; l < context->control.cases.len; ++l) {
+        CinderStmt *label = context->control.cases.data[l]; label->as.case_label.block = create_block(context, label->kind == ST_CASE ? "switch.case" : "switch.default");
+    }
 }
 
 static bool ancestor_scope(const CinderControlMap *map, int ancestor, int scope) {
@@ -723,7 +727,7 @@ static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int 
 
 static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
     if (stmt == NULL) return;
-    if (stmt->kind != ST_LABEL && block_at(context->function, context->current)->terminator.kind != TERM_UNREACHABLE) context->current = create_block(context, "dead.statement");
+    if (stmt->kind != ST_LABEL && stmt->kind != ST_CASE && stmt->kind != ST_DEFAULT && block_at(context->function, context->current)->terminator.kind != TERM_UNREACHABLE) context->current = create_block(context, "dead.statement");
     size_t literal_mark = context->active_slots.len;
     for (size_t i = 0U; i < stmt->literal_objects.len; ++i)
         if (stmt->literal_objects.data[i]->literal_evaluated) begin_declarations(context, stmt->literal_objects.data[i]);
@@ -807,7 +811,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             branch_to(context, test, body_id, after_id, stmt->loc);
             cinder_vec_push((CinderVec *)&context->break_blocks, &after_id);
             cinder_vec_push((CinderVec *)&context->continue_blocks, &step_id);
-            size_t loop_scope = context->active_slots.len; cinder_vec_push((CinderVec *)&context->loop_scopes, &loop_scope);
+            size_t loop_scope = context->active_slots.len; cinder_vec_push((CinderVec *)&context->loop_scopes, &loop_scope); cinder_vec_push((CinderVec *)&context->break_scopes, &loop_scope);
             context->current = body_id;
             lower_stmt(context, body);
             ensure_block_jump(context, step_id, stmt->loc);
@@ -816,14 +820,41 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
                 (void)lower_full_expression(context, stmt->as.for_stmt.step, false, stmt->loc);
                 ensure_block_jump(context, cond_id, stmt->loc);
             }
-            --context->break_blocks.len;
+            --context->break_blocks.len; --context->break_scopes.len;
             --context->continue_blocks.len; --context->loop_scopes.len;
             context->locals.len = scope_mark;
             context->current = after_id;
             end_scope(context, lifetime_mark, stmt->loc); context->active_slots.len = lifetime_mark;
             break;
         }
-        case ST_BREAK: if (context->break_blocks.len > 0U) { end_scope(context, context->loop_scopes.data[context->loop_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->break_blocks.data[context->break_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
+        case ST_SWITCH: {
+            CinderValueId control = lower_full_expression(context, stmt->as.selection.control, false, stmt->loc);
+            CinderType *type = stmt->as.selection.control->type;
+            CinderBlockId after_id = create_block(context, "switch.after");
+            for (size_t i = 0U; i < stmt->as.selection.cases.len; ++i) {
+                CinderStmt *label = stmt->as.selection.cases.data[i];
+                CinderIRInst *constant = add_inst_ptr(context->function, context->current, IR_CONST, label->loc);
+                constant->type = type; constant->integer = label->as.case_label.value; constant->dst = new_value(context->function); CinderValueId value = constant->dst;
+                CinderIRInst *equal = add_inst_ptr(context->function, context->current, IR_CMP_EQ, label->loc);
+                equal->left = control; equal->right = value; equal->source_type = type; equal->dst = new_value(context->function); CinderValueId test = equal->dst;
+                CinderBlockId entering = create_block(context, "switch.enter"), next = create_block(context, "switch.next");
+                branch_to(context, test, entering, next, label->loc);
+                context->current = entering; transition_scopes(context, stmt->control_scope, label->control_scope, label->loc); ensure_block_jump(context, label->as.case_label.block, label->loc);
+                context->current = next;
+            }
+            CinderStmt *fallback = stmt->as.selection.default_label;
+            if (fallback != NULL) transition_scopes(context, stmt->control_scope, fallback->control_scope, fallback->loc);
+            ensure_block_jump(context, fallback == NULL ? after_id : fallback->as.case_label.block, stmt->loc);
+            size_t break_scope = context->active_slots.len;
+            cinder_vec_push((CinderVec *)&context->break_blocks, &after_id); cinder_vec_push((CinderVec *)&context->break_scopes, &break_scope);
+            context->current = create_block(context, "switch.body.unreached"); lower_stmt(context, stmt->as.selection.body); ensure_block_jump(context, after_id, stmt->loc);
+            --context->break_blocks.len; --context->break_scopes.len;
+            context->current = after_id; break;
+        }
+        case ST_CASE: case ST_DEFAULT:
+            ensure_block_jump(context, stmt->as.case_label.block, stmt->loc);
+            context->current = stmt->as.case_label.block; lower_stmt(context, stmt->as.case_label.body); break;
+        case ST_BREAK: if (context->break_blocks.len > 0U) { end_scope(context, context->break_scopes.data[context->break_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->break_blocks.data[context->break_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
         case ST_CONTINUE: if (context->continue_blocks.len > 0U) { end_scope(context, context->loop_scopes.data[context->loop_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->continue_blocks.data[context->continue_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
         case ST_LABEL:
             ensure_block_jump(context, stmt->as.label.block, stmt->loc);
@@ -1046,7 +1077,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
             CinderIRBlock *block = block_at(&function, context.current); block->terminator.kind = TERM_RETURN; block->terminator.value = returned;
         }
         if (function.is_noreturn && function_can_return(&function)) cinder_diag(diags, CINDER_WARNING, decl->loc, "function '%s' declared _Noreturn appears capable of returning", decl->name);
-        free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.expression_temporaries.data); cinder_control_destroy(&context.control);
+        free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.break_scopes.data); free(context.expression_temporaries.data); cinder_control_destroy(&context.control);
         cinder_vec_push((CinderVec *)&module->functions, &function);
     }
     return diags->errors == 0U ? 0 : 1;

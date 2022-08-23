@@ -498,7 +498,6 @@
       "native_evidence": [],
       "open_requirements": [
         "Audited source-bound hosted native report reader and complete feature-family acceptance.",
-        "Automatic lifetime handling across goto and switch entry remains part of the pending control-flow work.",
         "Register address restrictions and final variadic parameter eligibility remain under audit."
       ],
       "implementation": [
@@ -1042,13 +1041,101 @@
       "id": "C33",
       "name": "Switch/case/default",
       "required_boundary": "Duplicate labels, fallthrough, dispatch",
-      "status": "planned",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/switch/body_without_cases.c",
+        "tests/switch/boolean_promotion.c",
+        "tests/switch/case_after_return.c",
+        "tests/switch/case_inside_else.c",
+        "tests/switch/case_inside_for.c",
+        "tests/switch/case_inside_if.c",
+        "tests/switch/case_inside_while.c",
+        "tests/switch/case_nested_block_storage.c",
+        "tests/switch/case_object_address.c",
+        "tests/switch/case_skips_if_condition.c",
+        "tests/switch/case_skips_loop_condition.c",
+        "tests/switch/character_promotion.c",
+        "tests/switch/compound_control.c",
+        "tests/switch/constant_expressions.c",
+        "tests/switch/control_comma.c",
+        "tests/switch/control_evaluated_once.c",
+        "tests/switch/default_first.c",
+        "tests/switch/default_in_loop.c",
+        "tests/switch/default_middle.c",
+        "tests/switch/dispatch_signed.c",
+        "tests/switch/duff_device.c",
+        "tests/switch/empty_switch.c",
+        "tests/switch/enum_control.c",
+        "tests/switch/fallthrough.c",
+        "tests/switch/generic_case.c",
+        "tests/switch/goto_case_backedge.c",
+        "tests/switch/goto_into_switch.c",
+        "tests/switch/goto_out_of_switch.c",
+        "tests/switch/loop_in_switch_break.c",
+        "tests/switch/nested_switch_labels.c",
+        "tests/switch/no_default.c",
+        "tests/switch/no_match_literal_lifetime.c",
+        "tests/switch/noncompound_body.c",
+        "tests/switch/noncompound_default.c",
+        "tests/switch/signed_wide_control.c",
+        "tests/switch/skipped_initializer_effect.c",
+        "tests/switch/stacked_cases.c",
+        "tests/switch/static_before_case.c",
+        "tests/switch/switch_in_for_continue.c",
+        "tests/switch/switch_in_while_continue.c",
+        "tests/switch/switch_return_aggregate.c",
+        "tests/switch/typedef_label_substatement.c",
+        "tests/switch/typedef_stacked_labels.c",
+        "tests/switch/unsigned_case_conversion.c",
+        "tests/switch/unsigned_short_promotion.c",
+        "tests/switch/wide_control.c"
+      ],
+      "boundary_cases": [
+        "tests/test_switch_contracts.py"
+      ],
+      "negative_cases": [
+        "tests/constraints/switch_call_case.c",
+        "tests/constraints/switch_case_outside.c",
+        "tests/constraints/switch_case_undefined.c",
+        "tests/constraints/switch_continue_without_loop.c",
+        "tests/constraints/switch_declaration_label.c",
+        "tests/constraints/switch_default_declaration.c",
+        "tests/constraints/switch_default_outside.c",
+        "tests/constraints/switch_duplicate_case.c",
+        "tests/constraints/switch_duplicate_converted.c",
+        "tests/constraints/switch_duplicate_default.c",
+        "tests/constraints/switch_floating_case.c",
+        "tests/constraints/switch_floating_control.c",
+        "tests/constraints/switch_generic_invalid_unselected.c",
+        "tests/constraints/switch_nested_loop_duplicate.c",
+        "tests/constraints/switch_nonconstant_case.c",
+        "tests/constraints/switch_pointer_case.c",
+        "tests/constraints/switch_pointer_control.c",
+        "tests/constraints/switch_record_control.c",
+        "tests/constraints/switch_sizeof_invalid_call.c",
+        "tests/constraints/switch_trailing_case.c",
+        "tests/constraints/switch_trailing_default.c",
+        "tests/memory/switch_block_retired.undefined.c",
+        "tests/memory/switch_continue_retired.undefined.c",
+        "tests/memory/switch_control_literal_retired.undefined.c",
+        "tests/memory/switch_loop_reentered.undefined.c",
+        "tests/memory/switch_skipped_array_initializer.undefined.c",
+        "tests/memory/switch_skipped_initializer.undefined.c",
+        "tests/memory/switch_skipped_nested_initializer.undefined.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Audited source-bound native report reader and complete feature-family acceptance."
+      ],
+      "implementation": [
+        "source/parser.c",
+        "source/sema.c",
+        "source/control.c",
+        "source/ir.c",
+        "source/ssa.c",
+        "source/ir_verify.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -1060,13 +1147,24 @@
         "tests/control/for_break.c",
         "tests/control/while_continue.c",
         "tests/memory/loop_lifetimes.c",
-        "tests/memory/nested_break.c"
+        "tests/memory/nested_break.c",
+        "tests/switch/switch_in_for_continue.c",
+        "tests/switch/loop_in_switch_break.c",
+        "tests/switch/switch_in_while_continue.c",
+        "tests/switch/duff_device.c"
       ],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "boundary_cases": [
+        "tests/test_switch_contracts.py"
+      ],
+      "negative_cases": [
+        "tests/constraints/break_outside_control.c",
+        "tests/constraints/continue_outside_loop.c",
+        "tests/constraints/switch_continue_without_loop.c",
+        "tests/memory/switch_continue_retired.undefined.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Audited source-bound native report reader and complete feature-family acceptance."
       ],
       "implementation": [
         "source/sema.c",
@@ -1125,7 +1223,9 @@
         "tests/goto/static_reentry.c"
       ],
       "boundary_cases": [
-        "tests/test_goto_contracts.py"
+        "tests/test_goto_contracts.py",
+        "tests/switch/typedef_label_substatement.c",
+        "tests/switch/typedef_stacked_labels.c"
       ],
       "negative_cases": [
         "tests/constraints/goto_after_return_undefined.c",
