@@ -83,5 +83,90 @@
     "require_reference_rejection": false,
     "rule": "C17 6.7.5 paragraph 7 alignment declaration semantic rule applies to an extern declaration with an initializer because it defines the object; host diagnostic is not mandatory.",
     "source_sha256": "a220d08f14e5efc2a77a67b08f0778dce53b4d46d81fbaf156d0ab3819771a0d"
+  },
+  "va_start_register_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "b2a83510929e731efd51372fa2ad71f0aa9e6a26b72981391cef1fe4df4a597d"
+  },
+  "va_start_float_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "ebf93c386d38e1296220df45bceb995e4fbf3c22496543957c345d7cbf91c2f3"
+  },
+  "va_start_char_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "f4770ff649b273fe4db9012a4ca461c05504d4c30e442c5d6f50ac6386da371a"
+  },
+  "va_start_bool_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "fa02470797a334d69e889ee0c392baea6bec25e2fce1bfe4f8bcf1f19d706a02"
+  },
+  "va_start_short_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "fa3f3ca1b909ac35d685229b5c5053679545a1a6353d3381a905e083700a7b05"
+  },
+  "va_start_array_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "79616eb1d3f4813ef420d0569e992a896fdc354071f97d4616729218bc60f4e7"
+  },
+  "va_start_function_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "78210f56b22d439a2e3a8f3ea0684c7631cc4196c00d8cc9513f453379b4a922"
+  },
+  "va_start_array_typedef_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "7219fa921e1cacbba5f3c30afc8baa0a52189bdba196438f5fe7cd424fc97330"
+  },
+  "va_start_definition_array_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "dbd2926e71ed09980a417b4c23120369d8ac1455924eb647a377757d7aad81b0"
+  },
+  "va_start_definition_register_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 defines undefined behavior for register, original array/function, or promotion-changing final named parameters. Cinder diagnoses evaluated uses; a host diagnostic is not mandatory.",
+    "source_sha256": "bcc4e51e0b5716d1fe5c21eac4a5ca315b45268022c6d8865abaa91df818fb59"
+  },
+  "va_start_shadowed_last.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 7.16.1.4 paragraph 4 requires parmN to identify the rightmost parameter declaration. A same-spelling local shadow is a different object; Cinder diagnoses it and host rejection is not mandatory.",
+    "source_sha256": "2bc10c2ebb8c8bd295d5deb4cd168637e2cccd05524147f64ec1b5e96cf0ab62"
+  },
+  "register_array_decay.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
+    "source_sha256": "37bd9082ecab43fd6d59f829a4391565ae076b6637cea17dc0d9a7b9b0279b22"
+  },
+  "register_array_index.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
+    "source_sha256": "29d8ce84c57475cb55460e149d40184b2f539568251f39ea7556c258212ab0e6"
+  },
+  "register_member_array_decay.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
+    "source_sha256": "b43087524a426aef0ba3ba48414d1ab8e63f020b2b4a1f7123039cfab6c84f2c"
+  },
+  "register_sizeof_index.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
+    "source_sha256": "01b06bc908ad1a005c92fe83a665a2adf1e17c7a79f4b5b6c4ae70b7cc201366"
+  },
+  "register_generic_control.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
+    "source_sha256": "c018a0481931ff58929ef73315acb6a561adc74d673e01342d5c6235df9ad855"
+  },
+  "register_generic_unused_index.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
+    "source_sha256": "05a4df230390b637ba847067bcc74fc94df88f9070486b4f001d2a4e369c6f23"
   }
 }

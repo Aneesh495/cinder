@@ -448,7 +448,37 @@
         "tests/block_storage/static_uninitialized_aggregate.c",
         "tests/block_storage/string.c",
         "tests/block_storage/unknown_array.c",
-        "tests/block_storage/extern_void_unused.c"
+        "tests/block_storage/extern_void_unused.c",
+        "tests/register/array_size.c",
+        "tests/register/const_last_vararg.c",
+        "tests/register/enum_last_vararg.c",
+        "tests/register/floating.c",
+        "tests/register/for_object.c",
+        "tests/register/generic_array_size.c",
+        "tests/register/generic_scalar_lvalue.c",
+        "tests/register/integer.c",
+        "tests/register/member_array_size.c",
+        "tests/register/nested_member.c",
+        "tests/register/parameter.c",
+        "tests/register/pointer.c",
+        "tests/register/pointer_cancellation.c",
+        "tests/register/pointer_index_address.c",
+        "tests/register/pointer_parameter.c",
+        "tests/register/pointer_typedef_vararg.c",
+        "tests/register/prototype_array_only.c",
+        "tests/register/prototype_register_only.c",
+        "tests/register/record_last_vararg.c",
+        "tests/register/register_earlier_vararg.c",
+        "tests/register/register_pointer_member.c",
+        "tests/register/shadowed_register_object.c",
+        "tests/register/small_scalars.c",
+        "tests/register/struct_argument.c",
+        "tests/register/struct_copy.c",
+        "tests/register/struct_member.c",
+        "tests/register/struct_return.c",
+        "tests/register/unevaluated_promoted_vararg.c",
+        "tests/register/unevaluated_vararg_bound.c",
+        "tests/register/union_member.c"
       ],
       "boundary_cases": [
         "tests/memory/nested_break.c",
@@ -464,7 +494,8 @@
         "tests/block_storage/native/separate_a.c",
         "tests/block_storage/native/separate_b.c",
         "tests/block_storage/native/separate_main.c",
-        "tests/block_storage/native/unused_extern.c"
+        "tests/block_storage/native/unused_extern.c",
+        "tests/test_register_contracts.py"
       ],
       "negative_cases": [
         "tests/constraints/block_storage_alignment_conflict.c",
@@ -493,7 +524,25 @@
         "tests/constraints/global_multiple_initializers.c",
         "tests/constraints/global_static_incomplete_tentative.c",
         "tests/memory/block_static_readonly.undefined.c",
-        "tests/memory/block_static_readonly_array.undefined.c"
+        "tests/memory/block_static_readonly_array.undefined.c",
+        "tests/constraints/register_address.c",
+        "tests/constraints/register_array_address.c",
+        "tests/constraints/register_array_decay.c",
+        "tests/constraints/register_array_index.c",
+        "tests/constraints/register_bound_address.c",
+        "tests/constraints/register_definition_over_prototype.c",
+        "tests/constraints/register_generic_address.c",
+        "tests/constraints/register_generic_control.c",
+        "tests/constraints/register_generic_unused_index.c",
+        "tests/constraints/register_member_address.c",
+        "tests/constraints/register_member_array_decay.c",
+        "tests/constraints/register_nested_member_address.c",
+        "tests/constraints/register_parameter_address.c",
+        "tests/constraints/register_prototype_bound_address.c",
+        "tests/constraints/register_sizeof_address.c",
+        "tests/constraints/register_sizeof_index.c",
+        "tests/constraints/register_struct_address.c",
+        "tests/constraints/register_union_address.c"
       ],
       "native_evidence": [],
       "open_requirements": [
@@ -1356,11 +1405,20 @@
         "tests/variadic/restart_after_end.c",
         "tests/variadic/signed_unsigned_exception.c",
         "tests/variadic/sret_named.c",
-        "tests/variadic/void_character_exception.c"
+        "tests/variadic/void_character_exception.c",
+        "tests/register/const_last_vararg.c",
+        "tests/register/enum_last_vararg.c",
+        "tests/register/pointer_typedef_vararg.c",
+        "tests/register/prototype_array_only.c",
+        "tests/register/record_last_vararg.c",
+        "tests/register/register_earlier_vararg.c",
+        "tests/register/unevaluated_promoted_vararg.c",
+        "tests/register/unevaluated_vararg_bound.c"
       ],
       "boundary_cases": [
         "tests/test_abi_variadic.py",
-        "tests/test_abi_aggregates.py"
+        "tests/test_abi_aggregates.py",
+        "tests/test_register_contracts.py"
       ],
       "negative_cases": [
         "tests/constraints/va_arg_array.c",
@@ -1380,7 +1438,18 @@
         "tests/memory/va_end_other_function.undefined.c",
         "tests/memory/va_end_twice.undefined.c",
         "tests/memory/va_start_no_provenance.undefined.c",
-        "tests/memory/va_start_twice.undefined.c"
+        "tests/memory/va_start_twice.undefined.c",
+        "tests/constraints/va_start_array_last.c",
+        "tests/constraints/va_start_array_typedef_last.c",
+        "tests/constraints/va_start_bool_last.c",
+        "tests/constraints/va_start_char_last.c",
+        "tests/constraints/va_start_definition_array_last.c",
+        "tests/constraints/va_start_definition_register_last.c",
+        "tests/constraints/va_start_float_last.c",
+        "tests/constraints/va_start_function_last.c",
+        "tests/constraints/va_start_register_last.c",
+        "tests/constraints/va_start_shadowed_last.c",
+        "tests/constraints/va_start_short_last.c"
       ],
       "native_evidence": [],
       "open_requirements": [

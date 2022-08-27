@@ -269,7 +269,9 @@ struct CinderField {
 struct CinderParam {
     char *name;
     CinderType *type;
+    unsigned declaration_flags;
 };
+enum { CINDER_PARAM_REGISTER = 1U, CINDER_PARAM_ADJUSTED = 2U };
 typedef struct {
     CinderParam *data;
     size_t len;
@@ -459,6 +461,8 @@ struct CinderDecl {
     CinderType *type;
     bool is_static;
     bool is_extern;
+    bool is_register;
+    bool parameter_adjusted;
     bool is_definition;
     size_t alignment;
     bool has_alignment;

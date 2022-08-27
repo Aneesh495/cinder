@@ -3518,5 +3518,125 @@
   {
     "source": "../switch/switch_return_aggregate.c",
     "exit": 0
+  },
+  {
+    "source": "../register/integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/small_scalars.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/floating.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/pointer_cancellation.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/pointer_index_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/struct_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/nested_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/union_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/struct_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/struct_argument.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/struct_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/array_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/member_array_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/generic_array_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/generic_scalar_lvalue.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/for_object.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/parameter.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/pointer_parameter.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/prototype_register_only.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/prototype_array_only.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/register_earlier_vararg.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/enum_last_vararg.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/const_last_vararg.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/record_last_vararg.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/pointer_typedef_vararg.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/unevaluated_promoted_vararg.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/unevaluated_vararg_bound.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/shadowed_register_object.c",
+    "exit": 0
+  },
+  {
+    "source": "../register/register_pointer_member.c",
+    "exit": 0
   }
 ]

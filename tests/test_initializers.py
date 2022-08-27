@@ -16,7 +16,7 @@ from native_profile import configure_stack
 compiler = pathlib.Path(sys.argv[1]).resolve()
 identity = hashlib.sha256(compiler.read_bytes()).hexdigest()
 group = sys.argv[2] if len(sys.argv) > 2 else 'initializers'
-assert group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment', 'noreturn', 'block_storage', 'goto', 'switch')
+assert group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment', 'noreturn', 'block_storage', 'goto', 'switch', 'register')
 base = pathlib.Path('.agent-local') / group / identity
 base.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'

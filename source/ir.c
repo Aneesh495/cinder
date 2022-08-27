@@ -157,7 +157,7 @@ static CinderValueId lower_call(LowerContext *context, CinderExpr *expr) {
         CinderValueId arg = lower_expr(context, expr->as.call.args.data[i]);
         CinderType *type = expr->as.call.args.data[i]->type;
         if (aggregate_value(type)) arg = aggregate_snapshot(context, arg, type, expr->as.call.args.data[i]->loc);
-        CinderParam parameter = {NULL, type}; cinder_vec_push((CinderVec *)&actual, &parameter);
+        CinderParam parameter = {NULL, type, 0U}; cinder_vec_push((CinderVec *)&actual, &parameter);
         bool is_float = expr->as.call.args.data[i]->type != NULL && (expr->as.call.args.data[i]->type->kind == TYPE_FLOAT || expr->as.call.args.data[i]->type->kind == TYPE_DOUBLE);
         cinder_vec_push((CinderVec *)&lowered, &arg); cinder_vec_push((CinderVec *)&lowered_floats, &is_float);
     }

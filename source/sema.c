@@ -66,9 +66,18 @@ static CinderSymbol *scope_here(CinderScope *scope, const char *name) {
 
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope);
 
+static bool register_object(const CinderExpr *expr, unsigned depth) {
+    if (expr == NULL || depth >= 256U) return false;
+    if (expr->kind == EX_NAME) return expr->resolved_decl != NULL && expr->resolved_decl->is_register;
+    if (expr->kind == EX_MEMBER && !expr->as.member.arrow) return register_object(expr->as.member.base, depth + 1U);
+    if (expr->kind == EX_GENERIC && expr->as.generic.selected < expr->as.generic.associations.len) return register_object(expr->as.generic.associations.data[expr->as.generic.selected].value, depth + 1U);
+    return false;
+}
+
 static CinderType *sema_value(CinderSema *sema, CinderExpr **expression, CinderScope *scope) {
     CinderType *type = sema_expr(sema, *expression, scope);
     if (type->kind == TYPE_ARRAY || type->kind == TYPE_FUNCTION) {
+        if (type->kind == TYPE_ARRAY && register_object(*expression, 0U)) cinder_diag(sema->diags, CINDER_ERROR, (*expression)->loc, "register array cannot be converted to a pointer");
         CinderExpr *decay = cinder_arena_alloc(&sema->ast->arena, sizeof(*decay), _Alignof(CinderExpr));
         memset(decay, 0, sizeof(*decay)); decay->kind = EX_DECAY; decay->loc = (*expression)->loc;
         decay->as.unary.value = *expression; decay->type = cinder_type_pointer(sema->types, type->kind == TYPE_ARRAY ? type->base : type);
@@ -499,6 +508,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             int op = expr->as.unary.op;
             CinderType *value = op == '&' || op == TOK_PLUSPLUS || op == TOK_MINUSMINUS ? sema_expr(sema, expr->as.unary.value, scope) : sema_value(sema, &expr->as.unary.value, scope);
             bool update = op == TOK_PLUSPLUS || op == TOK_MINUSMINUS;
+            if (op == '&' && register_object(expr->as.unary.value, 0U)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "cannot take the address of a register object or member");
             if ((op == '&' || update) && !expr->as.unary.value->is_lvalue && !(op == '&' && value->kind == TYPE_FUNCTION)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "unary operator requires an assignable lvalue");
             if (update && !numeric_type(value) && !pointer_step_type(value, expr->parse_index)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "increment requires arithmetic or a complete object pointer");
             if (update && (value->qualifiers & 1U) != 0U) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "increment cannot modify a const-qualified object");
@@ -550,7 +560,14 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
                         if (start) {
                             CinderExpr *last = expr->as.call.args.data[1];
                             if (sema->function == NULL || !sema->function->type->variadic || sema->function->params.len == 0U || last->kind != EX_NAME || strcmp(last->as.name, sema->function->params.data[sema->function->params.len - 1U]->name) != 0) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_start requires the final named parameter of a variadic function");
-                            else (void)sema_expr(sema, last, scope);
+                            else {
+                                (void)sema_expr(sema, last, scope);
+                                CinderDecl *parameter = sema->function->params.data[sema->function->params.len - 1U];
+                                if (last->resolved_decl != parameter) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_start operand must resolve to the final parameter declaration");
+                                CinderType *type = parameter->type;
+                                bool promoted = type->kind == TYPE_BOOL || type->kind == TYPE_CHAR || type->kind == TYPE_SHORT || type->kind == TYPE_FLOAT;
+                                if (sema->unevaluated_depth == 0U && (parameter->is_register || parameter->parameter_adjusted || promoted)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_start final parameter has register storage, adjusted array/function type, or default promotion");
+                            }
                         }
                     }
                     expr->type = sema->types->void_type; return expr->type;
@@ -636,7 +653,7 @@ static bool constant_scope(CinderExpr *expr, CinderScope *scope, unsigned depth)
             return true;
         case EX_NAME:
             if (expr->name_visible && expr->type != NULL && scope_here(scope, expr->as.name) == NULL)
-                scope_add(scope, expr->as.name, expr->type, NULL, expr->type->kind == TYPE_FUNCTION);
+                scope_add(scope, expr->as.name, expr->type, expr->resolved_decl, expr->type->kind == TYPE_FUNCTION);
             return true;
         case EX_BINARY: return constant_scope(expr->as.binary.left, scope, depth + 1U) && constant_scope(expr->as.binary.right, scope, depth + 1U);
         case EX_ASSIGN: return constant_scope(expr->as.assign.target, scope, depth + 1U) && constant_scope(expr->as.assign.value, scope, depth + 1U);
