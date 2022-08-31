@@ -37,6 +37,36 @@ static int64_t maximum(const CinderType *type) {
 
 static bool evaluate(CinderAst *ast, const CinderExpr *expr, IntegerConstant *result, unsigned depth);
 
+static bool evaluate_offset(CinderAst *ast, const CinderExpr *expr, size_t *result, unsigned depth) {
+    if (expr == NULL || expr->kind != EX_OFFSETOF || depth >= 256U || expr->as.offset.path.len == 0U || expr->as.offset.path.len > 256U) return false;
+    const CinderType *type = expr->as.offset.object_type;
+    if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION) || !type->complete || type->completion_index > expr->parse_index) return false;
+    size_t offset = 0U;
+    for (size_t i = 0U; i < expr->as.offset.path.len; ++i) {
+        const CinderInitDesignator *part = &expr->as.offset.path.data[i];
+        if (part->member != NULL) {
+            if ((type->kind != TYPE_STRUCT && type->kind != TYPE_UNION) || !type->complete || type->completion_index > expr->parse_index) return false;
+            const CinderField *field = NULL;
+            for (size_t f = 0U; f < type->fields.len; ++f) {
+                if (type->fields.data[f].name != NULL && strcmp(type->fields.data[f].name, part->member) == 0) { field = &type->fields.data[f]; break; }
+            }
+            if (field == NULL || field->bit_width != 0U || field->offset > SIZE_MAX - offset) return false;
+            offset += field->offset; type = field->type;
+        } else {
+            IntegerConstant index;
+            if (type->kind != TYPE_ARRAY || !type->complete || type->base == NULL || !type->base->complete || type->base->size == 0U || !evaluate(ast, part->index, &index, depth + 1U)) return false;
+            uint64_t length = (uint64_t)type->array_len;
+            if (index.bits > length || (index.bits == length && i + 1U != expr->as.offset.path.len) || index.bits > (SIZE_MAX - offset) / type->base->size) return false;
+            offset += (size_t)index.bits * type->base->size; type = type->base;
+        }
+    }
+    *result = offset; return true;
+}
+
+bool cinder_offsetof_value(CinderAst *ast, const CinderExpr *expr, size_t *value) {
+    return evaluate_offset(ast, expr, value, 0U);
+}
+
 static CinderType *value_type(CinderAst *ast, CinderType *type) {
     if (type != NULL && (type->kind == TYPE_ARRAY || type->kind == TYPE_FUNCTION)) return cinder_type_pointer(ast->types, type->kind == TYPE_ARRAY ? type->base : type);
     return type;
@@ -65,7 +95,7 @@ CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsig
     }
     if (expr->kind == EX_CAST) return expr->as.cast.cast_type;
     if (expr->kind == EX_CHAR) return ast->types->int_type;
-    if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) return ast->types->ulong_type;
+    if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF || expr->kind == EX_OFFSETOF) return ast->types->ulong_type;
     if (expr->kind == EX_UNARY) {
         CinderType *type = cinder_expression_type(ast, expr->as.unary.value, depth + 1U);
         if (expr->as.unary.op == '!') return ast->types->int_type;
@@ -217,6 +247,11 @@ static bool evaluate(CinderAst *ast, const CinderExpr *expr, IntegerConstant *re
         CinderType *type = cinder_expression_type(ast, expr, depth + 1U);
         if (!integer_type(type) || !evaluate(ast, expr->as.conditional.condition, &condition, depth + 1U) || !evaluate(ast, condition.bits != 0U ? expr->as.conditional.yes : expr->as.conditional.no, result, depth + 1U)) return false;
         result->bits = normalize(result->bits, type); result->type = type; return true;
+    }
+    if (expr->kind == EX_OFFSETOF) {
+        size_t value;
+        if (!evaluate_offset(ast, expr, &value, depth + 1U)) return false;
+        *result = (IntegerConstant){(uint64_t)value, ast->types->ulong_type}; return true;
     }
     if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) {
         CinderType *type = expr->queried_type != NULL ? expr->queried_type : cinder_expression_type(ast, expr->as.unary.value, depth + 1U);

@@ -823,12 +823,27 @@
       "valid_cases": [
         "tests/memory/array_sizeof.c",
         "tests/literals/concatenated_size.c",
-        "tests/linkage/inline_tag_size.c"
+        "tests/linkage/inline_tag_size.c",
+        "tests/offset/plain_layout.c",
+        "tests/offset/nested_member.c",
+        "tests/offset/matrix_member.c",
+        "tests/offset/array_bound.c",
+        "tests/offset/enumerator.c",
+        "tests/offset/generic_result.c"
       ],
       "boundary_cases": [
-        "tests/memory/array_address.c"
+        "tests/memory/array_address.c",
+        "tests/offset/one_past_array.c",
+        "tests/offset/aligned_member.c",
+        "tests/offset/incomplete_then_complete.c",
+        "tests/offset/shadowed_tag.c"
       ],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/offset_before_completion.c",
+        "tests/constraints/offset_bad_unevaluated.c",
+        "tests/constraints/offset_unknown_member.c",
+        "tests/constraints/offset_pointer_path.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -839,7 +854,10 @@
         "source/ir_verify.c",
         "source/interp_memory.c",
         "source/ir_interp.c",
-        "source/x86_64.c"
+        "source/x86_64.c",
+        "source/parser.c",
+        "source/const_eval.c",
+        "runtime/include/stddef.h"
       ]
     },
     {

@@ -779,3 +779,34 @@ exact source hashes and non-mandatory reference policies; the original reference
 diagnostics are retained. No invalid native execution is used as evidence.
 See `docs/REGISTER.md`. Full acceptance and its audited report readers remain
 incomplete.
+
+
+## Target offset constants and fundamental runtime headers
+
+The authored `stddef.h` intrinsic resolves complete source-point aggregate
+layouts and constant member/index paths into typed `size_t` constants. Every
+index expression is semantically checked even when unevaluated. Bounds, enums,
+assertions, cases, static initializers, direct native objects and serialized IR
+use the same target layout. Owned `stdbool.h`, `stdint.h` and `limits.h` describe
+the Linux LP64 profile. `max_align_t` promises alignment 16 with a private
+representation; matching a libc-specific sizeof is not claimed. Other runtime
+headers and a real self-host build remain open. See `docs/RUNTIME_HEADERS.md`.
+
+Strict GCC and sanitizer builds passed 34 authored offset/header cases against
+both references at both optimization levels, original object/assembly byte and
+relocation checks, 68 canonical CIR/object identities, six parser-boundary
+checks and seven invalid/profile designators. Both builds rejected all 306
+constraint sources. The sanitizer passed 1,888 source CIR comparisons plus 36
+mutations, 106 classified memory cases plus 57 mutations, 100,000 typed IR
+comparisons, and 1,000 SSA cases. All 204 owned/assembled/parsed native runs
+passed in the Linux development VM with independently audited object/compiler
+hashes. The sanitizer smoke and evidence tampering/read-only checks passed.
+
+Two initial test assertions incorrectly assumed the build host's integer typedef
+and maximum-alignment choices matched the target. They were corrected to check
+header type consistency and exact alignment on the declared target; the source
+and failure audit remain private. Transient host reference startup timeouts
+were retained; unchanged binaries and complete reruns subsequently passed.
+No timeout is counted as a successful run. Full acceptance remains incomplete.
+The preceding register/varargs increment passed the complete native Linux
+workflow [37713251240](https://github.com/Aneesh495/cinder/actions/runs/37713251240).

@@ -1,0 +1,9 @@
+flowchart LR
+  H[Owned stddef macro] --> P[Parser: typename and member/index path]
+  P --> S[Semantic analysis: all index constraints]
+  S --> L[Source-point complete target layout]
+  L --> C[Integer constant: unsigned long size_t]
+  C --> ICE[Bounds, enumerators, cases, static initializers]
+  C --> IR[Typed IR const]
+  IR --> VM[Independent interpreter]
+  IR --> ELF[Original encoded ELF object]

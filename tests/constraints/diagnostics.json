@@ -96,5 +96,29 @@
   ],
   "va_start_array_last.c": [
     "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "offset_nonaggregate.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_incomplete.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_unknown_member.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_scalar_member.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_pointer_path.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_scalar_index.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_floating_index.c": [
+    "offsetof requires a complete aggregate"
+  ],
+  "offset_void_index.c": [
+    "offsetof requires a complete aggregate"
   ]
 }
