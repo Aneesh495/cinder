@@ -324,7 +324,7 @@ int cinder_preprocess(CinderSourceManager *sources, const char *path, const char
     initialize_clock(&pp);
     static const char *const predefined[] = {
         "__STDC__ 1", "__STDC_VERSION__ 201710L", "__STDC_HOSTED__ 1", "__CINDER__ 1",
-        "__x86_64__ 1", "__linux__ 1", "__LP64__ 1", "__STDC_NO_ATOMICS__ 1",
+        "__x86_64__ 1", "__linux__ 1", "__unix__ 1", "__LP64__ 1", "__STDC_NO_ATOMICS__ 1",
         "__STDC_NO_COMPLEX__ 1", "__STDC_NO_THREADS__ 1", "__STDC_NO_VLA__ 1"
     };
     for (size_t i = 0U; i < CINDER_ARRAY_LEN(predefined); ++i) define_text(&pp, predefined[i], true);

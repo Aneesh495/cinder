@@ -50,6 +50,8 @@ jobs:
         run: make test-register
       - name: Target offsetof and fundamental headers
         run: make test-offset
+      - name: Authored target libc and POSIX interfaces
+        run: make test-runtime-headers
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -104,6 +106,7 @@ jobs:
             .agent-local/register-contracts
             .agent-local/offset
             .agent-local/offset-contracts
+            .agent-local/runtime-headers
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks
