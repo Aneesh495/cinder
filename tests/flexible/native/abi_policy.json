@@ -1,0 +1,26 @@
+{
+  "integer": {
+    "source_sha256": "a41310d3b682a90bf6243fcfc7b68d0d66c2d29b268ef55e0d4e2989c08fe476",
+    "provider_sha256": "0af099516abba68e658c61da12eb26f65e61c4897ee53f547faf17c03e54724a",
+    "family": "clang",
+    "reason": "Clang classifies flexible-member structs as MEMORY; the declared Cinder profile uses GCC 4.4+ fixed-header INTEGER/SSE classes.",
+    "ruling": "https://raw.githubusercontent.com/llvm/llvm-project/main/clang/lib/CodeGen/Targets/X86.cpp",
+    "gcc_ruling": "https://gcc.gnu.org/gcc-4.4/changes.html"
+  },
+  "sse": {
+    "source_sha256": "d8f0943774c2337aa70b3a96ffd87d6393abbdf2013bf3c891da2f40c1c774b5",
+    "provider_sha256": "3e8faefb35fa1dbc016eb5b69eeff3a19a7a9b688e4df8af546e158298844c92",
+    "family": "clang",
+    "reason": "Clang classifies flexible-member structs as MEMORY; the declared Cinder profile uses GCC 4.4+ fixed-header INTEGER/SSE classes.",
+    "ruling": "https://raw.githubusercontent.com/llvm/llvm-project/main/clang/lib/CodeGen/Targets/X86.cpp",
+    "gcc_ruling": "https://gcc.gnu.org/gcc-4.4/changes.html"
+  },
+  "mixed": {
+    "source_sha256": "1b91e402dccd9710759cb55d2e94d09ca19e574130a93d5c75e81aa7c4e01873",
+    "provider_sha256": "6cb866d220c71ba57fce326d56e6b3dc0a4508fd54e9502a4a9ef2ed670b1de5",
+    "family": "clang",
+    "reason": "Clang classifies flexible-member structs as MEMORY; the declared Cinder profile uses GCC 4.4+ fixed-header INTEGER/SSE classes.",
+    "ruling": "https://raw.githubusercontent.com/llvm/llvm-project/main/clang/lib/CodeGen/Targets/X86.cpp",
+    "gcc_ruling": "https://gcc.gnu.org/gcc-4.4/changes.html"
+  }
+}

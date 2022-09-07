@@ -1,0 +1,1 @@
+struct S{long n; char data[];};static struct S inc(struct S s){++s.n;return s;}static struct S apply(struct S (*f)(struct S),struct S s){return f(s);}int main(void){struct S s={19};s=apply(inc,s);return s.n!=20;}

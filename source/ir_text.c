@@ -347,7 +347,13 @@ static bool validate_type(Reader *reader, const CinderType *type, bool *active, 
                 size_t end = expected + field->type->size;
                 if (end > extent) extent = end;
             }
-            if (!field->type->complete || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION || field->offset > type->size || field->type->size > type->size - field->offset || field->bit_offset + field->bit_width > field->type->size * 8U || (type->kind == TYPE_UNION && field->offset != 0U)) { parse_error(reader, "field is outside aggregate extent or has an invalid object type"); return false; }
+            bool flexible = field->type->kind == TYPE_ARRAY && !field->type->complete && field->type->base != NULL && field->type->base->complete;
+            if (flexible) {
+                size_t named = 0U;
+                for (size_t p = 0U; p < f; ++p) if (type->fields.data[p].name != NULL) ++named;
+                if (type->kind != TYPE_STRUCT || f + 1U != type->fields.len || field->name == NULL || named == 0U || field->type->size != 0U || field->type->array_len != 0U) { parse_error(reader, "invalid flexible array member placement or extent"); return false; }
+            }
+            if ((!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION || field->offset > type->size || field->type->size > type->size - field->offset || field->bit_offset + field->bit_width > field->type->size * 8U || (type->kind == TYPE_UNION && field->offset != 0U) || (type->kind == TYPE_STRUCT && cinder_type_contains_flexible(field->type))) { parse_error(reader, "field is outside aggregate extent or has an invalid object type"); return false; }
             if (type->align < alignment || (field->bit_width != 0U && (!integer_type(field->type) || field->alignment != 0U)) || (field->bit_width == 0U && (field->bit_offset != 0U || field->offset % alignment != 0U))) { parse_error(reader, "invalid member alignment or bitfield type"); return false; }
             for (size_t previous = 0U; previous < f; ++previous)
                 if (field->name != NULL && type->fields.data[previous].name != NULL && strcmp(field->name, type->fields.data[previous].name) == 0) { parse_error(reader, "duplicate aggregate member"); return false; }
@@ -359,6 +365,7 @@ static bool validate_type(Reader *reader, const CinderType *type, bool *active, 
     if (type->kind == TYPE_POINTER || type->kind == TYPE_ARRAY) {
         if (type->base == NULL || !validate_type(reader, type->base, active, depth + 1U)) return false;
         if (type->kind == TYPE_ARRAY && (type->base->kind == TYPE_VOID || type->base->kind == TYPE_FUNCTION || type->base->size == 0U || type->array_len > SIZE_MAX / type->base->size || type->size != type->array_len * type->base->size || type->align != type->base->align)) { parse_error(reader, "invalid array layout"); return false; }
+        if (type->kind == TYPE_ARRAY && cinder_type_contains_flexible(type->base)) { parse_error(reader, "array element contains a flexible array member"); return false; }
     } else if (type->base != NULL) { parse_error(reader, "unexpected base type"); return false; }
     if (type->kind == TYPE_FUNCTION) {
         if (type->size != 0U || type->align != 1U || !type->complete) { parse_error(reader, "invalid function layout"); return false; }

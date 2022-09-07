@@ -298,7 +298,12 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         if (index_type->is_unsigned && values[inst->right].integer < 0) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, inst->loc, "unsigned pointer index exceeds the object domain"); goto done; }
                         if (!cinder_interp_offset(context, pointer->address, values[inst->right].integer, inst->operator_code, (size_t)inst->integer, &result, inst->loc)) goto done;
                     }
-                    else if (inst->op == IR_POINTER_MEMBER) { if (!cinder_interp_member(context, pointer->address, (size_t)inst->integer, inst->type->base->size, &result, inst->loc)) goto done; }
+                    else if (inst->op == IR_POINTER_MEMBER) {
+                        const CinderType *member = inst->type->base;
+                        bool flexible = member->kind == TYPE_ARRAY && !member->complete;
+                        bool valid = flexible ? cinder_interp_flexible_member(context, pointer->address, (size_t)inst->integer, member->base, &result, inst->loc) : cinder_type_contains_flexible(member) ? cinder_interp_extended_member(context, pointer->address, (size_t)inst->integer, &result, inst->loc) : cinder_interp_member(context, pointer->address, (size_t)inst->integer, member->size, &result, inst->loc);
+                        if (!valid) goto done;
+                    }
                     else {
                         if (!values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer subtraction has no object provenance"); goto done; }
                         if (!cinder_interp_difference(context, pointer->address, values[inst->right].address, (size_t)inst->integer, &result.integer, inst->loc)) goto done;

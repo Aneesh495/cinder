@@ -4,6 +4,7 @@ import hashlib
 import json
 import pathlib
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -14,14 +15,17 @@ from test_objects import inspect
 compiler = pathlib.Path(sys.argv[1]).resolve()
 irtool = compiler.parent / 'cinderir'
 identity = hashlib.sha256(compiler.read_bytes() + irtool.read_bytes()).hexdigest()
-base = pathlib.Path('.agent-local/block-storage-contracts') / identity
+base = pathlib.Path('.agent-local/block-storage-contracts' if len(sys.argv)<3 else '.agent-local/flexible-abi-contracts') / identity
 base.mkdir(parents=True, exist_ok=True)
-root = pathlib.Path('tests/block_storage/native')
+group = sys.argv[2] if len(sys.argv)>2 else 'block_storage'
+assert group in ('block_storage','flexible')
+root = pathlib.Path('tests',group,'native')
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
 profile = configure_stack()
 references = [shutil.which('gcc-15') or shutil.which('gcc'), shutil.which('clang')]
 assert all(references)
 observations = []
+policy = json.loads((root / 'abi_policy.json').read_text()) if group == 'flexible' else {}
 
 def invoke(argv):
     result = subprocess.run([str(arg) for arg in argv], capture_output=True, timeout=30)
@@ -37,6 +41,7 @@ for case in json.loads((root / 'cases.json').read_text()):
     provider = None if case['provider'] is None else root / case['provider']
     for level in ('-O0', '-O2'):
         objects = {'owned': [], 'assembled': []}
+        if group=='flexible':objects['parsed']=[]
         for source in sources:
             stem = base / (case['name']+'-'+source.stem+level)
             obj, asm, oracle = stem.with_suffix('.o'), stem.with_suffix('.s'), stem.with_suffix('.assembled.o')
@@ -61,6 +66,7 @@ for case in json.loads((root / 'cases.json').read_text()):
                 row['interpreter'] = value
             save(row)
             objects['owned'].append(obj); objects['assembled'].append(oracle)
+            if group=='flexible':objects['parsed'].append(parsed)
         for reference in references:
             # References execute on both hosts; Cinder objects execute on x86 Linux.
             ref = base / (case['name']+'-'+pathlib.Path(reference).name+level+'.reference')
@@ -74,6 +80,17 @@ for case in json.loads((root / 'cases.json').read_text()):
                 library = base / (case['name']+'-'+pathlib.Path(reference).name+level+'.provider.o')
                 # Host provider object is needed only for native x86 linking.
                 if native: invoke([reference, '-std=c17', level, '-c', provider, '-o', library])
+            rule = policy.get(case['name'])
+            if rule is not None and 'clang' in pathlib.Path(reference).name:
+                assert hashlib.sha256(sources[0].read_bytes()).hexdigest() == rule['source_sha256'] and hashlib.sha256(provider.read_bytes()).hexdigest() == rule['provider_sha256'], 'changed ABI discrepancy reproducer'
+                # Cross-target LLVM IR independently records Clang's MEMORY
+                # contract even when this harness runs on an arm64 build host.
+                oracle = base / (case['name'] + level + '.clang-abi.ll')
+                invoke([reference, '-target', 'x86_64-linux-gnu', '-std=c17', level, '-S', '-emit-llvm', provider, '-o', oracle])
+                definition = next(line for line in oracle.read_text().splitlines() if re.search(r'define.*@reference\(', line))
+                assert 'sret(' in definition and 'byval(' in definition, (rule, definition, 'reference ABI changed; re-audit required')
+                save(dict(kind='ineligible-abi', case=case['name'], reference=reference, level=level, reason=rule, oracle_sha256=hashlib.sha256(oracle.read_bytes()).hexdigest(), definition=definition))
+                continue
             for kind, units in objects.items():
                 row = dict(kind='native-link', case=case['name'], reference=reference, level=level, path=kind, expected=0, native=native, objects=[str(path) for path in units], provider=str(library) if library is not None else None)
                 if native:
@@ -84,4 +101,4 @@ for case in json.loads((root / 'cases.json').read_text()):
                 save(row)
 
 assert hashlib.sha256(compiler.read_bytes() + irtool.read_bytes()).hexdigest() == identity
-print('Block storage contracts: 7 authored linkage profiles, CIR identity, local symbols, unresolved extern classification, and native cross-unit paths passed; native='+str(native))
+print(group+' contracts: '+str(len(json.loads((root/'cases.json').read_text())))+' authored linkage profiles; '+str(sum(r['kind']=='ineligible-abi' for r in observations))+' incompatible ABI profiles retained; native='+str(native))

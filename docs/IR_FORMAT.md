@@ -99,3 +99,11 @@ contract is classified as `noreturn_return` by the interpreter. The original
 encoder emits `UD2` if a marked function returns, or a marked call resumes.
 Non-call instructions cannot carry this contract. Both call and function
 records retain it across canonical round trips; unknown booleans are rejected.
+
+A struct's final named incomplete-array field has zero fixed size and preserves
+its complete element type. Its alignment contributes to canonical struct
+layout. The reader rejects illegal placement, recursive flexible-containing
+struct members, and array elements containing these records, including through
+unions. `pointer.member` identifies the actual field; its flexible extent is
+derived from the containing object's storage by the interpreter. See
+`FLEXIBLE_ARRAYS.md`.

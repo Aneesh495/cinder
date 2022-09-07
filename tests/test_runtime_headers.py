@@ -14,11 +14,13 @@ from test_objects import inspect
 
 compiler=pathlib.Path(sys.argv[1]).resolve()
 irtool=compiler.parent/'cinderir'
+group=sys.argv[2] if len(sys.argv)>2 else 'runtime'
+assert group in ('runtime','flexible_allocated')
 headers=sorted(pathlib.Path('runtime/include').rglob('*.h'))
-inputs=headers+sorted(pathlib.Path('tests/runtime').glob('*.c'))+[pathlib.Path(__file__)]
+inputs=headers+sorted(pathlib.Path('tests',group).glob('*.c'))+[pathlib.Path(__file__)]
 hashes={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
 identity=hashlib.sha256(compiler.read_bytes()+irtool.read_bytes()+json.dumps(hashes,sort_keys=True).encode()).hexdigest()
-root=pathlib.Path('.agent-local/runtime-headers')/identity;root.mkdir(parents=True,exist_ok=True)
+root=pathlib.Path('.agent-local/runtime-headers' if group=='runtime' else '.agent-local/flexible-allocated')/identity;root.mkdir(parents=True,exist_ok=True)
 native=platform.system()=='Linux' and platform.machine()=='x86_64'
 stack=configure_stack()
 references=[shutil.which('gcc-15') or shutil.which('gcc'),shutil.which('clang')];assert all(references)
@@ -64,7 +66,7 @@ def contents(path):
             result[name] = data[section[4]:section[4]+section[5]]
     return result
 
-for source in sorted(pathlib.Path('tests/runtime').glob('*.c')):
+for source in sorted(pathlib.Path('tests',group).glob('*.c')):
     row=dict(source=str(source),source_sha256=hashes[str(source)],references=[],objects=[],native=native)
     for reference in references:
         for level in ('-O0','-O2'):
@@ -81,13 +83,14 @@ for source in sorted(pathlib.Path('tests/runtime').glob('*.c')):
         assert obj.read_bytes()==parsed.read_bytes() and cir.read_bytes()==canonical.read_bytes(),(source,level)
         observation=json.loads(run([irtool,'--classify',cir]).stdout)
         if source.name=='header_layout.c':assert observation['valid'] and observation['integer']==0,observation
+        if group=='flexible_allocated':assert not observation['valid'] and observation['class']=='unsupported',observation
         record=dict(level=level,interpreter=observation,ir_sha256=hashlib.sha256(cir.read_bytes()).hexdigest(),objects={kind:hashlib.sha256(path.read_bytes()).hexdigest() for kind,path in [('owned',obj),('assembled',assembled),('parsed',parsed)]},executions=[])
         if native:
             for kind,path in [('owned',obj),('assembled',assembled),('parsed',parsed)]:
                 output=prefix.with_suffix('.'+kind+'.native');run(['cc','-no-pie',path,'-o',output]);record['executions'].append(dict(kind=kind,**execute(output)))
         row['objects'].append(record)
     rows.append(row);(root/'observations.json').write_text(json.dumps(dict(compiler_sha256=hashlib.sha256(compiler.read_bytes()).hexdigest(),irtool_sha256=hashlib.sha256(irtool.read_bytes()).hexdigest(),inputs=hashes,reference_tools=reference_tools,native=native,stack_profile=stack,cases=rows),indent=2)+'\n')
-    print('Runtime probe:',source.name,'passed; native='+str(native),flush=True)
+    print(group+' probe:',source.name,'passed; native='+str(native),flush=True)
 assert hashes=={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
 assert identity==hashlib.sha256(compiler.read_bytes()+irtool.read_bytes()+json.dumps(hashes,sort_keys=True).encode()).hexdigest()
-print(f'Runtime headers: {len(rows)} authored probes passed; native={native}. External libc interpreter calls are reported separately.')
+print(f'{group}: {len(rows)} authored probes passed; native={native}. External libc interpreter calls are reported separately.')

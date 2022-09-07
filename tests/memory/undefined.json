@@ -422,5 +422,33 @@
   {
     "source": "switch_loop_reentered.undefined.c",
     "classification": 10
+  },
+  {
+    "source": "flexible_zero_load.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "flexible_zero_one_past.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "flexible_tail_past.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "flexible_tail_negative.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "flexible_tail_uninitialized.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "flexible_tail_const.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "flexible_tail_expired.undefined.c",
+    "classification": 10
   }
 ]

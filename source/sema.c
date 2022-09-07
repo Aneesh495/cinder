@@ -204,6 +204,7 @@ static void sema_init_object(CinderSema *sema, CinderDecl *decl, CinderExpr **ex
                     size_t field = 0U;
                     while (field < frame->type->fields.len && (frame->type->fields.data[field].name == NULL || strcmp(frame->type->fields.data[field].name, designator->member) != 0)) ++field;
                     if (field == frame->type->fields.len) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator names no member"); break; }
+                    if (field >= cinder_init_child_count(frame->type)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "flexible array member cannot be initialized"); break; }
                     frame->index = field;
                 } else if (designator->index != NULL && frame->type->kind == TYPE_ARRAY) {
                     int64_t index; CinderType *index_type;

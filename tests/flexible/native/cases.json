@@ -1,0 +1,66 @@
+[
+  {
+    "name": "integer",
+    "owned": [
+      "integer.c"
+    ],
+    "provider": "integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "sse",
+    "owned": [
+      "sse.c"
+    ],
+    "provider": "sse_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "mixed",
+    "owned": [
+      "mixed.c"
+    ],
+    "provider": "mixed_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "memory",
+    "owned": [
+      "memory.c"
+    ],
+    "provider": "memory_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "pointer_integer",
+    "owned": [
+      "pointer_integer.c"
+    ],
+    "provider": "pointer_integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "pointer_sse",
+    "owned": [
+      "pointer_sse.c"
+    ],
+    "provider": "pointer_sse_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "pointer_mixed",
+    "owned": [
+      "pointer_mixed.c"
+    ],
+    "provider": "pointer_mixed_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "pointer_memory",
+    "owned": [
+      "pointer_memory.c"
+    ],
+    "provider": "pointer_memory_provider.c",
+    "interpreter": "unsupported"
+  }
+]

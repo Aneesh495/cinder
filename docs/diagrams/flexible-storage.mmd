@@ -1,0 +1,11 @@
+flowchart LR
+    A[Named struct prefix] --> B[Fixed size and tail padding]
+    C[Final incomplete array] --> D[Element alignment and member offset]
+    D --> B
+    B --> E[Fixed initializer and ABI transfer]
+    B --> F[Actual containing object extent]
+    F --> G[Whole tail elements and pointer bounds]
+    G --> H[Typed initialized lifetime-checked access]
+    I[Native allocator] --> F
+    J[Canonical CIR type graph] --> K[Independent layout and placement checks]
+    K --> E
