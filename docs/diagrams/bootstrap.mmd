@@ -1,0 +1,17 @@
+flowchart LR
+    S[Hashed source and runtime snapshot] --> H[Declared host GCC]
+    H --> A[Fresh stage 1 Cinder]
+    S --> A
+    A --> O2[Original stage 2 objects]
+    O2 --> L2[System linker and declared startup libraries]
+    L2 --> B[Stage 2 Cinder and IR tool]
+    S --> B
+    B --> O3[Original stage 3 objects]
+    O3 --> L3[Same linker configuration]
+    L3 --> C[Stage 3 Cinder and IR tool]
+    O2 --> D[Exact object and executable hashes]
+    O3 --> D
+    B --> T[Separate authored suites and 1000 native programs]
+    C --> T
+    D --> E[Raw source-bound bootstrap manifest]
+    T --> E
