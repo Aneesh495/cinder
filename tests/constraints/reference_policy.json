@@ -168,5 +168,19 @@
     "require_reference_rejection": false,
     "rule": "C17 6.3.2.1 paragraph 3 specifies undefined register-array conversion; 6.7.1 paragraph 8 applies register storage recursively to members, and footnote 121 limits array operations. Cinder rejects pointer conversions including unevaluated typed contexts. Host diagnostic is not mandatory and may differ for members.",
     "source_sha256": "05a4df230390b637ba847067bcc74fc94df88f9070486b4f001d2a4e369c6f23"
+  },
+  "anonymous_register_array_decay.c": {
+    "require_reference_rejection": false,
+    "source_sha256": "32d31f78eec5a1828eb027c80d294929373c72f0803358a493547f83ee41dab4",
+    "reason": "Inherited register-array value conversion has undefined behavior under C17 6.3.2.1p3 and 6.7.1p8; mandatory reference diagnostics are not required.",
+    "ruling": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+  },
+  "anonymous_const_write.c": {
+    "require_reference_rejection": true,
+    "allowed_reference_acceptance": [
+      "clang"
+    ],
+    "source_sha256": "3782e98ecf706a4cd3f30bc5d80e43834fac5e94d2fd150f5f8f7c0abf65e8b9",
+    "rule": "C17 6.5.16 paragraph 2 and 6.5.2.3 paragraphs 3-4 require a modifiable lvalue and preserve containing aggregate qualifiers. Cinder follows the physical anonymous member path and GCC rejects this const-member assignment. Clang accepts the exact reproducer; that reference diagnostic discrepancy remains separately recorded and does not waive the Cinder constraint."
   }
 }

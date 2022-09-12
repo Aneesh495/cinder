@@ -350,7 +350,11 @@ static bool validate_type(Reader *reader, const CinderType *type, bool *active, 
             bool flexible = field->type->kind == TYPE_ARRAY && !field->type->complete && field->type->base != NULL && field->type->base->complete;
             if (flexible) {
                 size_t named = 0U;
-                for (size_t p = 0U; p < f; ++p) if (type->fields.data[p].name != NULL) ++named;
+                for (size_t p = 0U; p < f; ++p) {
+                    const CinderField *previous = &type->fields.data[p];
+                    if (previous->name != NULL) ++named;
+                    else if (cinder_type_anonymous_member(previous)) named += cinder_type_named_members(previous->type);
+                }
                 if (type->kind != TYPE_STRUCT || f + 1U != type->fields.len || field->name == NULL || named == 0U || field->type->size != 0U || field->type->array_len != 0U) { parse_error(reader, "invalid flexible array member placement or extent"); return false; }
             }
             if ((!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION || field->offset > type->size || field->type->size > type->size - field->offset || field->bit_offset + field->bit_width > field->type->size * 8U || (type->kind == TYPE_UNION && field->offset != 0U) || (type->kind == TYPE_STRUCT && cinder_type_contains_flexible(field->type))) { parse_error(reader, "field is outside aggregate extent or has an invalid object type"); return false; }
@@ -359,6 +363,7 @@ static bool validate_type(Reader *reader, const CinderType *type, bool *active, 
                 if (field->name != NULL && type->fields.data[previous].name != NULL && strcmp(field->name, type->fields.data[previous].name) == 0) { parse_error(reader, "duplicate aggregate member"); return false; }
         }
         if (type->complete && plain && (type->fields.len == 0U || type->align != aggregate_align || type->size != ((extent + aggregate_align - 1U) & ~(aggregate_align - 1U)))) { parse_error(reader, "aggregate extent or alignment disagrees with target layout"); return false; }
+        if (type->complete && !cinder_type_members_unique(type)) { parse_error(reader, "duplicate promoted member or invalid anonymous aggregate member"); return false; }
         return finite_object(reader, type, active, depth);
     }
     active[index] = true;

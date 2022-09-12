@@ -71,14 +71,18 @@ static bool lvalue_address(AddressContext *context, const CinderExpr *expr, Cind
     if (expr->kind == EX_MEMBER) {
         const CinderExpr *base = expr->as.member.base;
         CinderType *aggregate = expr->as.member.arrow ? base->type->base : base->type;
-        if (expr->as.member.field >= aggregate->fields.len) return false;
         bool valid = expr->as.member.arrow ? value_address(context, base, address, depth + 1U) : lvalue_address(context, base, address, depth + 1U);
-        const CinderField *field = &aggregate->fields.data[expr->as.member.field];
-        if (!valid || address->symbol == NULL || field->bit_width != 0U || address->addend < 0 || field->offset > (uint64_t)INT64_MAX - (uint64_t)address->addend) return false;
-        address->addend += (int64_t)field->offset;
-        address->domain_begin = (size_t)address->addend;
-        if (field->type->size > SIZE_MAX - address->domain_begin) return false;
-        address->domain_end = address->domain_begin + field->type->size; return true;
+        if (!valid || address->symbol == NULL || expr->as.member.path.len == 0U) return false;
+        for (size_t p = 0U; p < expr->as.member.path.len; ++p) {
+            size_t index = expr->as.member.path.data[p]; if (index >= aggregate->fields.len) return false;
+            const CinderField *field = &aggregate->fields.data[index];
+            if (field->bit_width != 0U || address->addend < 0 || field->offset > (uint64_t)INT64_MAX - (uint64_t)address->addend) return false;
+            address->addend += (int64_t)field->offset;
+            address->domain_begin = (size_t)address->addend;
+            if (field->type->size > SIZE_MAX - address->domain_begin) return false;
+            address->domain_end = address->domain_begin + field->type->size; aggregate = field->type;
+        }
+        return true;
     }
     return false;
 }

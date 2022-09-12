@@ -3910,5 +3910,133 @@
   {
     "source": "../flexible/fixed_variadic_mixed.c",
     "exit": 0
+  },
+  {
+    "source": "../anonymous/struct_members.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/union_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/recursive_members.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/named_boundary.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/array_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/arrow_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/arrow_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/volatile_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/const_member_read.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/outer_const_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/compound_lvalue.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/offset_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/designated_array_element.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/flat_initializer.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/braced_initializer.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/designated_resume.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/union_resume.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/aggregate_argument.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/aggregate_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/static_array_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/local_static.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/flexible_struct_prefix.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/flexible_union_prefix.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/flexible_recursive_prefix.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/inferred_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/array_of_records.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/generic_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/generic_lvalue.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/array_size_query.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/member_increment_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/memory_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../anonymous/callback.c",
+    "exit": 0
   }
 ]

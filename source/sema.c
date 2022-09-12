@@ -201,11 +201,11 @@ static void sema_init_object(CinderSema *sema, CinderDecl *decl, CinderExpr **ex
             for (size_t d = 0U; d < entry->designators.len; ++d) {
                 CinderInitDesignator *designator = &entry->designators.data[d]; CinderInitFrame *frame = &frames[depth - 1U];
                 if (designator->member != NULL && (frame->type->kind == TYPE_STRUCT || frame->type->kind == TYPE_UNION)) {
-                    size_t field = 0U;
-                    while (field < frame->type->fields.len && (frame->type->fields.data[field].name == NULL || strcmp(frame->type->fields.data[field].name, designator->member) != 0)) ++field;
-                    if (field == frame->type->fields.len) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer designator names no member"); break; }
-                    if (field >= cinder_init_child_count(frame->type)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "flexible array member cannot be initialized"); break; }
-                    frame->index = field;
+                    CinderInitMemberResult selection = cinder_init_member(frames, &depth, CINDER_ARRAY_LEN(frames), designator->member);
+                    if (selection != INIT_MEMBER_OK) {
+                        cinder_diag(sema->diags, CINDER_ERROR, expr->loc, selection == INIT_MEMBER_FLEXIBLE ? "flexible array member cannot be initialized" : selection == INIT_MEMBER_DEPTH ? "initializer designator path is too deep" : "initializer designator names no member"); break;
+                    }
+                    frame = &frames[depth - 1U];
                 } else if (designator->index != NULL && frame->type->kind == TYPE_ARRAY) {
                     int64_t index; CinderType *index_type;
                     (void)sema_expr(sema, designator->index, scope);
@@ -629,8 +629,15 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             CinderType *base = expr->as.member.arrow ? sema_value(sema, &expr->as.member.base, scope) : sema_expr(sema, expr->as.member.base, scope);
             if (expr->as.member.arrow) base = base->kind == TYPE_POINTER ? base->base : sema->types->error_type;
             if ((base->kind != TYPE_STRUCT && base->kind != TYPE_UNION) || (!base->complete || base->completion_index > expr->parse_index)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "member access requires a complete structure or union"); expr->type = sema->types->error_type; return expr->type; }
-            for (size_t field = 0U; field < base->fields.len; ++field) if (base->fields.data[field].name != NULL && strcmp(base->fields.data[field].name, expr->as.member.name) == 0) {
-                expr->as.member.field = field; expr->type = cinder_type_qualified(sema->types, base->fields.data[field].type, base->fields.data[field].type->qualifiers | base->qualifiers);
+            size_t path[64]; size_t length = cinder_type_member_path(base, expr->as.member.name, path, CINDER_ARRAY_LEN(path));
+            if (length != 0U && length != SIZE_MAX) {
+                expr->as.member.path.len = 0U;
+                for (size_t p = 0U; p < length; ++p) {
+                    cinder_vec_push((CinderVec *)&expr->as.member.path, &path[p]);
+                    CinderType *child = base->fields.data[path[p]].type;
+                    base = cinder_type_qualified(sema->types, child, child->qualifiers | base->qualifiers);
+                }
+                expr->as.member.field = path[length - 1U]; expr->type = base;
                 expr->is_lvalue = expr->as.member.arrow || expr->as.member.base->is_lvalue; return expr->type;
             }
             cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "unknown member '%s'", expr->as.member.name); expr->type = sema->types->error_type; return expr->type;

@@ -1,0 +1,50 @@
+[
+  {
+    "name": "integer",
+    "owned": [
+      "integer.c"
+    ],
+    "provider": "integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "sse",
+    "owned": [
+      "sse.c"
+    ],
+    "provider": "sse_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "mixed",
+    "owned": [
+      "mixed.c"
+    ],
+    "provider": "mixed_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "memory",
+    "owned": [
+      "memory.c"
+    ],
+    "provider": "memory_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "union_integer",
+    "owned": [
+      "union_integer.c"
+    ],
+    "provider": "union_integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "sse_pair",
+    "owned": [
+      "sse_pair.c"
+    ],
+    "provider": "sse_pair_provider.c",
+    "interpreter": "unsupported"
+  }
+]

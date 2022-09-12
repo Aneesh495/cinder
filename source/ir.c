@@ -316,9 +316,14 @@ static CinderValueId lower_address(LowerContext *context, CinderExpr *target) {
         CinderExpr *base = target->as.member.base;
         CinderValueId address = target->as.member.arrow ? lower_expr(context, base) : lower_aggregate(context, base);
         CinderType *aggregate = target->as.member.arrow ? base->type->base : base->type;
-        CinderIRInst *member = add_inst_ptr(context->function, context->current, IR_POINTER_MEMBER, target->loc);
-        member->dst = new_value(context->function); member->left = address; member->integer = (int64_t)aggregate->fields.data[target->as.member.field].offset;
-        member->slot = (int)target->as.member.field; member->type = cinder_type_pointer(context->function->types, target->type); return member->dst;
+        for (size_t p = 0U; p < target->as.member.path.len; ++p) {
+            size_t index = target->as.member.path.data[p]; const CinderField *field = &aggregate->fields.data[index];
+            CinderType *child = cinder_type_qualified(context->function->types, field->type, field->type->qualifiers | aggregate->qualifiers);
+            CinderIRInst *member = add_inst_ptr(context->function, context->current, IR_POINTER_MEMBER, target->loc);
+            member->dst = new_value(context->function); member->left = address; member->integer = (int64_t)field->offset;
+            member->slot = (int)index; member->type = cinder_type_pointer(context->function->types, child); address = member->dst; aggregate = child;
+        }
+        return address;
     }
     cinder_diag(context->diags, CINDER_ERROR, target->loc, "unsupported addressable expression"); return CINDER_INVALID_VALUE;
 }

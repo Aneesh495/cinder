@@ -269,11 +269,66 @@ static bool contains_flexible(const CinderType *type, unsigned depth) {
 
 bool cinder_type_contains_flexible(const CinderType *type) { return contains_flexible(type, 0U); }
 
+bool cinder_type_anonymous_member(const CinderField *field) {
+    return field != NULL && field->name == NULL && field->type != NULL && (field->type->kind == TYPE_STRUCT || field->type->kind == TYPE_UNION) && field->type->tag == NULL && field->bit_width == 0U;
+}
+
+static size_t find_member(const CinderType *type, const char *name, size_t *working, size_t *result, size_t capacity, size_t depth, size_t *length) {
+    if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION)) return 0U;
+    if (depth >= capacity) return SIZE_MAX;
+    size_t matches = 0U;
+    for (size_t f = 0U; f < type->fields.len; ++f) {
+        const CinderField *field = &type->fields.data[f]; working[depth] = f;
+        if (field->name != NULL && strcmp(field->name, name) == 0) {
+            if (matches != 0U) return SIZE_MAX;
+            memcpy(result, working, (depth + 1U) * sizeof(*result)); *length = depth + 1U; matches = 1U;
+        } else if (cinder_type_anonymous_member(field)) {
+            size_t found = find_member(field->type, name, working, result, capacity, depth + 1U, length);
+            if (found == SIZE_MAX || found > 1U - matches) return SIZE_MAX;
+            matches += found;
+        }
+    }
+    return matches;
+}
+
+size_t cinder_type_member_path(const CinderType *type, const char *name, size_t *path, size_t capacity) {
+    size_t working[64], length = 0U;
+    if (name == NULL || path == NULL || capacity == 0U || capacity > CINDER_ARRAY_LEN(working)) return SIZE_MAX;
+    size_t matches = find_member(type, name, working, path, capacity, 0U, &length);
+    return matches == SIZE_MAX ? SIZE_MAX : matches == 0U ? 0U : length;
+}
+
+static bool unique_members(const CinderType *root, const CinderType *type, unsigned depth) {
+    if (depth >= 64U) return false;
+    for (size_t f = 0U; f < type->fields.len; ++f) {
+        const CinderField *field = &type->fields.data[f];
+        if (field->name != NULL) { size_t path[64]; if (cinder_type_member_path(root, field->name, path, CINDER_ARRAY_LEN(path)) == SIZE_MAX) return false; }
+        else if (!cinder_type_anonymous_member(field) || !unique_members(root, field->type, depth + 1U)) return false;
+    }
+    return true;
+}
+
+bool cinder_type_members_unique(const CinderType *type) { return type != NULL && unique_members(type, type, 0U); }
+
+static size_t named_members(const CinderType *type, unsigned depth) {
+    if (type == NULL || depth >= 64U) return 0U;
+    size_t count = 0U;
+    for (size_t f = 0U; f < type->fields.len; ++f) {
+        const CinderField *field = &type->fields.data[f];
+        if (field->name != NULL) ++count;
+        else if (cinder_type_anonymous_member(field)) count += named_members(field->type, depth + 1U);
+    }
+    return count;
+}
+
+size_t cinder_type_named_members(const CinderType *type) { return named_members(type, 0U); }
+
 int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, CinderLoc loc) {
     if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION)) return 1;
     size_t size = 0U;
     size_t align = 1U;
     size_t named = 0U;
+    if (!cinder_type_members_unique(type)) cinder_diag(diags, CINDER_ERROR, loc, "duplicate promoted aggregate member or invalid anonymous member");
     for (size_t i = 0U; i < type->fields.len; ++i) {
         CinderField *field = &type->fields.data[i];
         bool flexible = field->type != NULL && field->type->kind == TYPE_ARRAY && !field->type->complete && field->type->base != NULL && field->type->base->complete;
@@ -281,6 +336,7 @@ int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, Cin
         if (field->type == NULL || (!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_ERROR, loc, "field '%s' requires a complete object type", field->name == NULL ? "<unnamed>" : field->name); continue; }
         if (type->kind == TYPE_STRUCT && cinder_type_contains_flexible(field->type)) { cinder_diag(diags, CINDER_ERROR, loc, "struct member cannot contain a flexible array member"); continue; }
         if (field->name != NULL) ++named;
+        else if (cinder_type_anonymous_member(field)) named += cinder_type_named_members(field->type);
         if (!cinder_object_alignment_valid(field->type, field->alignment)) { cinder_diag(diags, CINDER_ERROR, loc, "member alignment is invalid or weaker than its type"); continue; }
         size_t field_align = field->alignment == 0U ? field->type->align : field->alignment;
         if (field_align > align) align = field_align;

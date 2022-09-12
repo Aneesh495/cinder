@@ -76,6 +76,7 @@ typedef struct {
     unsigned function_specifiers;
     size_t alignment;
     bool alignment_specified;
+    bool anonymous_aggregate;
 } DeclarationSpec;
 
 enum { STORAGE_TYPEDEF = 1U, STORAGE_STATIC = 2U, STORAGE_EXTERN = 4U, STORAGE_AUTO = 8U, STORAGE_REGISTER = 16U };
@@ -110,6 +111,17 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
     }
     if (type == NULL) type = cinder_type_new(ast->types, kind);
     if (!take(ast, '{')) return type;
+    if (ast->aggregate_depth >= 64U) {
+        cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition nesting exceeds the profile limit");
+        size_t braces = 1U;
+        while (braces != 0U && !is(ast, TOK_EOF)) {
+            if (take(ast, '{')) ++braces;
+            else if (take(ast, '}')) --braces;
+            else ++ast->cursor;
+        }
+        return type;
+    }
+    ++ast->aggregate_depth;
     if (type->complete) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate tag is already defined");
     if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
@@ -117,6 +129,10 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
         DeclarationSpec spec = {0};
         CinderType *field_base = parse_declaration_specifiers(ast, &spec);
         if (spec.storage != 0U || spec.function_specifiers != 0U) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "member declaration cannot have storage or function specifiers");
+        if (is(ast, ';') && spec.anonymous_aggregate && field_base->tag == NULL && (field_base->kind == TYPE_STRUCT || field_base->kind == TYPE_UNION)) {
+            CinderField field = {NULL, field_base, 0U, 0U, 0U, spec.alignment};
+            cinder_vec_push((CinderVec *)&type->fields, &field); ++ast->cursor; continue;
+        }
         do {
             char *field_name = NULL; CinderLoc field_loc = peek(ast)->loc;
             CinderType *field_type = parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
@@ -128,6 +144,7 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
         (void)expect(ast, ';', "';'");
     }
     (void)expect(ast, '}', "'}'");
+    --ast->aggregate_depth;
     if (type->fields.len == 0U) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     (void)cinder_type_layout_aggregate(type, ast->diags, type->tag == NULL ? cinder_loc(CINDER_NO_FILE, 0U, 0U) : peek(ast)->loc);
     type->completion_index = ast->cursor;
@@ -248,6 +265,7 @@ static CinderType *parse_declaration_specifiers(CinderAst *ast, DeclarationSpec 
         } else if (kind == TOK_KW_STRUCT || kind == TOK_KW_UNION) {
             if (aggregate != NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting aggregate specifiers");
             ++ast->cursor; aggregate = parse_aggregate_specifier(ast, kind == TOK_KW_UNION);
+            if (spec != NULL) spec->anonymous_aggregate = aggregate->tag == NULL;
         } else if (kind == TOK_KW_ENUM) {
             if (aggregate != NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting enum specifier");
             ++ast->cursor; aggregate = parse_enum_specifier(ast);
