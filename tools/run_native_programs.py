@@ -44,9 +44,15 @@ def main():
     tools = {name: dict(path=str(path), sha256=digest(path), version=subprocess.run([str(path), '--version'], check=True, capture_output=True, text=True).stdout) for name, path in {**references, **compilers}.items()}
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
+    snapshots = root / 'tool-snapshots'
+    snapshots.mkdir()
+    for name, record in tools.items():
+        shutil.copy2(record['path'], snapshots/name)
+        record['artifact'] = 'tool-snapshots/'+name
+        assert digest(snapshots/name) == record['sha256'], 'tool snapshot changed during capture'
     env = dict(os.environ, SOURCE_DATE_EPOCH='0', LC_ALL='C', TZ='UTC')
     inputs = {str(pathlib.Path(__file__).resolve()): digest(__file__), str(pathlib.Path(__file__).with_name('defined_programs.py').resolve()): digest(pathlib.Path(__file__).with_name('defined_programs.py'))}
-    configuration = dict(schema=1, seed=args.seed, requested=args.count, jobs=args.jobs, profile=args.profile, stack_profile=dict(before_soft=soft, soft=stack_bytes, hard=hard), machine=platform.uname()._asdict(), environment={k: env[k] for k in ('SOURCE_DATE_EPOCH', 'LC_ALL', 'TZ')}, tools=tools, inputs=inputs)
+    configuration = dict(schema=2, seed=args.seed, requested=args.count, jobs=args.jobs, profile=args.profile, stack_profile=dict(before_soft=soft, soft=stack_bytes, hard=hard), machine=platform.uname()._asdict(), environment={k: env[k] for k in ('SOURCE_DATE_EPOCH', 'LC_ALL', 'TZ')}, tools=tools, inputs=inputs)
     (root / 'configuration.json').write_text(json.dumps(configuration, indent=2) + '\n')
 
     def probe(index):

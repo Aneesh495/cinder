@@ -68,13 +68,21 @@ def main():
         path = pathlib.Path(name).resolve()
         if path.is_file():
             dependencies[str(path)] = dict(path=str(path), sha256=digest(path))
+    dependencies['driver'] = dict(path=str(linker), sha256=digest(linker))
+    dependency_snapshots = root/'dependency-snapshots'
+    dependency_snapshots.mkdir()
+    for index, (name, record) in enumerate(dependencies.items()):
+        path = dependency_snapshots/str(index)
+        shutil.copy2(record['path'], path)
+        record['artifact'] = str(path.relative_to(root))
+        assert digest(path) == record['sha256'], 'dependency changed during capture'
     build_configuration = {}
     for name in ('CMakeCache.txt', 'compile_commands.json', 'build.ninja'):
         path = compiler.parent/name
         if path.exists():
             shutil.copy2(path, seed/name)
             build_configuration[name] = digest(path)
-    manifest = dict(schema=1, status='running', inputs=hashes, modules=modules, seed_compiler={name: digest(seed/name) for name in ('cindercc', 'cinderir')}, seed_configuration=build_configuration, environment={k:env[k] for k in ('SOURCE_DATE_EPOCH', 'LC_ALL', 'TZ')}, source_prefix=str(snapshot), execution_profile=args.profile, stack_profile=dict(before_soft=soft, soft=stack_bytes, hard=hard), machine=platform.uname()._asdict(), linker=dict(path=str(linker), sha256=digest(linker), version=subprocess.run([str(linker), '--version'], check=True, capture_output=True, text=True).stdout), dependencies=dependencies, commands=[], stages={})
+    manifest = dict(schema=2, status='running', inputs=hashes, modules=modules, seed_compiler={name: digest(seed/name) for name in ('cindercc', 'cinderir')}, seed_configuration=build_configuration, environment={k:env[k] for k in ('SOURCE_DATE_EPOCH', 'LC_ALL', 'TZ')}, source_prefix=str(snapshot), execution_profile=args.profile, stack_profile=dict(before_soft=soft, soft=stack_bytes, hard=hard), machine=platform.uname()._asdict(), linker=dict(path=str(linker), sha256=digest(linker), version=subprocess.run([str(linker), '--version'], check=True, capture_output=True, text=True).stdout), dependencies=dependencies, commands=[], stages={})
 
     def save():
         (root/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
@@ -161,6 +169,10 @@ def main():
         assert digest(linker) == manifest['linker']['sha256'] and all(digest(v['path'])==v['sha256'] for v in dependencies.values()), 'link dependencies changed during bootstrap'
         manifest.update(status='pass', generated_summary_sha256=digest(root/'generated/summary.json'))
         save()
+        from native_evidence import verify_bootstrap
+        verified = verify_bootstrap(root, repo, compiler)
+        assert verified['programs'] == 1000 and verified['native'] == 8000 and verified['interpreted'] == 4000
+        print('Read-only bootstrap evidence verification passed.', flush=True)
     except BaseException as error:
         manifest.update(status='fail', error=str(error))
         save()
