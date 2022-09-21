@@ -207,6 +207,12 @@ static CinderValueId emit_constant(LowerContext *context, int64_t value, CinderL
     return inst->dst;
 }
 
+static CinderValueId emit_typed_constant(LowerContext *context, int64_t value, CinderType *type, CinderLoc loc) {
+    CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, loc);
+    inst->dst = new_value(context->function); inst->type = type; inst->integer = value; return inst->dst;
+}
+
+
 static CinderValueId emit_operation(LowerContext *context, CinderIROp op, CinderValueId left, CinderValueId right, CinderLoc loc) {
     CinderIRInst *inst = add_inst_ptr(context->function, context->current, op, loc);
     inst->dst = new_value(context->function);
@@ -333,9 +339,24 @@ static CinderValueId load_address(LowerContext *context, CinderValueId address, 
     load->dst = new_value(context->function); load->left = address; load->type = type; return load->dst;
 }
 
+static CinderValueId load_lvalue(LowerContext *context, CinderExpr *target, CinderValueId address, CinderLoc loc) {
+    if (target->bit_width == 0U) return load_address(context, address, target->type, loc);
+    CinderIRInst *load = add_inst_ptr(context->function, context->current, IR_BIT_LOAD, loc);
+    load->dst = new_value(context->function); load->left = address; load->type = target->type;
+    load->integer = (int64_t)target->bit_width; load->operator_code = (int)target->bit_offset; return load->dst;
+}
+
+static CinderValueId bitfield_value(LowerContext *context, CinderExpr *target, CinderValueId value, CinderLoc loc) {
+    if (target->bit_width == 0U) return value;
+    CinderIRInst *convert = add_inst_ptr(context->function, context->current, IR_BIT_CONVERT, loc);
+    convert->dst = new_value(context->function); convert->left = value; convert->type = target->type;
+    convert->integer = (int64_t)target->bit_width; return convert->dst;
+}
+
 static void store_lvalue(LowerContext *context, CinderExpr *target, CinderValueId address, CinderValueId value, CinderLoc loc) {
     if (address != CINDER_INVALID_VALUE) {
-        CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_MEMORY_STORE, loc);
+        CinderIRInst *store = add_inst_ptr(context->function, context->current, target->bit_width == 0U ? IR_MEMORY_STORE : IR_BIT_STORE, loc);
+        store->integer = (int64_t)target->bit_width; store->operator_code = (int)target->bit_offset;
         store->left = address; store->right = value; store->type = target->type; return;
     }
     const char *symbol = object_symbol(target);
@@ -487,7 +508,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         if (expr->as.generic.selected >= expr->as.generic.associations.len) { cinder_diag(context->diags, CINDER_FATAL, expr->loc, "unresolved generic value expression"); return CINDER_INVALID_VALUE; }
         return lower_expr(context, expr->as.generic.associations.data[expr->as.generic.selected].value);
     }
-    if (expr->kind == EX_COMPOUND_LITERAL) return load_address(context, lower_address(context, expr), expr->type, expr->loc);
+    if (expr->kind == EX_COMPOUND_LITERAL) return load_lvalue(context, expr, lower_address(context, expr), expr->loc);
     if (expr->kind == EX_INT || expr->kind == EX_CHAR) {
         CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc);
         inst->dst = new_value(context->function); inst->integer = expr->as.integer; return inst->dst;
@@ -501,7 +522,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         CinderValueId address = lower_address(context, object);
         return convert_value(context, address, cinder_type_pointer(context->function->types, object->type), expr->type, expr->loc);
     }
-    if (expr->kind == EX_INDEX || expr->kind == EX_MEMBER) return load_address(context, lower_address(context, expr), expr->type, expr->loc);
+    if (expr->kind == EX_INDEX || expr->kind == EX_MEMBER) return load_lvalue(context, expr, lower_address(context, expr), expr->loc);
     if (expr->kind == EX_NAME) {
         const char *symbol = object_symbol(expr);
         int slot = symbol == NULL ? object_slot(context, expr) : -1;
@@ -521,7 +542,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         CinderExpr *target = expr->as.assign.target;
         CinderValueId address = target->kind == EX_NAME ? CINDER_INVALID_VALUE : lower_address(context, target);
         CinderValueId previous = CINDER_INVALID_VALUE;
-        if (expr->as.assign.op != '=') previous = address == CINDER_INVALID_VALUE ? lower_expr(context, target) : load_address(context, address, target->type, expr->loc);
+        if (expr->as.assign.op != '=') previous = address == CINDER_INVALID_VALUE ? lower_expr(context, target) : load_lvalue(context, target, address, expr->loc);
         CinderValueId value = lower_expr(context, expr->as.assign.value);
         if (expr->as.assign.op != '=' && expr->type->kind == TYPE_POINTER) value = pointer_offset(context, previous, value, expr->type, expr->as.assign.op == TOK_MINUSEQ, expr->loc);
         else if (expr->as.assign.op != '=') {
@@ -534,6 +555,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
             operation->type = operation_type; operation->source_type = operation_type;
             value = convert_value(context, value, operation_type, expr->type, expr->loc);
         }
+        value = bitfield_value(context, target, value, expr->loc);
         store_lvalue(context, target, address, value, expr->loc);
         return value;
     }
@@ -542,14 +564,14 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         if (op == TOK_PLUSPLUS || op == TOK_MINUSMINUS) {
             CinderExpr *target = expr->as.unary.value;
             CinderValueId address = target->kind == EX_NAME ? CINDER_INVALID_VALUE : lower_address(context, target);
-            CinderValueId old = address == CINDER_INVALID_VALUE ? lower_expr(context, target) : load_address(context, address, target->type, expr->loc);
+            CinderValueId old = address == CINDER_INVALID_VALUE ? lower_expr(context, target) : load_lvalue(context, target, address, expr->loc);
             if (target->type->kind == TYPE_POINTER) {
                 CinderValueId one = emit_constant(context, 1, expr->loc);
                 CinderValueId updated = pointer_offset(context, old, one, target->type, op == TOK_MINUSMINUS, expr->loc);
                 store_lvalue(context, target, address, updated, expr->loc); return expr->as.unary.postfix ? old : updated;
             }
             CinderType *target_type = expr->as.unary.value->type;
-            CinderType *operation_type = cinder_ir_floating(target_type) ? target_type : cinder_integer_promote(context->function->types, target_type);
+            CinderType *operation_type = target->bit_width != 0U && target->bit_width < 32U ? context->function->types->int_type : cinder_ir_floating(target_type) ? target_type : cinder_integer_promote(context->function->types, target_type);
             CinderValueId operand = convert_value(context, old, target_type, operation_type, expr->loc);
             CinderValueId one_value = new_value(context->function);
             bool floating = cinder_ir_floating(operation_type);
@@ -558,6 +580,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
             CinderIRInst *add = add_inst_ptr(context->function, context->current, add_op, expr->loc); add->dst = new_value(context->function); add->left = operand; add->right = one_value; add->loc = expr->loc; add->type = operation_type; add->source_type = operation_type;
             CinderValueId updated = add->dst;
             updated = convert_value(context, updated, operation_type, target_type, expr->loc);
+            updated = bitfield_value(context, target, updated, expr->loc);
             store_lvalue(context, target, address, updated, expr->loc);
             return expr->as.unary.postfix ? old : updated;
         }
@@ -712,6 +735,13 @@ static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int 
     CinderValueId bytes = convert_value(context, object, cinder_type_pointer(context->function->types, decl->type), byte_pointer, decl->loc);
     for (size_t a = 0U; a < decl->init_actions.len; ++a) {
         CinderInitAction *action = &decl->init_actions.data[a]; CinderExpr *value = action->value;
+        if (action->bit_width != 0U && (action->zero || value != NULL)) {
+            CinderValueId destination = initializer_address(context, bytes, action->offset, action->type, decl->loc);
+            CinderValueId source = action->zero ? emit_typed_constant(context, 0, action->type, decl->loc) : lower_expr(context, value);
+            CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_BIT_INIT, decl->loc);
+            store->left = destination; store->right = source; store->type = action->type;
+            store->integer = (int64_t)action->bit_width; store->operator_code = (int)action->bit_offset; continue;
+        }
         if (action->zero) { zero_initializer_span(context, bytes, action->offset, action->offset + action->type->size, decl->loc); continue; }
         if (value == NULL) continue;
         CinderValueId destination = initializer_address(context, bytes, action->offset, action->type, value->loc);
@@ -917,7 +947,18 @@ static void lower_global_plan(CinderIRModule *module, CinderAst *ast, CinderDecl
                 free(global->addresses.data[r].symbol); global->addresses.data[r] = global->addresses.data[--global->addresses.len];
             } else ++r;
         }
-        if (action->zero) { memset(global->bytes + action->offset, 0, action->type->size); continue; }
+        if (action->zero && action->bit_width == 0U) { memset(global->bytes + action->offset, 0, action->type->size); continue; }
+        if (action->bit_width != 0U) {
+            int64_t integer = 0; double floating = 0.0;
+            if (!action->zero && !cinder_constant_scalar(ast, value, action->type, &integer, &floating)) { cinder_diag(diags, CINDER_ERROR, value->loc, "global bitfield initializer requires an arithmetic constant"); continue; }
+            for (unsigned bit = 0U; bit < action->bit_width; ++bit) {
+                size_t position = (size_t)action->bit_offset + bit, byte = action->offset + position / 8U;
+                unsigned char mask = (unsigned char)(1U << (position % 8U));
+                unsigned char old = (unsigned char)global->bytes[byte];
+                global->bytes[byte] = (char)((old & (unsigned char)~mask) | (((uint64_t)integer >> bit & 1U) != 0U ? mask : 0U));
+            }
+            continue;
+        }
         if (action->type->kind == TYPE_ARRAY && value->kind == EX_STRING) {
             size_t count = value->literal_length + 1U; if (count > action->type->size) count = action->type->size;
             memcpy(global->bytes + action->offset, value->as.string, count); continue;
@@ -1093,7 +1134,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
 }
 
 const char *cinder_ir_op_name(CinderIROp op) {
-    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","local.reset","function.address","object.copy","object.init","local.init","memory.init","zero.init","local.freeze","aggregate.arg","aggregate.return","va.start","va.copy","va.end","undef"};
+    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","local.reset","function.address","object.copy","object.init","local.init","memory.init","zero.init","local.freeze","aggregate.arg","aggregate.return","va.start","va.copy","va.end","bit.load","bit.store","bit.init","bit.convert","undef"};
     return op < CINDER_ARRAY_LEN(names) ? names[op] : "unknown";
 }
 

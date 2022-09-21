@@ -544,6 +544,55 @@ static void object_store(CinderMachineObject *object, const CinderType *type, ui
     emit8(object, operand); emit32(object, (uint32_t)displacement);
 }
 
+static void bitfield_normalize(CinderMachineObject *object, const CinderType *type, unsigned width) {
+    emit8(object, 0x48U); emit8(object, 0xB9U); emit64(object, (UINT64_C(1) << width) - 1U);
+    emit8(object, 0x48U); emit8(object, 0x21U); emit8(object, 0xC8U);
+    if (type->kind != TYPE_BOOL && !type->is_unsigned) {
+        emit8(object, 0x48U); emit8(object, 0xC1U); emit8(object, 0xE0U); emit8(object, (uint8_t)(64U - width));
+        emit8(object, 0x48U); emit8(object, 0xC1U); emit8(object, 0xF8U); emit8(object, (uint8_t)(64U - width));
+    }
+}
+
+/* Byte accesses stay inside the bitfield's occupied bytes. In particular, a
+ * uint container may also contain distinct ordinary char members. */
+static void bitfield_load(CinderMachineObject *object, const CinderIRInst *inst) {
+    CinderType byte = {0}; byte.kind = TYPE_CHAR; byte.size = 1U; byte.is_unsigned = true;
+    unsigned begin = (unsigned)inst->operator_code / 8U;
+    unsigned end = ((unsigned)inst->operator_code + (unsigned)inst->integer + 7U) / 8U;
+    emit8(object, 0x45U); emit8(object, 0x31U); emit8(object, 0xDBU);
+    for (unsigned i = begin; i < end; ++i) {
+        object_load(object, &byte, 0x82U, true, (int)i);
+        if (i != begin) { emit8(object, 0x48U); emit8(object, 0xC1U); emit8(object, 0xE0U); emit8(object, (uint8_t)((i - begin) * 8U)); }
+        emit8(object, 0x49U); emit8(object, 0x09U); emit8(object, 0xC3U);
+    }
+    emit_mov_reg_reg(object, 0U, 11U);
+    if ((unsigned)inst->operator_code % 8U != 0U) { emit8(object, 0x48U); emit8(object, 0xC1U); emit8(object, 0xE8U); emit8(object, (uint8_t)((unsigned)inst->operator_code % 8U)); }
+    bitfield_normalize(object, inst->type, (unsigned)inst->integer);
+}
+
+static void bitfield_store(CinderMachineObject *object, const CinderIRInst *inst) {
+    CinderType byte = {0}; byte.kind = TYPE_CHAR; byte.size = 1U; byte.is_unsigned = true;
+    unsigned offset = (unsigned)inst->operator_code;
+    unsigned begin = offset / 8U, end = (offset + (unsigned)inst->integer + 7U) / 8U;
+    uint64_t mask = ((UINT64_C(1) << (unsigned)inst->integer) - 1U) << (offset % 8U);
+    emit8(object, 0x48U); emit8(object, 0xB9U); emit64(object, (UINT64_C(1) << (unsigned)inst->integer) - 1U);
+    emit8(object, 0x48U); emit8(object, 0x21U); emit8(object, 0xC8U);
+    emit_mov_reg_reg(object, 11U, 0U);
+    if (offset % 8U != 0U) { emit8(object, 0x49U); emit8(object, 0xC1U); emit8(object, 0xE3U); emit8(object, (uint8_t)(offset % 8U)); }
+    for (unsigned i = begin; i < end; ++i) {
+        unsigned shift = (i - begin) * 8U;
+        uint8_t selected = (uint8_t)(mask >> shift);
+        emit_mov_reg_reg(object, 0U, 11U);
+        if (shift != 0U) { emit8(object, 0x48U); emit8(object, 0xC1U); emit8(object, 0xE8U); emit8(object, (uint8_t)shift); }
+        emit8(object, 0x48U); emit8(object, 0x25U); emit32(object, selected);
+        emit_mov_reg_reg(object, 1U, 0U);
+        object_load(object, &byte, 0x82U, true, (int)i);
+        emit8(object, 0x48U); emit8(object, 0x25U); emit32(object, (uint8_t)~selected);
+        emit8(object, 0x48U); emit8(object, 0x09U); emit8(object, 0xC8U);
+        object_store(object, &byte, 0x82U, true, (int)i);
+    }
+}
+
 static void emit_global_load(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
     size_t size = inst->type == NULL ? 8U : inst->type->size;
     if (cinder_ir_floating(inst->type)) {
@@ -740,6 +789,18 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     load_value_alloc(object, function, allocation, inst->right); emit_mov_reg_reg(object, 6U, 0U);
                     emit8(object, 0x48U); emit8(object, 0xB9U); emit64(object, inst->type->size);
                     emit8(object, 0xF3U); emit8(object, 0xA4U); break;
+                case IR_BIT_LOAD:
+                    load_value_to_r10(object, function, allocation, inst->left);
+                    bitfield_load(object, inst);
+                    store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_BIT_CONVERT:
+                    load_value_alloc(object, function, allocation, inst->left);
+                    bitfield_normalize(object, inst->type, (unsigned)inst->integer);
+                    store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_BIT_STORE: case IR_BIT_INIT:
+                    load_value_to_r10(object, function, allocation, inst->left);
+                    load_value_alloc(object, function, allocation, inst->right);
+                    bitfield_store(object, inst); break;
                 case IR_MEMORY_LOAD:
                     load_value_to_r10(object, function, allocation, inst->left);
                     object_load(object, inst->type, 0x82U, true, 0);

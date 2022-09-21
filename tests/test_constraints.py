@@ -33,6 +33,9 @@ with tempfile.TemporaryDirectory(prefix='cinder-constraints-') as directory:
             discrepancy = rule['require_reference_rejection'] and reference.returncode == 0
             if discrepancy:
                 assert family in rule.get('allowed_reference_acceptance', []), (source, reference, 'unadjudicated reference diagnostic discrepancy')
+                diagnostic = rule.get('require_acceptance_diagnostic', {}).get(family)
+                if diagnostic:
+                    assert diagnostic.encode() in reference.stderr, (source, reference, 'missing required reference warning')
             reference_rows.append(dict(**identities[command], exit=reference.returncode, stdout=reference.stdout.decode(errors='replace'), stderr=reference.stderr.decode(errors='replace'), mandatory_constraint=rule['require_reference_rejection'], adjudicated_discrepancy=discrepancy))
         output.write_bytes(b'prior complete output')
         result = subprocess.run([compiler, '-c', str(source), '-o', str(output)], capture_output=True, timeout=10)

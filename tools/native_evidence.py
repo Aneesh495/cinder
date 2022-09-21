@@ -122,10 +122,10 @@ def verify_generated(base, source_root, minimum, compilers):
 AUTHORED_COMMANDS = frozenset((
     'tests/run_smoke.sh','tests/run_frontend.sh','tests/run_globals.sh','tests/run_multi.sh','tests/run_preprocessor.sh','tests/run_ir.sh',
     'tests/test_preprocessor.py','tests/test_control.py','tests/test_constraints.py','tests/test_undefined.py','tests/test_memory.py','tests/test_literals.py','tests/test_linkage.py','tests/test_static_addresses.py','tests/test_numeric.py','tests/test_ir_text.py',
-    'tests/test_alignment_contracts.py','tests/test_noreturn_contracts.py','tests/test_block_storage_contracts.py','tests/test_goto_contracts.py','tests/test_switch_contracts.py','tests/test_register_contracts.py','tests/test_offset_contracts.py','tests/test_runtime_headers.py','tests/test_flexible_contracts.py','tests/test_anonymous_contracts.py',
+    'tests/test_alignment_contracts.py','tests/test_noreturn_contracts.py','tests/test_block_storage_contracts.py','tests/test_goto_contracts.py','tests/test_switch_contracts.py','tests/test_register_contracts.py','tests/test_offset_contracts.py','tests/test_runtime_headers.py','tests/test_flexible_contracts.py','tests/test_anonymous_contracts.py', 'tests/test_bitfield_contracts.py',
     'tests/run_float.sh','tests/run_varargs.sh','tests/run_apps.sh','tests/run_abi.sh','tests/test_abi_boundary.py','tests/run_output.py',
 ))
-AUTHORED_GROUPS = frozenset(('initializers','aggregates','aggregate_abi','variadic','compound_literals','static_assertions','generic','alignment','noreturn','block_storage','goto','switch','register','offset','flexible','anonymous'))
+AUTHORED_GROUPS = frozenset(('initializers','aggregates','aggregate_abi','variadic','compound_literals','static_assertions','generic','alignment','noreturn','block_storage','goto','switch','register','offset','flexible','anonymous','bitfields'))
 
 
 def bootstrap_inputs(root):
@@ -187,7 +187,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
         observed_host.add(name)
     require(observed_host==modules, 'stage 1 actual compiler module inventory is incomplete')
     for stage,previous in [('stage2','stage1'),('stage3','stage2')]:
-        expected_roles.update({stage+'-compile':len(modules),stage+'-link':2,stage+'-authored':len(AUTHORED_COMMANDS),stage+'-authored-group':len(AUTHORED_GROUPS),stage+'-allocated':1,stage+'-flexible-abi':1,stage+'-anonymous-abi':1})
+        expected_roles.update({stage+'-compile':len(modules),stage+'-link':2,stage+'-authored':len(AUTHORED_COMMANDS),stage+'-authored-group':len(AUTHORED_GROUPS),stage+'-allocated':1,stage+'-flexible-abi':1,stage+'-anonymous-abi':1,stage+'-bitfield-abi':1})
         compilations=[c for c in commands if c['role']==stage+'-compile']
         observed=set()
         for command in compilations:

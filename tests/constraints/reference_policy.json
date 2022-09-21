@@ -182,5 +182,32 @@
     ],
     "source_sha256": "3782e98ecf706a4cd3f30bc5d80e43834fac5e94d2fd150f5f8f7c0abf65e8b9",
     "rule": "C17 6.5.16 paragraph 2 and 6.5.2.3 paragraphs 3-4 require a modifiable lvalue and preserve containing aggregate qualifiers. Cinder follows the physical anonymous member path and GCC rejects this const-member assignment. Clang accepts the exact reproducer; that reference diagnostic discrepancy remains separately recorded and does not waive the Cinder constraint."
+  },
+  "bitfield_profile_long.c": {
+    "require_reference_rejection": false,
+    "source_sha256": "be0df31bb69d875c1cfd6045973f6826e049f17e6e8f6f70cb65f3cc8ac75bd4",
+    "ruling": "C17 6.7.2.1p5 permits implementation-defined extra bitfield types. This target profile supports _Bool and signed/unsigned int only."
+  },
+  "bitfield_const_assignment.c": {
+    "require_reference_rejection": true,
+    "allowed_reference_acceptance": [
+      "gcc"
+    ],
+    "require_acceptance_diagnostic": {
+      "gcc": "read-only location"
+    },
+    "source_sha256": "817c5b1a91242b4484e5fc65c30e758d929d91a4fdc64931c174acedf7e7cac4",
+    "ruling": "C17 6.5.16p2 and 6.5.3.1 require a modifiable lvalue. GCC diagnoses const bitfield writes as warnings and returns success even under -pedantic-errors. Cinder rejects these mandatory constraints; raw GCC warnings remain evidence."
+  },
+  "bitfield_const_increment.c": {
+    "require_reference_rejection": true,
+    "allowed_reference_acceptance": [
+      "gcc"
+    ],
+    "require_acceptance_diagnostic": {
+      "gcc": "read-only location"
+    },
+    "source_sha256": "155f1b00a2edc681bce93a3ad33ebd0e633d54e71c200bf91cddec89b7827125",
+    "ruling": "C17 6.5.16p2 and 6.5.3.1 require a modifiable lvalue. GCC diagnoses const bitfield writes as warnings and returns success even under -pedantic-errors. Cinder rejects these mandatory constraints; raw GCC warnings remain evidence."
   }
 }

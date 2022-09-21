@@ -1,0 +1,1 @@
+struct S { const unsigned a:3; char c; unsigned b:5; }; int main(void){struct S s[2]={{5,'A',17},{6,'B',19}};s[0].c='X';s[1].c='Y';s[1].b=23;return s[0].a!=5 || s[0].c!='X' || s[0].b!=17 || s[1].a!=6 || s[1].c!='Y' || s[1].b!=23;}

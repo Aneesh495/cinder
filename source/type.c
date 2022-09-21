@@ -270,7 +270,7 @@ static bool contains_flexible(const CinderType *type, unsigned depth) {
 bool cinder_type_contains_flexible(const CinderType *type) { return contains_flexible(type, 0U); }
 
 bool cinder_type_anonymous_member(const CinderField *field) {
-    return field != NULL && field->name == NULL && field->type != NULL && (field->type->kind == TYPE_STRUCT || field->type->kind == TYPE_UNION) && field->type->tag == NULL && field->bit_width == 0U;
+    return field != NULL && field->name == NULL && field->type != NULL && (field->type->kind == TYPE_STRUCT || field->type->kind == TYPE_UNION) && field->type->tag == NULL && !field->is_bitfield;
 }
 
 static size_t find_member(const CinderType *type, const char *name, size_t *working, size_t *result, size_t capacity, size_t depth, size_t *length) {
@@ -303,7 +303,7 @@ static bool unique_members(const CinderType *root, const CinderType *type, unsig
     for (size_t f = 0U; f < type->fields.len; ++f) {
         const CinderField *field = &type->fields.data[f];
         if (field->name != NULL) { size_t path[64]; if (cinder_type_member_path(root, field->name, path, CINDER_ARRAY_LEN(path)) == SIZE_MAX) return false; }
-        else if (!cinder_type_anonymous_member(field) || !unique_members(root, field->type, depth + 1U)) return false;
+        else if (!field->is_bitfield && (!cinder_type_anonymous_member(field) || !unique_members(root, field->type, depth + 1U))) return false;
     }
     return true;
 }
@@ -327,10 +327,27 @@ int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, Cin
     if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION)) return 1;
     size_t size = 0U;
     size_t align = 1U;
-    size_t named = 0U;
+    size_t named = 0U, bits = 0U;
     if (!cinder_type_members_unique(type)) cinder_diag(diags, CINDER_ERROR, loc, "duplicate promoted aggregate member or invalid anonymous member");
     for (size_t i = 0U; i < type->fields.len; ++i) {
         CinderField *field = &type->fields.data[i];
+        if (field->is_bitfield) {
+            if (field->type == NULL || (field->type->kind != TYPE_BOOL && field->type->kind != TYPE_INT) || field->alignment != 0U || field->bit_width > (field->type->kind == TYPE_BOOL ? 1U : 32U) || (field->bit_width == 0U && field->name != NULL)) {
+                cinder_diag(diags, CINDER_ERROR, loc, "invalid target bitfield type, width, or alignment"); continue;
+            }
+            size_t unit = field->type->size * 8U;
+            if (field->name != NULL) { ++named; if (field->type->align > align) align = field->type->align; }
+            if (type->kind == TYPE_UNION) {
+                field->offset = 0U; field->bit_offset = 0U;
+                size_t member_size = field->name == NULL ? (field->bit_width + 7U) / 8U : field->type->size;
+                if (member_size > size) size = member_size;
+            } else {
+                if (field->bit_width == 0U || field->bit_width > unit - bits % unit) bits = type_align_up(bits, unit);
+                field->offset = bits / unit * field->type->size; field->bit_offset = (unsigned)(bits % unit);
+                bits += field->bit_width; size = (bits + 7U) / 8U;
+            }
+            continue;
+        }
         bool flexible = field->type != NULL && field->type->kind == TYPE_ARRAY && !field->type->complete && field->type->base != NULL && field->type->base->complete;
         if (flexible && (type->kind != TYPE_STRUCT || i + 1U != type->fields.len || field->name == NULL || named == 0U)) { cinder_diag(diags, CINDER_ERROR, loc, "flexible array requires a final named struct member after another named member"); continue; }
         if (field->type == NULL || (!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_ERROR, loc, "field '%s' requires a complete object type", field->name == NULL ? "<unnamed>" : field->name); continue; }
@@ -346,6 +363,8 @@ int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, Cin
             field->offset = size;
             if (field->type->size > SIZE_MAX - size) { cinder_diag(diags, CINDER_ERROR, loc, "aggregate layout size overflow"); size = SIZE_MAX; }
             else size += field->type->size;
+            if (size > SIZE_MAX / 8U) { cinder_diag(diags, CINDER_ERROR, loc, "aggregate bit layout size overflow"); bits = SIZE_MAX; }
+            else bits = size * 8U;
         }
         if (type->kind == TYPE_UNION && field->type->size > size) size = field->type->size;
     }

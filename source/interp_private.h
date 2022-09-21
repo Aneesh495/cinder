@@ -66,6 +66,9 @@ uint32_t cinder_interp_object(InterpContext *context, const CinderType *type, bo
 void cinder_interp_retire(InterpContext *context, uint32_t id);
 InterpValue cinder_interp_address(const InterpContext *context, uint32_t id);
 InterpValue cinder_interp_pointer_value(InterpPointer pointer);
+int64_t cinder_interp_bit_value(uint64_t bits, const CinderType *type, unsigned width);
+bool cinder_interp_bit_load(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, InterpValue *value, CinderLoc loc);
+bool cinder_interp_bit_store(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, const InterpValue *value, bool initializing, CinderLoc loc);
 bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const CinderType *type, InterpValue *value, CinderLoc loc);
 bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const CinderType *type, const InterpValue *value, bool initializing, CinderLoc loc);
 bool cinder_interp_zero(InterpContext *context, InterpPointer pointer, size_t count, CinderLoc loc);

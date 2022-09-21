@@ -16,7 +16,7 @@ compiler = pathlib.Path(sys.argv[1]).resolve()
 irtool = compiler.parent / 'cinderir'
 identity = hashlib.sha256(compiler.read_bytes() + irtool.read_bytes()).hexdigest()
 group = sys.argv[2] if len(sys.argv)>2 else 'block_storage'
-assert group in ('block_storage','flexible','anonymous')
+assert group in ('block_storage','flexible','anonymous','bitfields')
 base = pathlib.Path('.agent-local/' + ('block-storage-contracts' if group == 'block_storage' else group+'-abi-contracts')) / identity
 base.mkdir(parents=True, exist_ok=True)
 root = pathlib.Path('tests',group,'native')
@@ -41,7 +41,7 @@ for case in json.loads((root / 'cases.json').read_text()):
     provider = None if case['provider'] is None else root / case['provider']
     for level in ('-O0', '-O2'):
         objects = {'owned': [], 'assembled': []}
-        if group in ('flexible','anonymous'):objects['parsed']=[]
+        if group in ('flexible','anonymous','bitfields'):objects['parsed']=[]
         for source in sources:
             stem = base / (case['name']+'-'+source.stem+level)
             obj, asm, oracle = stem.with_suffix('.o'), stem.with_suffix('.s'), stem.with_suffix('.assembled.o')
@@ -66,7 +66,7 @@ for case in json.loads((root / 'cases.json').read_text()):
                 row['interpreter'] = value
             save(row)
             objects['owned'].append(obj); objects['assembled'].append(oracle)
-            if group in ('flexible','anonymous'):objects['parsed'].append(parsed)
+            if group in ('flexible','anonymous','bitfields'):objects['parsed'].append(parsed)
         for reference in references:
             # References execute on both hosts; Cinder objects execute on x86 Linux.
             ref = base / (case['name']+'-'+pathlib.Path(reference).name+level+'.reference')

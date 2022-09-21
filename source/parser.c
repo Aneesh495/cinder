@@ -130,13 +130,24 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
         CinderType *field_base = parse_declaration_specifiers(ast, &spec);
         if (spec.storage != 0U || spec.function_specifiers != 0U) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "member declaration cannot have storage or function specifiers");
         if (is(ast, ';') && spec.anonymous_aggregate && field_base->tag == NULL && (field_base->kind == TYPE_STRUCT || field_base->kind == TYPE_UNION)) {
-            CinderField field = {NULL, field_base, 0U, 0U, 0U, spec.alignment};
+            CinderField field = {NULL, field_base, 0U, 0U, 0U, spec.alignment, false};
             cinder_vec_push((CinderVec *)&type->fields, &field); ++ast->cursor; continue;
         }
         do {
             char *field_name = NULL; CinderLoc field_loc = peek(ast)->loc;
-            CinderType *field_type = parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
-            CinderField field = {field_name, field_type, 0U, 0U, 0U, spec.alignment};
+            CinderType *field_type = is(ast, ':') ? field_base : parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
+            CinderField field = {field_name, field_type, 0U, 0U, 0U, spec.alignment, false};
+            if (take(ast, ':')) {
+                field.is_bitfield = true;
+                CinderExpr *width = parse_conditional(ast); int64_t value = 0; CinderType *width_type;
+                bool constant = cinder_constant_integer(ast, width, &value, &width_type);
+                CinderConstantExpr retained = {width, ast->current_function, value}; cinder_vec_push((CinderVec *)&ast->constant_exprs, &retained);
+                unsigned maximum = field_type->kind == TYPE_BOOL ? 1U : 32U;
+                if (field_type->kind != TYPE_BOOL && field_type->kind != TYPE_INT) cinder_diag(ast->diags, CINDER_ERROR, field_loc, "bitfield type requires _Bool, signed int, or unsigned int in the target profile");
+                if (!constant || value < 0 || (uint64_t)value > maximum || (value == 0 && field_name != NULL)) cinder_diag(ast->diags, CINDER_ERROR, field_loc, "bitfield width requires an in-range integer constant; zero width must be unnamed");
+                else field.bit_width = (unsigned)value;
+                if (spec.alignment_specified) cinder_diag(ast->diags, CINDER_ERROR, field_loc, "alignment specifier cannot apply to a bitfield");
+            }
             for (size_t f = 0U; f < type->fields.len; ++f)
                 if (field_name != NULL && type->fields.data[f].name != NULL && strcmp(field_name, type->fields.data[f].name) == 0) cinder_diag(ast->diags, CINDER_ERROR, field_loc, "duplicate aggregate member '%s'", field_name);
             cinder_vec_push((CinderVec *)&type->fields, &field);

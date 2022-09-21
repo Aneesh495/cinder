@@ -4038,5 +4038,213 @@
   {
     "source": "../anonymous/callback.c",
     "exit": 0
+  },
+  {
+    "source": "../bitfields/unsigned_limits.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/signed_limits.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/plain_signed.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/bool_fields.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/full_unsigned.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/full_signed.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/unnamed_padding.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/zero_boundary.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/cross_unit.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/char_prefix.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/char_suffix.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/mixed_bool_int.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/const_neighbor.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/volatile_members.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/assign_truncate.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/signed_truncate.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/prefix_wrap.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/postfix_wrap.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/compound_updates.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/bitwise_updates.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/arrow_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/array_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/partial_local.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/designated_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/designated_resume.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/designated_override.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/static_initialization.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/static_designated.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/anonymous_promoted.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/union_first.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/union_designated.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/aggregate_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/aggregate_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/memory_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/integer_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/conditional_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/variadic_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/switch_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/aligned_aggregate.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/flexible_prefix.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/bool_zero_boundary.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/generic_lvalue.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/unsigned_31.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/signed_one.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/const_bit_char_neighbors.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/const_bit_array_neighbors.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/profile_generic_declared.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/profile_sizeof_values.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/profile_postfix_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/comma_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/assignment_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../bitfields/prefix_promotions.c",
+    "exit": 0
   }
 ]

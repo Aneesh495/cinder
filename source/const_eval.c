@@ -85,6 +85,49 @@ size_t cinder_generic_selection(const CinderType *control, const CinderExpr *exp
     return selected == SIZE_MAX ? fallback : selected;
 }
 
+static unsigned expression_bit_width(CinderAst *ast, const CinderExpr *expr, unsigned depth) {
+    if (expr == NULL || depth >= 256U) return 0U;
+    if (expr->bit_width != 0U) return expr->bit_width;
+    if (expr->kind == EX_MEMBER) {
+        CinderType *type = cinder_expression_type(ast, expr->as.member.base, depth + 1U);
+        if (expr->as.member.arrow && type != NULL && type->kind == TYPE_POINTER) type = type->base;
+        if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION)) return 0U;
+        size_t path[64]; size_t count = cinder_type_member_path(type, expr->as.member.name, path, CINDER_ARRAY_LEN(path));
+        if (count == 0U || count == SIZE_MAX) return 0U;
+        for (size_t p = 0U; p < count; ++p) {
+            const CinderField *field = &type->fields.data[path[p]];
+            if (p + 1U == count) return field->is_bitfield ? field->bit_width : 0U;
+            type = field->type;
+        }
+    }
+    if (expr->kind == EX_GENERIC) {
+        CinderType *control = value_type(ast, cinder_expression_type(ast, expr->as.generic.control, depth + 1U));
+        size_t selected = cinder_generic_selection(control, expr);
+        if (selected < expr->as.generic.associations.len) return expression_bit_width(ast, expr->as.generic.associations.data[selected].value, depth + 1U);
+    }
+    if (expr->kind == EX_ASSIGN) return expression_bit_width(ast, expr->as.assign.target, depth + 1U);
+    if (expr->kind == EX_BINARY && expr->as.binary.op == ',') return expression_bit_width(ast, expr->as.binary.right, depth + 1U);
+    if (expr->kind == EX_UNARY && (expr->as.unary.op == TOK_PLUSPLUS || expr->as.unary.op == TOK_MINUSMINUS)) return expression_bit_width(ast, expr->as.unary.value, depth + 1U);
+    return 0U;
+}
+
+static CinderType *promote_expression_type(CinderAst *ast, const CinderExpr *expr, CinderType *type, unsigned depth) {
+    unsigned width = expression_bit_width(ast, expr, depth + 1U);
+    if (width != 0U && width < 32U && integer_type(type)) return ast->types->int_type;
+    return integer_type(type) ? cinder_integer_promote(ast->types, type) : type;
+}
+
+bool cinder_expression_designates_bitfield(CinderAst *ast, const CinderExpr *expr, unsigned depth) {
+    if (expr == NULL || depth >= 256U) return false;
+    if (expr->kind == EX_MEMBER) return expression_bit_width(ast, expr, depth + 1U) != 0U;
+    if (expr->kind == EX_GENERIC) {
+        CinderType *control = value_type(ast, cinder_expression_type(ast, expr->as.generic.control, depth + 1U));
+        size_t selected = cinder_generic_selection(control, expr);
+        return selected < expr->as.generic.associations.len && cinder_expression_designates_bitfield(ast, expr->as.generic.associations.data[selected].value, depth + 1U);
+    }
+    return false;
+}
+
 CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsigned depth) {
     if (expr == NULL || depth >= 256U) return NULL;
     if (expr->kind == EX_COMPOUND_LITERAL && !cinder_infer_initializer_shape(ast, expr->as.compound_literal, depth + 1U)) return NULL;
@@ -100,18 +143,18 @@ CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsig
     if (expr->kind == EX_UNARY) {
         CinderType *type = cinder_expression_type(ast, expr->as.unary.value, depth + 1U);
         if (expr->as.unary.op == '!') return ast->types->int_type;
-        if (expr->as.unary.op == '&' && type != NULL) return cinder_type_pointer(ast->types, type);
+        if (expr->as.unary.op == '&' && type != NULL) return expression_bit_width(ast, expr->as.unary.value, depth + 1U) == 0U ? cinder_type_pointer(ast->types, type) : NULL;
         type = value_type(ast, type);
         if (expr->as.unary.op == '*' && type != NULL && type->kind == TYPE_POINTER) return type->base;
         if (expr->as.unary.op == TOK_PLUSPLUS || expr->as.unary.op == TOK_MINUSMINUS) return type;
         if ((expr->as.unary.op == '+' || expr->as.unary.op == '-') && type != NULL && (type->kind == TYPE_FLOAT || type->kind == TYPE_DOUBLE)) return type;
-        return integer_type(type) ? cinder_integer_promote(ast->types, type) : NULL;
+        return integer_type(type) ? promote_expression_type(ast, expr->as.unary.value, type, depth + 1U) : NULL;
     }
     if (expr->kind == EX_BINARY || expr->kind == EX_CONDITIONAL) {
         CinderType *left = value_type(ast, cinder_expression_type(ast, expr->kind == EX_BINARY ? expr->as.binary.left : expr->as.conditional.yes, depth + 1U));
         CinderType *right = value_type(ast, cinder_expression_type(ast, expr->kind == EX_BINARY ? expr->as.binary.right : expr->as.conditional.no, depth + 1U));
         if (expr->kind == EX_BINARY && expr->as.binary.op == ',') return right;
-        if (expr->kind == EX_CONDITIONAL && left != NULL && right != NULL && cinder_type_compatible(left, right)) return left;
+        if (expr->kind == EX_CONDITIONAL && left != NULL && right != NULL && !integer_type(left) && cinder_type_compatible(left, right)) return left;
         if (expr->kind == EX_CONDITIONAL && left != NULL && right != NULL && (left->kind == TYPE_STRUCT || left->kind == TYPE_UNION)) {
             CinderType a = *left, b = *right; a.qualifiers = 0U; b.qualifiers = 0U;
             if (cinder_type_compatible(&a, &b)) return left;
@@ -119,7 +162,7 @@ CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsig
         if (expr->kind == EX_CONDITIONAL && left != NULL && right != NULL && (left->kind == TYPE_POINTER || right->kind == TYPE_POINTER)) return left->kind == TYPE_POINTER ? left : right;
         if (expr->kind == EX_BINARY) {
             int op = expr->as.binary.op;
-            if ((op == TOK_SHL || op == TOK_SHR) && integer_type(left) && integer_type(right)) return cinder_integer_promote(ast->types, left);
+            if ((op == TOK_SHL || op == TOK_SHR) && integer_type(left) && integer_type(right)) return promote_expression_type(ast, expr->as.binary.left, left, depth + 1U);
             if (op == TOK_EQEQ || op == TOK_NEQ || op == TOK_LE || op == TOK_GE || op == '<' || op == '>' || op == TOK_ANDAND || op == TOK_OROR) return ast->types->int_type;
             if ((op == '+' || op == '-') && left != NULL && left->kind == TYPE_POINTER && integer_type(right)) return left;
             if (op == '+' && right != NULL && right->kind == TYPE_POINTER && integer_type(left)) return right;
@@ -128,7 +171,9 @@ CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsig
         bool a = integer_type(left) || (left != NULL && (left->kind == TYPE_FLOAT || left->kind == TYPE_DOUBLE));
         bool b = integer_type(right) || (right != NULL && (right->kind == TYPE_FLOAT || right->kind == TYPE_DOUBLE));
         if (!a || !b) return NULL;
-        return cinder_arithmetic_type(ast->types, left, right);
+        const CinderExpr *a_expr = expr->kind == EX_BINARY ? expr->as.binary.left : expr->as.conditional.yes;
+        const CinderExpr *b_expr = expr->kind == EX_BINARY ? expr->as.binary.right : expr->as.conditional.no;
+        return cinder_arithmetic_type(ast->types, promote_expression_type(ast, a_expr, left, depth + 1U), promote_expression_type(ast, b_expr, right, depth + 1U));
     }
     if (expr->kind == EX_CALL) {
         CinderType *type = cinder_expression_type(ast, expr->as.call.callee, depth + 1U);
@@ -261,6 +306,7 @@ static bool evaluate(CinderAst *ast, const CinderExpr *expr, IntegerConstant *re
         *result = (IntegerConstant){(uint64_t)value, ast->types->ulong_type}; return true;
     }
     if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) {
+        if (expr->queried_type == NULL && cinder_expression_designates_bitfield(ast, expr->as.unary.value, depth + 1U)) return false;
         CinderType *type = expr->queried_type != NULL ? expr->queried_type : cinder_expression_type(ast, expr->as.unary.value, depth + 1U);
         if (type == NULL || !type->complete || type->completion_index > expr->parse_index || type->kind == TYPE_VOID || type->kind == TYPE_FUNCTION) return false;
         *result = (IntegerConstant){expr->kind == EX_SIZEOF ? type->size : type->align, ast->types->ulong_type}; return true;

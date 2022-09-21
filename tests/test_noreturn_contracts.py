@@ -145,7 +145,7 @@ mutations = {
     'noncall-contract': '\n'.join(bad)+'\n',
     'invalid-boolean': text.replace('noreturn 1', 'noreturn 2', 1),
     'missing-contract': text.replace('noreturn 1 ', '', 1),
-    'previous-schema': text.replace('cinder-ir 4', 'cinder-ir 3', 1),
+    'previous-schema': text.replace('cinder-ir 5', 'cinder-ir 3', 1),
 }
 for name, content in mutations.items():
     fixture = base / (name+'.invalid.cir'); fixture.write_text(content)

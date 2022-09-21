@@ -265,6 +265,7 @@ struct CinderField {
     unsigned bit_offset;
     unsigned bit_width;
     size_t alignment;
+    bool is_bitfield;
 };
 struct CinderParam {
     char *name;
@@ -359,6 +360,8 @@ typedef struct {
     CinderType *type;
     CinderExpr *value;
     bool zero;
+    unsigned bit_offset;
+    unsigned bit_width;
 } CinderInitAction;
 
 typedef enum {
@@ -415,6 +418,8 @@ struct CinderExpr {
     CinderLoc loc;
     CinderType *type;
     bool is_lvalue;
+    unsigned bit_offset;
+    unsigned bit_width;
     bool name_visible;
     CinderDecl *resolved_decl;
     CinderType *queried_type;
@@ -534,6 +539,7 @@ void cinder_ast_destroy(CinderAst *ast);
 int cinder_parse(CinderAst *ast);
 bool cinder_constant_integer(CinderAst *ast, const CinderExpr *expr, int64_t *value, CinderType **type);
 bool cinder_offsetof_value(CinderAst *ast, const CinderExpr *expr, size_t *value);
+size_t cinder_init_first(const CinderType *type);
 size_t cinder_init_child_count(const CinderType *type);
 typedef enum { INIT_MEMBER_OK, INIT_MEMBER_UNKNOWN, INIT_MEMBER_FLEXIBLE, INIT_MEMBER_DEPTH } CinderInitMemberResult;
 CinderInitMemberResult cinder_init_member(CinderInitFrame *frames, size_t *depth, size_t capacity, const char *name);
@@ -541,6 +547,7 @@ CinderType *cinder_init_child(CinderInitFrame frame, size_t *offset);
 void cinder_init_advance(CinderInitFrame *frames, size_t *depth);
 bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned depth);
 CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsigned depth);
+bool cinder_expression_designates_bitfield(CinderAst *ast, const CinderExpr *expr, unsigned depth);
 size_t cinder_generic_selection(const CinderType *control, const CinderExpr *expr);
 void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *out);
 
@@ -669,6 +676,10 @@ typedef enum {
     IR_VA_START,
     IR_VA_COPY,
     IR_VA_END,
+    IR_BIT_LOAD,
+    IR_BIT_STORE,
+    IR_BIT_INIT,
+    IR_BIT_CONVERT,
     IR_UNDEF,
 } CinderIROp;
 

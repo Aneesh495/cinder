@@ -79,7 +79,7 @@ mutations['flexible-not-final'] = '\n'.join(swapped) + '\n'
 count = int(lines[1].split()[1])
 extra = f'type {count} array 0 1 0 0 4 4 {header_id} 1 none 0 - params 0 fields 0 identity 999999\n'
 mutations['array-of-flexible-header'] = seed.replace(f'types {count}\n', f'types {count + 1}\n', 1).replace('globals 0\n', extra + 'globals 0\n', 1)
-extra = f'type {count} struct 0 1 0 0 4 4 none 0 none 0 x456d626564 params 0 fields 1 identity 999999\nfield x68656164 {header_id} 0 0 0 align 0\n'
+extra = f'type {count} struct 0 1 0 0 4 4 none 0 none 0 x456d626564 params 0 fields 1 identity 999999\nfield x68656164 {header_id} 0 0 0 align 0 bits 0\n'
 mutations['embedded-flexible-header'] = seed.replace(f'types {count}\n', f'types {count + 1}\n', 1).replace('globals 0\n', extra + 'globals 0\n', 1)
 for name, text in mutations.items():
     assert text != seed, name

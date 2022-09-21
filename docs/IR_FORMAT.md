@@ -1,6 +1,6 @@
 # Canonical typed IR
 
-The schema header is `cinder-ir 4 lp64-le sysv-x86-64`. The format uses whitespace
+The schema header is `cinder-ir 5 lp64-le sysv-x86-64`. The format uses whitespace
 separated tokens and optional `#` comments between tokens. The writer emits a
 deterministic order. Type IDs follow first reachable use; recursive aggregate
 identities are collected before their members. Integers and floating values use
@@ -90,7 +90,7 @@ records. Zero inherits the declared type alignment. Nonzero requests must
 be supported powers of two, at least the natural alignment, and at most 16.
 These requests affect storage, leaving scalar type layout unchanged. The
 reader verifies canonical field offsets and tail padding for complete
-aggregates without bitfields, as well as requested member alignment and
+aggregates, including independently reconstructed bitfield packing, as well as requested member alignment and
 local/global storage constraints. Earlier schema headers are rejected.
 
 `noreturn 0` or `noreturn 1` records the declaration contract on each function
@@ -107,3 +107,24 @@ struct members, and array elements containing these records, including through
 unions. `pointer.member` identifies the actual field; its flexible extent is
 derived from the containing object's storage by the interpreter. See
 `FLEXIBLE_ARRAYS.md`.
+
+Schema 5 adds `bits 0` or `bits 1` to every field record, after `align N`.
+The flag distinguishes an ordinary field from an unnamed zero-width bitfield.
+The preceding bit offset and bit width remain explicit. The reader independently
+reconstructs each storage unit, zero-width boundary, aggregate alignment, and
+ordinary-member placement. Earlier schema headers are rejected.
+
+`bit.load`, `bit.store`, and `bit.init` use a pointer to the declared integer
+storage type as their left operand. Store and initialization also have a value
+of that type as their right operand. Literal integer metadata is the nonzero
+bit width; operator metadata is the nonnegative bit offset within the unit.
+`bit.convert` takes a scalar of the declared type, with a nonzero width and
+operator offset zero, and normalizes assignment/increment results without
+another volatile load.
+No bit instruction has a source type, local slot, symbol, or extra arguments.
+`bit.store` cannot target a const-qualified pointee. Internal byte fragments
+used for omitted initialization also use these contracts.
+
+Interpreter object initialization is tracked per bit. Assigning one field does
+not initialize a neighboring field, while reads of that assigned field do not
+inspect neighboring indeterminate bits. Aggregate copies preserve these masks.

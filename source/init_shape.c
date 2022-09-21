@@ -2,6 +2,13 @@
 
 #include <string.h>
 
+size_t cinder_init_first(const CinderType *type) {
+    size_t index = 0U;
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION)
+        while (index < type->fields.len && type->fields.data[index].is_bitfield && type->fields.data[index].name == NULL) ++index;
+    return index;
+}
+
 size_t cinder_init_child_count(const CinderType *type) {
     if (type->kind == TYPE_ARRAY) return type->complete ? type->array_len : SIZE_MAX;
     if (type->kind == TYPE_STRUCT && type->fields.len != 0U) {
@@ -29,7 +36,7 @@ CinderInitMemberResult cinder_init_member(CinderInitFrame *frames, size_t *depth
         if (p + 1U < length) {
             if (*depth == capacity) return INIT_MEMBER_DEPTH;
             size_t offset; CinderType *child = cinder_init_child(*frame, &offset);
-            frames[(*depth)++] = (CinderInitFrame){child, 0U, offset};
+            frames[(*depth)++] = (CinderInitFrame){child, cinder_init_first(child), offset};
         }
     }
     return INIT_MEMBER_OK;
@@ -39,7 +46,11 @@ void cinder_init_advance(CinderInitFrame *frames, size_t *depth) {
     while (*depth != 0U) {
         CinderInitFrame *frame = &frames[*depth - 1U];
         if (frame->type->kind == TYPE_UNION) frame->index = frame->type->fields.len;
-        else ++frame->index;
+        else {
+            ++frame->index;
+            if (frame->type->kind == TYPE_STRUCT)
+                while (frame->index < frame->type->fields.len && frame->type->fields.data[frame->index].is_bitfield && frame->type->fields.data[frame->index].name == NULL) ++frame->index;
+        }
         if (frame->index < cinder_init_child_count(frame->type) || *depth == 1U) return;
         --*depth;
     }
@@ -70,12 +81,12 @@ bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned n
     if (decl->initializer->kind != EX_INIT_LIST) return false;
     const CinderExpr *list = decl->initializer;
     size_t limit = 64U * 1024U * 1024U / type->base->size, extent = 0U;
-    CinderInitFrame frames[64]; size_t depth = 1U; frames[0] = (CinderInitFrame){type, 0U, 0U};
+    CinderInitFrame frames[64]; size_t depth = 1U; frames[0] = (CinderInitFrame){type, cinder_init_first(type), 0U};
     if (type->base->kind == TYPE_CHAR && list->as.initializer.entries.len == 1U && list->as.initializer.entries.data[0].designators.len == 0U && list->as.initializer.entries.data[0].value->kind == EX_STRING) extent = list->as.initializer.entries.data[0].value->literal_length + 1U;
     else for (size_t e = 0U; e < list->as.initializer.entries.len; ++e) {
         const CinderInitEntry *entry = &list->as.initializer.entries.data[e];
         if (entry->designators.len != 0U) {
-            depth = 1U; frames[0] = (CinderInitFrame){type, 0U, 0U};
+            depth = 1U; frames[0] = (CinderInitFrame){type, cinder_init_first(type), 0U};
             for (size_t d = 0U; d < entry->designators.len; ++d) {
                 CinderInitFrame *frame = &frames[depth - 1U];
                 const CinderInitDesignator *designator = &entry->designators.data[d];
@@ -90,7 +101,7 @@ bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned n
                 if (d + 1U < entry->designators.len) {
                     size_t offset; CinderType *child = cinder_init_child(*frame, &offset);
                     if (!aggregate(child) || depth == CINDER_ARRAY_LEN(frames)) return false;
-                    frames[depth++] = (CinderInitFrame){child, 0U, offset};
+                    frames[depth++] = (CinderInitFrame){child, cinder_init_first(child), offset};
                 }
             }
         }
@@ -101,7 +112,7 @@ bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned n
             CinderType *value = cinder_expression_type(ast, entry->value, nesting + 1U);
             while (aggregate(child) && !same_object_type(child, value)) {
                 if (!child->complete || depth == CINDER_ARRAY_LEN(frames) || cinder_init_child_count(child) == 0U) return false;
-                frames[depth++] = (CinderInitFrame){child, 0U, offset}; child = cinder_init_child(frames[depth - 1U], &offset);
+                frames[depth++] = (CinderInitFrame){child, cinder_init_first(child), offset}; child = cinder_init_child(frames[depth - 1U], &offset);
             }
         }
         cinder_init_advance(frames, &depth);
