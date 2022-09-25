@@ -755,6 +755,7 @@ typedef struct {
     size_t domain_begin;
     size_t domain_end;
     bool function;
+    CINDER_VEC_TYPE(size_t) origin_path;
 } CinderIRAddress;
 
 typedef struct {

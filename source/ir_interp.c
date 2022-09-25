@@ -306,6 +306,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         bool flexible = member->kind == TYPE_ARRAY && !member->complete;
                         bool valid = flexible ? cinder_interp_flexible_member(context, pointer->address, (size_t)inst->integer, member->base, &result, inst->loc) : cinder_type_contains_flexible(member) ? cinder_interp_extended_member(context, pointer->address, (size_t)inst->integer, &result, inst->loc) : cinder_interp_member(context, pointer->address, (size_t)inst->integer, member->size, &result, inst->loc);
                         if (!valid) goto done;
+                        cinder_interp_member_origin(pointer->address, (size_t)inst->slot, (size_t)inst->integer, &result);
                     }
                     else {
                         if (!values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer subtraction has no object provenance"); goto done; }
@@ -456,7 +457,17 @@ CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *fu
             }
             if (target == 0U) { cinder_interp_fail(&context, INTERP_UNSUPPORTED, global->loc, "address initializer target storage is unavailable"); ready = false; break; }
             if (address->addend < 0 || (uint64_t)address->addend < address->domain_begin || (uint64_t)address->addend > address->domain_end) { cinder_interp_fail(&context, INTERP_POINTER_BOUNDS, global->loc, "address initializer exceeds its object domain"); ready = false; break; }
-            InterpValue value = cinder_interp_pointer_value((InterpPointer){target, address->addend, address->domain_begin, address->domain_end});
+            InterpValue value = cinder_interp_address(&context, target);
+            value.address.offset = address->addend; value.address.begin = address->domain_begin; value.address.end = address->domain_end;
+            for (size_t p = 0U; p < address->origin_path.len; ++p) {
+                const CinderType *type = value.address.declared_type;
+                for (unsigned depth = 0U; type != NULL && type->kind == TYPE_ARRAY && depth < 256U; ++depth) type = type->base;
+                size_t field = address->origin_path.data[p];
+                if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION) || field >= type->fields.len) { cinder_interp_fail(&context, INTERP_MALFORMED, global->loc, "invalid address member origin"); ready = false; break; }
+                cinder_interp_member_origin(value.address, field, type->fields.data[field].offset, &value);
+            }
+            if (!ready) break;
+            value = cinder_interp_pointer_value(value.address);
             InterpObject *object = &context.objects.data[globals[g] - 1U];
             for (size_t byte = 0U; byte < 8U; ++byte) object->bytes[address->offset + byte] = (unsigned char)((uint64_t)value.integer >> (byte * 8U));
             InterpStoredPointer stored = {address->offset, value.address}; cinder_vec_push((CinderVec *)&object->pointers, &stored);

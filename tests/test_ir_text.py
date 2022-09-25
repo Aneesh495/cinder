@@ -61,7 +61,7 @@ constant = next(line for line in lines if line.startswith('inst const '))
 parts = constant.split()
 # Mutation cases are counted separately from authored source cases.
 mutations = {
-    'schema': text.replace('cinder-ir 5', 'cinder-ir 99', 1),
+    'schema': text.replace('cinder-ir 6', 'cinder-ir 99', 1),
     'profile': text.replace('sysv-x86-64', 'other-target', 1),
     'missing-end': text.replace('end-module\n', ''),
     'trailing-data': text + 'unexpected\n',

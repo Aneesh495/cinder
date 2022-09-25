@@ -41,7 +41,7 @@ Initializers skip unnamed fields, retain physical anonymous-member paths, and
 zero omitted bits without overwriting explicit neighbors. Static initializers
 encode the same layout directly into original ELF data. The independent CIR
 reader reconstructs packing before verification or code generation. Its schema
-5 records distinguish ordinary members from unnamed zero-width fields.
+6 records distinguish ordinary members from unnamed zero-width fields.
 
 `make test-bitfields` covers authored layout, signedness, initialization,
 conversions, qualifiers, promotions, single evaluation, and ABI cases. Original

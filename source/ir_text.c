@@ -101,7 +101,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
     if (cinder_verify_ir(module, diags) != 0) return 1;
     TypeTable table = {NULL, 0U, 0U};
     if (!collect_module(&table, module)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR serialization type graph exceeds limits"); free(table.data); return 1; }
-    fprintf(out, "cinder-ir 5 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
+    fprintf(out, "cinder-ir 6 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
     for (size_t t = 0U; t < table.len; ++t) write_type(out, &table, t);
     fprintf(out, "globals %zu\n", module->globals.len);
     for (size_t g = 0U; g < module->globals.len; ++g) {
@@ -117,6 +117,8 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
             fprintf(out, " %016" PRIx64 " ", (uint64_t)address->addend);
             write_type_ref(out, &table, address->pointer_type); fputc(' ', out); write_type_ref(out, &table, address->target_type);
             fprintf(out, " %zu %zu %u", address->domain_begin, address->domain_end, address->function ? 1U : 0U);
+            fprintf(out, " origin %zu", address->origin_path.len);
+            for (size_t p = 0U; p < address->origin_path.len; ++p) fprintf(out, " %zu", address->origin_path.data[p]);
         }
         write_loc(out, global->loc); fputc('\n', out);
     }
@@ -404,7 +406,9 @@ static void read_globals(Reader *reader) {
             address.offset = (size_t)number(reader, IR_TEXT_LIMIT); address.symbol = string(reader, true, true);
             address.addend = signed_bits(bits(reader)); address.pointer_type = type_ref(reader); address.target_type = type_ref(reader);
             address.domain_begin = (size_t)number(reader, IR_TEXT_LIMIT); address.domain_end = (size_t)number(reader, IR_TEXT_LIMIT);
-            address.function = boolean(reader); cinder_vec_push((CinderVec *)&global.addresses, &address);
+            address.function = boolean(reader); expect(reader, "origin"); size_t length = (size_t)number(reader, 256U);
+            for (size_t p = 0U; p < length && !reader->failed; ++p) { size_t field = (size_t)number(reader, 65535U); cinder_vec_push((CinderVec *)&address.origin_path, &field); }
+            cinder_vec_push((CinderVec *)&global.addresses, &address);
         }
         global.loc = location(reader); cinder_vec_push((CinderVec *)&reader->module->globals, &global);
     }
@@ -480,7 +484,7 @@ static void read_functions(Reader *reader) {
 int cinder_parse_ir(CinderIRModule *module, const char *text, size_t length, CinderDiagnostics *diags) {
     Reader reader; memset(&reader, 0, sizeof(reader)); reader.text = text; reader.length = length; reader.line = 1U; reader.module = module; reader.diags = diags;
     if (length > IR_TEXT_LIMIT || memchr(text, '\0', length) != NULL || module->functions.len != 0U || module->globals.len != 0U) { parse_error(&reader, "invalid input extent or nonempty destination module"); return 1; }
-    expect(&reader, "cinder-ir"); if (number(&reader, 5U) != 5U) parse_error(&reader, "unsupported IR schema version");
+    expect(&reader, "cinder-ir"); if (number(&reader, 6U) != 6U) parse_error(&reader, "unsupported IR schema version");
     expect(&reader, "lp64-le"); expect(&reader, "sysv-x86-64"); read_types(&reader);
     bool *active = cinder_alloc((reader.types.len == 0U ? 1U : reader.types.len) * sizeof(*active)); memset(active, 0, reader.types.len * sizeof(*active));
     for (size_t t = 0U; t < reader.types.len && !reader.failed; ++t) (void)validate_type(&reader, reader.types.data[t], active, 0U);

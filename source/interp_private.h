@@ -7,6 +7,8 @@ typedef struct {
     int64_t offset;
     size_t begin;
     size_t end;
+    const CinderType *declared_type;
+    bool readonly_origin;
 } InterpPointer;
 
 typedef struct {
@@ -66,6 +68,7 @@ uint32_t cinder_interp_object(InterpContext *context, const CinderType *type, bo
 void cinder_interp_retire(InterpContext *context, uint32_t id);
 InterpValue cinder_interp_address(const InterpContext *context, uint32_t id);
 InterpValue cinder_interp_pointer_value(InterpPointer pointer);
+void cinder_interp_member_origin(InterpPointer parent, size_t field, size_t offset, InterpValue *value);
 int64_t cinder_interp_bit_value(uint64_t bits, const CinderType *type, unsigned width);
 bool cinder_interp_bit_load(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, InterpValue *value, CinderLoc loc);
 bool cinder_interp_bit_store(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, const InterpValue *value, bool initializing, CinderLoc loc);

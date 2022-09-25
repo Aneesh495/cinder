@@ -1,0 +1,1 @@
+struct P{int x;int y;};union U{const struct P fixed;struct P live;};struct P change(struct P p){p.x+=2;return p;}int main(void){union U u={.live={3,5}};u.live=change(u.live);return u.live.x!=5||u.live.y!=5;}

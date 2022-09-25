@@ -4246,5 +4246,105 @@
   {
     "source": "../bitfields/prefix_promotions.c",
     "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_arrow.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_anonymous_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_nested_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_bitfield.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_anonymous_bitfield.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_bit_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_member_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_aggregate.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_aggregate_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_qualified_view_cast.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/struct_qualified_view_cast.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/array_qualified_view_cast.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_member_pointer_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_mutable_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_qualified_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_array_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_nested_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_anonymous_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_const_array_neighbor.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_callback.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_variadic_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_mutable_char_alias.c",
+    "exit": 0
+  },
+  {
+    "source": "../qualifiers/union_static_bit_pointer.c",
+    "exit": 0
   }
 ]

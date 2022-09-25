@@ -54,7 +54,7 @@ for source in inputs[:-1]:
 seed = (root / 'unsigned_limits-O0.cir').read_text()
 lines = seed.splitlines()
 field = next(i for i,line in enumerate(lines) if line.startswith('field '))
-mutations = {'previous-schema': seed.replace('cinder-ir 5 ', 'cinder-ir 4 ', 1)}
+mutations = {'previous-schema': seed.replace('cinder-ir 6 ', 'cinder-ir 4 ', 1)}
 def change(name, index, edits):
     altered = lines.copy(); columns = altered[index].split()
     for column,value in edits.items(): columns[column] = value
