@@ -1,0 +1,42 @@
+[
+  {
+    "source": "sparse_equal_phi.c",
+    "expected": 26,
+    "cfg_changes": true
+  },
+  {
+    "source": "sparse_conversion.c",
+    "expected": 7,
+    "cfg_changes": true
+  },
+  {
+    "source": "sparse_signed_conversion.c",
+    "expected": 7,
+    "cfg_changes": true
+  },
+  {
+    "source": "sparse_phi_arithmetic.c",
+    "expected": 26,
+    "cfg_changes": true
+  },
+  {
+    "source": "sparse_different_phi.c",
+    "expected": 30,
+    "cfg_changes": false
+  },
+  {
+    "source": "sparse_volatile_load.c",
+    "expected": 7,
+    "cfg_changes": false
+  },
+  {
+    "source": "sparse_call_effect.c",
+    "expected": 1,
+    "cfg_changes": false
+  },
+  {
+    "source": "sparse_phi_narrow_range.c",
+    "expected": 14,
+    "cfg_changes": false
+  }
+]

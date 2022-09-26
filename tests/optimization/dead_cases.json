@@ -1,0 +1,44 @@
+[
+  {
+    "source": "dead_unsigned_sum.c",
+    "expected": 3,
+    "opcode": "add",
+    "changes": true
+  },
+  {
+    "source": "dead_unsigned_product.c",
+    "expected": 3,
+    "opcode": "mul",
+    "changes": true
+  },
+  {
+    "source": "dead_bit_expression.c",
+    "expected": 3,
+    "opcode": "xor",
+    "changes": true
+  },
+  {
+    "source": "dead_signed_sum_kept.c",
+    "expected": 3,
+    "opcode": "add",
+    "changes": false
+  },
+  {
+    "source": "dead_memory_read_kept.c",
+    "expected": 3,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "dead_call_kept.c",
+    "expected": 1,
+    "opcode": "call",
+    "changes": false
+  },
+  {
+    "source": "dead_float_kept.c",
+    "expected": 0,
+    "opcode": "fadd",
+    "changes": false
+  }
+]

@@ -1,13 +1,25 @@
-#include "cinder.h"
+#include "opt_private.h"
 
 #include <limits.h>
 #include <stdlib.h>
+
+int64_t cinder_opt_normalize(int64_t value, const CinderType *type) {
+    uint64_t bits = (uint64_t)value;
+    if (type->kind == TYPE_BOOL) return bits != 0U;
+    unsigned width = (unsigned)(type->size * 8U);
+    if (width < 64U) {
+        uint64_t mask = (UINT64_C(1) << width) - 1U; bits &= mask;
+        if (!type->is_unsigned && (bits & (UINT64_C(1) << (width - 1U))) != 0U) bits |= ~mask;
+    }
+    return bits <= (uint64_t)INT64_MAX ? (int64_t)bits : -1 - (int64_t)~bits;
+}
 
 static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t *out) {
     CinderIROp op = inst->op;
     if (op != IR_ADD && op != IR_SUB && op != IR_MUL && op != IR_BIT_AND && op != IR_BIT_OR && op != IR_BIT_XOR && op != IR_CMP_EQ && op != IR_CMP_NE && op != IR_CMP_LT_S && op != IR_CMP_LE_S && op != IR_CMP_GT_S && op != IR_CMP_GE_S && op != IR_DIV_S && op != IR_MOD_S) return false;
     bool unsig = inst->type != NULL && inst->type->is_unsigned;
     const CinderType *operand = inst->source_type != NULL ? inst->source_type : inst->type;
+    if (operand->kind == TYPE_POINTER) return false;
     unsigned width = (unsigned)(operand->size * 8U);
     int64_t minimum = width == 64U ? INT64_MIN : -(INT64_C(1) << (width - 1U));
     switch (op) {
@@ -39,6 +51,16 @@ static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t 
         case IR_MOD_S: if (right == 0 || (left == minimum && right == -1)) return false; *out = left % right; return true;
         default: return false;
     }
+}
+
+bool cinder_opt_integer_value(const CinderIRInst *inst, int64_t left, int64_t right, int64_t *out) {
+    int64_t result;
+    if (!fold(inst, left, right, &result)) return false;
+    if (inst->type->size < 8U && !inst->type->is_unsigned) {
+        unsigned width = (unsigned)(inst->type->size * 8U);
+        if (result < -(INT64_C(1) << (width - 1U)) || result >= (INT64_C(1) << (width - 1U))) return false;
+    }
+    *out = cinder_opt_normalize(result, inst->type); return true;
 }
 
 static CinderValueId alias_of(CinderValueId value, const CinderValueId *aliases, size_t count) {
@@ -77,7 +99,6 @@ static unsigned propagate_copies(CinderIRFunction *function) {
 }
 
 int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags) {
-    (void)diags;
     stats->functions_changed = 0U; stats->instructions_changed = 0U; stats->constants_folded = 0U; stats->blocks_removed = 0U; stats->memory_forwarded = 0U; stats->dead_instructions_removed = 0U;
     if (level <= 0) return 0;
     for (size_t f = 0U; f < module->functions.len; ++f) {
@@ -92,7 +113,7 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
             CinderIRBlock *block = &function->blocks.data[b];
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 CinderIRInst *inst = &block->instructions.data[i];
-                if (inst->op == IR_CONST) { known[inst->dst] = true; constant[inst->dst] = inst->integer; continue; }
+                if (inst->op == IR_CONST) { known[inst->dst] = inst->type->kind != TYPE_POINTER; constant[inst->dst] = cinder_opt_normalize(inst->integer, inst->type); continue; }
                 if (inst->op == IR_COPY && known[inst->left]) { inst->op = IR_CONST; inst->integer = constant[inst->left]; inst->left = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = inst->integer; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
                 if (inst->right != CINDER_INVALID_VALUE && known[inst->left] && known[inst->right]) {
                     int64_t result = 0;
@@ -102,17 +123,25 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
                             if (inst->type->is_unsigned) result = (int64_t)((uint64_t)result & ((UINT64_C(1) << width) - 1U));
                             else if (result < -(INT64_C(1) << (width - 1U)) || result >= (INT64_C(1) << (width - 1U))) continue;
                         }
+                        result = cinder_opt_normalize(result, inst->type);
                         inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
                 }
                 if (inst->dst != CINDER_INVALID_VALUE) known[inst->dst] = false;
             }
         }
+        size_t previous_blocks = function->blocks.len;
+        unsigned cfg_changes = cinder_simplify_cfg(function, diags);
+        if (level >= 2) cfg_changes += cinder_sparse_constants(function, diags);
+        if (level >= 2) cfg_changes += cinder_number_values(function, diags);
+        stats->blocks_removed += (unsigned)(previous_blocks - function->blocks.len);
+        stats->instructions_changed += cfg_changes;
+        if (diags->errors != 0U) { free(known); free(constant); return 1; }
         unsigned forwarded = cinder_forward_local_memory(function);
         unsigned dead = cinder_remove_dead_ir(function);
         stats->memory_forwarded += forwarded;
         stats->dead_instructions_removed += dead;
         stats->instructions_changed += forwarded + dead;
-        if (changed_function || forwarded != 0U || dead != 0U) stats->functions_changed++;
+        if (changed_function || cfg_changes != 0U || forwarded != 0U || dead != 0U) stats->functions_changed++;
         free(known); free(constant);
     }
     return 0;

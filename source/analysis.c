@@ -163,6 +163,25 @@ unsigned cinder_forward_local_memory(CinderIRFunction *function) {
 
 unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
     unsigned removed = 0U;
+    size_t value_count = function->value_count == 0U ? 1U : function->value_count;
+    bool *defined = cinder_alloc(value_count * sizeof(*defined));
+    memset(defined, 1, value_count * sizeof(*defined));
+    for (size_t b = 0U; b < function->blocks.len; ++b)
+        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+            const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+            if (inst->op == IR_UNDEF && inst->dst < function->value_count) defined[inst->dst] = false;
+        }
+    bool facts_changed = true;
+    while (facts_changed) {
+        facts_changed = false;
+        for (size_t b = 0U; b < function->blocks.len; ++b)
+            for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+                const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+                if (inst->op != IR_PHI || !defined[inst->dst]) continue;
+                for (size_t p = 0U; p < inst->args.len; ++p)
+                    if (!defined[inst->args.data[p]]) { defined[inst->dst] = false; facts_changed = true; break; }
+            }
+    }
     bool changed = true;
     while (changed) {
         changed = false;
@@ -185,10 +204,15 @@ unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 CinderIRInst *inst = &block->instructions.data[i];
                 bool pure = inst->op == IR_UNDEF || inst->op == IR_PHI || inst->op == IR_FCONST || inst->op == IR_CONST || inst->op == IR_COPY || inst->op == IR_ADD || inst->op == IR_SUB || inst->op == IR_MUL || inst->op == IR_NEG || inst->op == IR_BIT_NOT || inst->op == IR_BIT_AND || inst->op == IR_BIT_OR || inst->op == IR_BIT_XOR || (inst->op >= IR_CMP_EQ && inst->op <= IR_CMP_GE_U);
+                bool arithmetic = inst->op == IR_ADD || inst->op == IR_SUB || inst->op == IR_MUL || inst->op == IR_NEG;
+                if (arithmetic && !inst->type->is_unsigned) pure = false;
+                if (inst->source_type != NULL && inst->source_type->kind == TYPE_POINTER) pure = false;
+                if (inst->op == IR_PHI && (b == 0U || inst->args.len == 0U)) pure = false;
+                if (inst->op != IR_PHI && ((inst->left != CINDER_INVALID_VALUE && !defined[inst->left]) || (inst->right != CINDER_INVALID_VALUE && !defined[inst->right]))) pure = false;
                 if (pure && inst->dst != CINDER_INVALID_VALUE && inst->dst < function->value_count && uses[inst->dst] == 0U) { free(inst->args.data); free(inst->phi_blocks.data); inst->args.data = NULL; inst->args.len = 0U; inst->args.cap = 0U; inst->phi_blocks.data = NULL; inst->phi_blocks.len = 0U; inst->phi_blocks.cap = 0U; inst->op = IR_NOP; inst->dst = CINDER_INVALID_VALUE; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; removed++; changed = true; }
             }
         }
         free(uses);
     }
-    return removed;
+    free(defined); return removed;
 }

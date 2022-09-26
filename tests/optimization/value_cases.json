@@ -1,0 +1,56 @@
+[
+  {
+    "source": "value_same_block.c",
+    "expected": 0,
+    "opcode": "add",
+    "changes": true
+  },
+  {
+    "source": "value_dominating_block.c",
+    "expected": 30,
+    "opcode": "add",
+    "changes": true
+  },
+  {
+    "source": "value_integer_product.c",
+    "expected": 42,
+    "opcode": "mul",
+    "changes": true
+  },
+  {
+    "source": "value_integer_conversion.c",
+    "expected": 6,
+    "opcode": "convert",
+    "changes": true
+  },
+  {
+    "source": "value_sibling_blocks.c",
+    "expected": 22,
+    "opcode": "add",
+    "changes": false
+  },
+  {
+    "source": "value_float_rounding.c",
+    "expected": 0,
+    "opcode": "fadd",
+    "changes": false
+  },
+  {
+    "source": "value_volatile_reads.c",
+    "expected": 14,
+    "opcode": "local.load",
+    "changes": false
+  },
+  {
+    "source": "value_memory_alias.c",
+    "expected": 16,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "value_call_results.c",
+    "expected": 3,
+    "opcode": "call",
+    "changes": false
+  }
+]

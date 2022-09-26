@@ -1,0 +1,62 @@
+[
+  {
+    "source": "cfg_constant_if.c",
+    "expected": 17,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_dead_call.c",
+    "expected": 0,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_zero_while.c",
+    "expected": 7,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_zero_do_condition.c",
+    "expected": 9,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_selected_phi.c",
+    "expected": 23,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_nested_constants.c",
+    "expected": 13,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_conditional_effect.c",
+    "expected": 7,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_goto_lifetime.c",
+    "expected": 9,
+    "cfg_changes": true
+  },
+  {
+    "source": "cfg_unknown_branch.c",
+    "expected": 18,
+    "cfg_changes": false
+  },
+  {
+    "source": "cfg_volatile_condition.c",
+    "expected": 11,
+    "cfg_changes": false
+  },
+  {
+    "source": "cfg_effectful_condition.c",
+    "expected": 3,
+    "cfg_changes": false
+  },
+  {
+    "source": "cfg_loop_phi.c",
+    "expected": 17,
+    "cfg_changes": false
+  }
+]
