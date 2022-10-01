@@ -133,6 +133,7 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
         unsigned cfg_changes = cinder_simplify_cfg(function, diags);
         if (level >= 2) cfg_changes += cinder_sparse_constants(function, diags);
         if (level >= 2) cfg_changes += cinder_number_values(function, diags);
+        if (level >= 2) cfg_changes += cinder_reduce_strength(function);
         stats->blocks_removed += (unsigned)(previous_blocks - function->blocks.len);
         stats->instructions_changed += cfg_changes;
         if (diags->errors != 0U) { free(known); free(constant); return 1; }

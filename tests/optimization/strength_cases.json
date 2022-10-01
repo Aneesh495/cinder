@@ -1,0 +1,104 @@
+[
+  {
+    "source": "strength_unsigned_multiply.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": true
+  },
+  {
+    "source": "strength_unsigned_divide.c",
+    "expected": 0,
+    "opcode": "div.u",
+    "changes": true
+  },
+  {
+    "source": "strength_unsigned_remainder.c",
+    "expected": 0,
+    "opcode": "mod.u",
+    "changes": true
+  },
+  {
+    "source": "strength_wide_multiply.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": true
+  },
+  {
+    "source": "strength_wide_divide.c",
+    "expected": 0,
+    "opcode": "div.u",
+    "changes": true
+  },
+  {
+    "source": "strength_wide_remainder.c",
+    "expected": 0,
+    "opcode": "mod.u",
+    "changes": true
+  },
+  {
+    "source": "strength_signed_identity.c",
+    "expected": 0,
+    "opcode": "div.s",
+    "changes": true
+  },
+  {
+    "source": "strength_unsigned_identity.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": true
+  },
+  {
+    "source": "strength_signed_multiply_kept.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": false
+  },
+  {
+    "source": "strength_signed_divide_kept.c",
+    "expected": 0,
+    "opcode": "div.s",
+    "changes": false
+  },
+  {
+    "source": "strength_signed_remainder_kept.c",
+    "expected": 0,
+    "opcode": "mod.s",
+    "changes": false
+  },
+  {
+    "source": "strength_nonpower_kept.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": false
+  },
+  {
+    "source": "strength_zero_factor_kept.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": false
+  },
+  {
+    "source": "strength_volatile_once.c",
+    "expected": 0,
+    "opcode": "div.u",
+    "changes": true
+  },
+  {
+    "source": "strength_call_once.c",
+    "expected": 0,
+    "opcode": "mod.u",
+    "changes": true
+  },
+  {
+    "source": "strength_full_word_shift.c",
+    "expected": 0,
+    "opcode": "mul",
+    "changes": true
+  },
+  {
+    "source": "strength_remainder_one_reads.c",
+    "expected": 0,
+    "opcode": "mod.u",
+    "changes": true
+  }
+]
