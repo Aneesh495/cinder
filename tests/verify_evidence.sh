@@ -2,7 +2,7 @@
 set -eu
 ccbin=${1:?compiler path}
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-manifest="$root/.agent-local/evidence/ACCEPTANCE.json"
+manifest="$root/artifacts/evidence/ACCEPTANCE.json"
 if [ ! -f "$manifest" ]; then
   printf '%s\n' 'No acceptance evidence has been generated; verification fails honestly.' >&2
   exit 1

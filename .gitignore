@@ -10,8 +10,8 @@ out/
 *.exe
 *.dSYM/
 
-# Local evidence and private engineering ledger
-.agent-local/
+# Local test and benchmark artifacts
+artifacts/
 
 # Tool and editor state
 .DS_Store

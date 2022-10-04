@@ -4,11 +4,7 @@ Updated: 2026-10-02
 
 ## Repository and publication
 
-- Workspace was empty at initialization and was initialized as Git branch `main`.
-- Authenticated GitHub account: `Aneesh495`.
-- Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
-- The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published implementation checkpoint before this Linux validation update: `12832be`.
+- Repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 
 ## Implemented behavior
 
@@ -32,29 +28,29 @@ The current native implementation is still a correctness-oriented scalar slice. 
 | `make test-frontend` | pass, include/macro/`-D`/interpreter/negative diagnostics | `tests/run_frontend.sh` |
 | `make test-globals` | pass, aggregate layout, global data, ELF sections, interpreter | `tests/run_globals.sh` |
 | `make test-multi` | pass, separate multi-input ELF objects and unavailable-host link diagnostic on macOS | `tests/run_multi.sh` |
-| `make test-native-linux` | pass on GitHub Ubuntu x86-64 workflow: native hello/globals execution, ELF inspection, multi-TU link, and result checks | [workflow run](https://github.com/Aneesh495/cinder/actions/runs/37086281799) |
+| `make test-native-linux` | pass on GitHub Ubuntu x86-64 workflow: native hello/globals execution, ELF inspection, multi-TU link, and result checks | [workflow run](https://github.com/Aneesh495/cinder/actions/runs/37086568060) |
 | `make test-preprocessor` | pass | `tests/run_preprocessor.sh` |
 | `make test-ir` | pass, dominators, loop headers, nonvacuous forwarding/dead-code/phi counters, verifier and allocation dump | `tests/run_ir.sh` |
 | `make test-parallel-copy` | pass, standalone cycle and phi plan checks | `tests/run_parallel_copy.sh` |
 | `make test-float` | pass, decimal literals, float IR/interpreter, SSE2 byte oracle, and ELF output | `tests/run_float.sh` |
 | `make test-varargs` | pass, integer variadic fixed-ordinal reads and stack arguments; full `va_list` ABI remains incomplete | `tests/run_varargs.sh` |
 | `make test-apps` | pass, eight authored applications | `tests/run_apps.sh` |
-| `make test-generated` | pass, 1,200 defined interpreter cases and 100 host-reference executions | `.agent-local/generated-summary.json` |
+| `make test-generated` | pass, 1,200 defined interpreter cases and 100 host-reference executions | `artifacts/generated-summary.json` |
 | `make test-abi` | pass for the declared scalar encoder/stack-frame smoke; cross-toolchain ABI gate unverified | `tests/run_abi.sh` |
 | `make test-object` | pass, output recognized as ELF64 relocatable x86-64 | `tests/run_object.sh` |
 | `make fuzz` | pass, ASan/UBSan build completed; coverage-guided campaign not run | `build-asan/cindercc` |
 | `make selfhost` | pass as a declared unavailable-host placeholder; no self-hosting execution claimed | `tests/selfhost.sh` |
-| `make benchmark` | pass, two local compile timing samples recorded; performance campaign not claimed | `.agent-local/benchmarks/` |
-| `make demo` | pass, object/IR/token artifacts generated | `.agent-local/demo/` |
-| `make acceptance` | pass, raw smoke evidence and incomplete gate registry generated | `.agent-local/evidence/ACCEPTANCE.json` |
+| `make benchmark` | pass, two local compile timing samples recorded; performance campaign not claimed | `artifacts/benchmarks/` |
+| `make demo` | pass, object/IR/token artifacts generated | `artifacts/demo/` |
+| `make acceptance` | pass, raw smoke evidence and incomplete gate registry generated | `artifacts/evidence/ACCEPTANCE.json` |
 | `make verify` | expected nonzero, incomplete required gates are rejected | terminal output |
-| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, 25 source files and 3,825 substantive production lines | `.agent-local/source-census.json` |
+| `python3 tools/source_census.py --root . --output artifacts/source-census.json` | pass, 25 source files and 3,825 substantive production lines | `artifacts/source-census.json` |
 | deterministic object check | pass, repeated `phi.c` objects had identical SHA-256 bytes | terminal output |
 | altered evidence check | pass, verifier rejected appended evidence bytes | terminal output |
 
 ## Acceptance status
 
-The Linux workflow has now independently passed native x86-64 hello/globals execution and multi-TU linking for `12832be`; the local macOS manifest still records Linux execution as unverified because its host cannot execute the target. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+The Linux workflow has now independently passed native x86-64 hello/globals execution and multi-TU linking; the local macOS manifest still records Linux execution as unverified because its host cannot execute the target. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, and full hosted `va_list`/`va_copy` support. `make verify` rejects the manifest rather than converting missing workloads into passes.
 
 ## Next action
 

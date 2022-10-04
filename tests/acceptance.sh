@@ -2,7 +2,7 @@
 set -eu
 ccbin=${1:?compiler path}
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-evidence="$root/.agent-local/evidence"
+evidence="$root/artifacts/evidence"
 mkdir -p "$evidence"
 "$ccbin" --version > "$evidence/compiler.version"
 printf '%s\n' "$(git -C "$root" rev-parse HEAD)" > "$evidence/source-revision"
@@ -21,10 +21,10 @@ if [ "${CINDER_REUSE_WORKLOADS:-0}" = "1" ]; then
     printf '%s\n' 'reused unchanged compiler workload summary' > "$evidence/generated.txt"
 else
     tests/run_apps.sh "$ccbin" > "$evidence/apps.txt"
-    python3 "$root/tools/run_defined_cases.py" "$ccbin" --count 1200 --output "$root/.agent-local/generated-summary.json" > "$evidence/generated.txt"
+    python3 "$root/tools/run_defined_cases.py" "$ccbin" --count 1200 --output "$root/artifacts/generated-summary.json" > "$evidence/generated.txt"
 fi
-cp "$root/.agent-local/generated-summary.json" "$evidence/generated-summary.json"
-python3 "$root/tools/source_census.py" --root "$root" --output "$root/.agent-local/source-census.json" > "$evidence/census.summary"
+cp "$root/artifacts/generated-summary.json" "$evidence/generated-summary.json"
+python3 "$root/tools/source_census.py" --root "$root" --output "$root/artifacts/source-census.json" > "$evidence/census.summary"
 python3 - "$evidence" "$root" <<'PY'
 import hashlib
 import json
