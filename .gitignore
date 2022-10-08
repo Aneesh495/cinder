@@ -12,6 +12,7 @@ out/
 
 # Local evidence and private engineering ledger
 .agent-local/
+artifacts/
 
 # Tool and editor state
 .DS_Store
