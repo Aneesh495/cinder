@@ -1,0 +1,68 @@
+[
+  {
+    "source": "copy_chain.c",
+    "expected": 37,
+    "opcode": "copy",
+    "changes": true
+  },
+  {
+    "source": "copy_equal_phi.c",
+    "expected": 37,
+    "opcode": "phi",
+    "changes": true
+  },
+  {
+    "source": "copy_self_phi.c",
+    "expected": 37,
+    "opcode": "phi",
+    "changes": true
+  },
+  {
+    "source": "copy_pointer_phi.c",
+    "expected": 9,
+    "opcode": "phi",
+    "changes": true
+  },
+  {
+    "source": "copy_float_phi.c",
+    "expected": 5,
+    "opcode": "phi",
+    "changes": true
+  },
+  {
+    "source": "copy_unequal_phi.c",
+    "expected": 38,
+    "opcode": "phi",
+    "changes": false
+  },
+  {
+    "source": "copy_cycle_phi.c",
+    "expected": 53,
+    "opcode": "phi",
+    "changes": false
+  },
+  {
+    "source": "copy_effects_phi.c",
+    "expected": 38,
+    "opcode": "phi",
+    "changes": true
+  },
+  {
+    "source": "copy_unequal_float_phi.c",
+    "expected": 6,
+    "opcode": "phi",
+    "changes": false
+  },
+  {
+    "source": "copy_volatile_reads.c",
+    "expected": 26,
+    "opcode": "global.load",
+    "changes": false
+  },
+  {
+    "source": "copy_const_origin_phi.c",
+    "expected": 41,
+    "opcode": "phi",
+    "changes": true
+  }
+]

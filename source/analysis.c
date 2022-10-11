@@ -1,4 +1,4 @@
-#include "cinder.h"
+#include "opt_private.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -161,8 +161,7 @@ unsigned cinder_forward_local_memory(CinderIRFunction *function) {
     return forwarded;
 }
 
-unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
-    unsigned removed = 0U;
+bool *cinder_opt_defined_values(const CinderIRFunction *function) {
     size_t value_count = function->value_count == 0U ? 1U : function->value_count;
     bool *defined = cinder_alloc(value_count * sizeof(*defined));
     memset(defined, 1, value_count * sizeof(*defined));
@@ -182,6 +181,12 @@ unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
                     if (!defined[inst->args.data[p]]) { defined[inst->dst] = false; facts_changed = true; break; }
             }
     }
+    return defined;
+}
+
+unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
+    unsigned removed = 0U;
+    bool *defined = cinder_opt_defined_values(function);
     bool changed = true;
     while (changed) {
         changed = false;

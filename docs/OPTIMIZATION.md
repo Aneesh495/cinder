@@ -3,7 +3,8 @@
 The current pipeline performs copy propagation and exact-width constant
 folding, constant-edge CFG simplification, sparse conditional constants,
 dominance-based integer value numbering, unsigned strength reduction, local
-memory forwarding, and dead instruction elimination. The remaining loop, pass-record,
+memory forwarding, redundant copy/phi cleanup, and dead instruction elimination.
+The remaining loop, pass-record,
 and machine representation work is tracked separately by full acceptance.
 
 Constant facts are normalized to the declared width, signedness, and Boolean
@@ -36,6 +37,23 @@ bounded to the latest 4,096 opportunities; a missed opportunity retains the
 original instruction. Floating operations, memory, pointers, and calls never
 enter the table. Integer divisions can share a dominating computation: any
 invalid first computation still executes before the reused result.
+
+Copy cleanup redirects uses to an exactly matching, dominating SSA value.
+Copies that can read an indeterminate value retain their instruction. A phi
+with a single common non-self input can reuse that input only when its
+definition dominates the phi block from outside. Loop self-inputs are ignored
+when finding the common value; different incoming values and cycles are kept.
+Phi elimination redirects uses and removes the transfer. It never introduces
+an eager copy, because phi transfers can carry an indeterminate value without
+reading it. The independent interpreter checks both used and unused
+indeterminate phis. Entry-block phis are rejected by the verifier: first entry
+has no predecessor from which to select an input.
+
+`cinderir --pass=copy-cleanup input.cir -o output.cir` runs the isolated pass
+with verification before and after it. Combining an isolated pass with `-O1`
+or `-O2` is rejected. `make test-optimizer` retains isolated before/after
+observations and objects for integer, pointer, floating, effect, and cycle
+fixtures, in addition to testing the complete normal pipeline.
 
 Dead-code removal retains potentially overflowing signed arithmetic, pointer
 comparisons, and reads of possibly indeterminate SSA values. Phi definedness is

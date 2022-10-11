@@ -4558,5 +4558,49 @@
   {
     "source": "../optimization/strength_remainder_one_reads.c",
     "exit": 0
+  },
+  {
+    "source": "../optimization/copy_chain.c",
+    "exit": 37
+  },
+  {
+    "source": "../optimization/copy_equal_phi.c",
+    "exit": 37
+  },
+  {
+    "source": "../optimization/copy_self_phi.c",
+    "exit": 37
+  },
+  {
+    "source": "../optimization/copy_pointer_phi.c",
+    "exit": 9
+  },
+  {
+    "source": "../optimization/copy_float_phi.c",
+    "exit": 5
+  },
+  {
+    "source": "../optimization/copy_unequal_phi.c",
+    "exit": 38
+  },
+  {
+    "source": "../optimization/copy_cycle_phi.c",
+    "exit": 53
+  },
+  {
+    "source": "../optimization/copy_effects_phi.c",
+    "exit": 38
+  },
+  {
+    "source": "../optimization/copy_unequal_float_phi.c",
+    "exit": 6
+  },
+  {
+    "source": "../optimization/copy_volatile_reads.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/copy_const_origin_phi.c",
+    "exit": 41
   }
 ]

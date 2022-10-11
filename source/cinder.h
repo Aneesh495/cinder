@@ -823,6 +823,7 @@ unsigned cinder_simplify_cfg(CinderIRFunction *function, CinderDiagnostics *diag
 unsigned cinder_sparse_constants(CinderIRFunction *function, CinderDiagnostics *diags);
 unsigned cinder_number_values(CinderIRFunction *function, CinderDiagnostics *diags);
 unsigned cinder_reduce_strength(CinderIRFunction *function);
+unsigned cinder_cleanup_copies(CinderIRFunction *function, CinderDiagnostics *diags);
 /* ---------- interpreter and optimization ---------- */
 typedef enum {
     INTERP_DEFINED,
@@ -860,6 +861,7 @@ typedef struct {
     unsigned dead_instructions_removed;
 } CinderOptStats;
 int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags);
+int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStats *stats, CinderDiagnostics *diags);
 
 /* ---------- machine representation and allocation ---------- */
 typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
