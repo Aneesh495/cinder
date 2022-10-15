@@ -933,3 +933,29 @@ missing compiler levels and host fallback cannot satisfy a reader. Raw schema 1
 bootstrap evidence remains historical proof and cannot silently satisfy the
 stronger schema 2 contract. No reader has been connected to final acceptance
 until a complete real native positive run and evidence mutation checks pass.
+
+## Local redundant memory elimination
+
+The optimizer now caches exact integer accesses to known nonvolatile local
+objects within a block. It forwards repeated loads and loads after retained
+writes, and removes identical ordinary stores only after a retained ordinary
+store has established write permission. Declaration volatility survives casts.
+Calls, unknown roots, writes, bitfields, aggregate effects, variadic operations
+and lifetime changes invalidate facts. Const initialization and reads never
+prove permission for a subsequent write.
+
+Strict GCC and Clang ASan/UBSan builds pass the 17 isolated source fixtures
+and six typed storage guards. The earlier optimizer suites, 25 arithmetic
+undefined cases, 136 memory classifications and 57 malformed memory contracts
+pass. A frozen development Linux VM executed 51 original objects and 68
+GCC/Clang reference programs; independent source, compiler, object, target ELF
+and executable hashes were checked. This is emulated functional evidence.
+`make test-optimizer`, CI and both native bootstrap stages run the new suite.
+
+The published copy-cleanup revision passed native Linux validation and its
+complete deterministic bootstrap. Broader local source and canonical-IR
+regressions for this memory revision are still running. A reference compiler
+timeout was retained separately and the unchanged suite is being rerun. The
+full acceptance remains incomplete: loop motion and pass records, actual HIR
+and machine representation, debugger, applications, fuzzing, recovery and
+performance work remain open.

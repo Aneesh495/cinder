@@ -152,10 +152,11 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
 
 int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStats *stats, CinderDiagnostics *diags) {
     memset(stats, 0, sizeof(*stats));
-    if (strcmp(name, "copy-cleanup") != 0) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "unknown isolated optimizer pass '%s'", name); return 1; }
+    bool memory = strcmp(name, "local-memory") == 0;
+    if (!memory && strcmp(name, "copy-cleanup") != 0) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "unknown isolated optimizer pass '%s'", name); return 1; }
     if (cinder_verify_ir(module, diags) != 0) return 1;
     for (size_t f = 0U; f < module->functions.len; ++f) {
-        unsigned removed = cinder_cleanup_copies(&module->functions.data[f], diags);
+        unsigned removed = memory ? cinder_forward_local_memory(&module->functions.data[f]) : cinder_cleanup_copies(&module->functions.data[f], diags);
         stats->instructions_changed += removed;
         stats->functions_changed += removed != 0U;
         if (diags->errors != 0U) return 1;

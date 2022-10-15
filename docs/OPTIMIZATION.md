@@ -49,11 +49,29 @@ reading it. The independent interpreter checks both used and unused
 indeterminate phis. Entry-block phis are rejected by the verifier: first entry
 has no predecessor from which to select an input.
 
-`cinderir --pass=copy-cleanup input.cir -o output.cir` runs the isolated pass
+`cinderir --pass=copy-cleanup input.cir -o output.cir` runs copy cleanup;
+`--pass=local-memory` runs the isolated memory pass. Each runs
 with verification before and after it. Combining an isolated pass with `-O1`
 or `-O2` is rejected. `make test-optimizer` retains isolated before/after
 observations and objects for integer, pointer, floating, effect, and cycle
 fixtures, in addition to testing the complete normal pipeline.
+
+Local memory facts are confined to one block and an exact SSA address and
+integer type. Roots must come from an actually declared nonvolatile local
+object. Pointer casts cannot erase volatility of that declaration. A retained
+first load guards reuse; a retained ordinary store guards removing a duplicate
+store. An initializer or read does not establish permission to write const
+storage. Any real write clears earlier alias facts. Calls, globals, aggregate
+copies, bitfield operations, variadic effects and lifetime transitions clear
+all facts. Unknown pointer roots, floating storage and volatile views also
+clear the table. The pass retains the first access, including any invalid
+read, write, bounds, lifetime or initialization check it would perform.
+
+The focused suite covers 17 source programs and six independently constructed
+CIR guards for mutable/const writes, reads after retirement/reset, and frozen
+aggregate storage. It compares isolated before/after interpreter outcomes and
+emits original objects for the source programs. Invalid cases compare their
+classification without treating the placeholder integer as an execution value.
 
 Dead-code removal retains potentially overflowing signed arithmetic, pointer
 comparisons, and reads of possibly indeterminate SSA values. Phi definedness is
