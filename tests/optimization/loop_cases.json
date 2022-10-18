@@ -1,0 +1,110 @@
+[
+  {
+    "source": "loop_unsigned_mul.c",
+    "expected": 108,
+    "opcode": "mul",
+    "moves": true
+  },
+  {
+    "source": "loop_unsigned_chain.c",
+    "expected": 90,
+    "opcode": "mul",
+    "moves": true
+  },
+  {
+    "source": "loop_bitwise.c",
+    "expected": 18,
+    "opcode": "and",
+    "moves": true
+  },
+  {
+    "source": "loop_comparison.c",
+    "expected": 7,
+    "opcode": "cmp.lt.u",
+    "moves": true
+  },
+  {
+    "source": "loop_conversion.c",
+    "expected": 27,
+    "opcode": "convert",
+    "moves": true
+  },
+  {
+    "source": "loop_fixed_shift.c",
+    "expected": 48,
+    "opcode": "shl",
+    "moves": true
+  },
+  {
+    "source": "loop_nested.c",
+    "expected": 48,
+    "opcode": "xor",
+    "moves": true
+  },
+  {
+    "source": "loop_do_loop.c",
+    "expected": 63,
+    "opcode": "mul",
+    "moves": true
+  },
+  {
+    "source": "loop_multiple_latches.c",
+    "expected": 63,
+    "opcode": "mul",
+    "moves": true
+  },
+  {
+    "source": "loop_signed_kept.c",
+    "expected": 84,
+    "opcode": "mul",
+    "moves": false
+  },
+  {
+    "source": "loop_division_zero_trip.c",
+    "expected": 0,
+    "opcode": "div.u",
+    "moves": false
+  },
+  {
+    "source": "loop_load_kept.c",
+    "expected": 27,
+    "opcode": "memory.load",
+    "moves": false
+  },
+  {
+    "source": "loop_volatile_kept.c",
+    "expected": 18,
+    "opcode": "global.load",
+    "moves": false
+  },
+  {
+    "source": "loop_float_kept.c",
+    "expected": 15,
+    "opcode": "fmul",
+    "moves": false
+  },
+  {
+    "source": "loop_variable_shift_kept.c",
+    "expected": 36,
+    "opcode": "shl",
+    "moves": false
+  },
+  {
+    "source": "loop_indeterminate_zero_trip.c",
+    "expected": 0,
+    "opcode": "add",
+    "moves": false
+  },
+  {
+    "source": "loop_irreducible_kept.c",
+    "expected": 33,
+    "opcode": "mul",
+    "moves": false
+  },
+  {
+    "source": "loop_call_kept.c",
+    "expected": 40,
+    "opcode": "call",
+    "moves": false
+  }
+]

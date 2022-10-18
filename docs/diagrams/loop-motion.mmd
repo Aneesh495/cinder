@@ -1,0 +1,9 @@
+flowchart TD
+  Entry[Block 0: entry and verified preheader] --> Header[Block 1: loop condition and phis]
+  Header --> Body[Block 2: body]
+  Body --> Step[Block 3: induction step]
+  Step --> Header
+  Header --> Exit[Block 4: return]
+  Body -. unsigned x times 9 moves with its SSA ID .-> Entry
+  Header -. induction phi remains .-> Header
+  Body -. dependent accumulator remains .-> Body

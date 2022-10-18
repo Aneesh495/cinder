@@ -4670,5 +4670,77 @@
   {
     "source": "../optimization/memory_bit_effect_kept.c",
     "exit": 26
+  },
+  {
+    "source": "../optimization/loop_unsigned_mul.c",
+    "exit": 108
+  },
+  {
+    "source": "../optimization/loop_unsigned_chain.c",
+    "exit": 90
+  },
+  {
+    "source": "../optimization/loop_bitwise.c",
+    "exit": 18
+  },
+  {
+    "source": "../optimization/loop_comparison.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/loop_conversion.c",
+    "exit": 27
+  },
+  {
+    "source": "../optimization/loop_fixed_shift.c",
+    "exit": 48
+  },
+  {
+    "source": "../optimization/loop_nested.c",
+    "exit": 48
+  },
+  {
+    "source": "../optimization/loop_do_loop.c",
+    "exit": 63
+  },
+  {
+    "source": "../optimization/loop_multiple_latches.c",
+    "exit": 63
+  },
+  {
+    "source": "../optimization/loop_signed_kept.c",
+    "exit": 84
+  },
+  {
+    "source": "../optimization/loop_division_zero_trip.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/loop_load_kept.c",
+    "exit": 27
+  },
+  {
+    "source": "../optimization/loop_volatile_kept.c",
+    "exit": 18
+  },
+  {
+    "source": "../optimization/loop_float_kept.c",
+    "exit": 15
+  },
+  {
+    "source": "../optimization/loop_variable_shift_kept.c",
+    "exit": 36
+  },
+  {
+    "source": "../optimization/loop_indeterminate_zero_trip.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/loop_irreducible_kept.c",
+    "exit": 33
+  },
+  {
+    "source": "../optimization/loop_call_kept.c",
+    "exit": 40
   }
 ]

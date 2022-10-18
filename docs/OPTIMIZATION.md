@@ -3,8 +3,8 @@
 The current pipeline performs copy propagation and exact-width constant
 folding, constant-edge CFG simplification, sparse conditional constants,
 dominance-based integer value numbering, unsigned strength reduction, local
-memory forwarding, redundant copy/phi cleanup, and dead instruction elimination.
-The remaining loop, pass-record,
+memory forwarding, redundant copy/phi cleanup, natural-loop invariant motion,
+and dead instruction elimination. The remaining pass-record,
 and machine representation work is tracked separately by full acceptance.
 
 Constant facts are normalized to the declared width, signedness, and Boolean
@@ -50,7 +50,8 @@ indeterminate phis. Entry-block phis are rejected by the verifier: first entry
 has no predecessor from which to select an input.
 
 `cinderir --pass=copy-cleanup input.cir -o output.cir` runs copy cleanup;
-`--pass=local-memory` runs the isolated memory pass. Each runs
+`--pass=local-memory` runs the isolated memory pass and `--pass=loop-motion`
+runs natural-loop motion. Each runs
 with verification before and after it. Combining an isolated pass with `-O1`
 or `-O2` is rejected. `make test-optimizer` retains isolated before/after
 observations and objects for integer, pointer, floating, effect, and cycle
@@ -98,6 +99,12 @@ a complete 16-bit division domain, wider boundaries and deterministic samples,
 signed overflow, zero division, and indeterminate inputs. The read-only evidence
 reader reconstructs every observation and rejects rehashed numeric and IR
 corruptions. [Rewrite validation](REWRITE_VALIDATION.md) specifies its limits.
+
+Natural-loop motion uses dominance-checked backedges and a verified existing
+preheader. Only defined total integer operations can move onto a zero-trip
+path. Trapping, memory, pointer, variable-shift, floating and effect operations
+retain their placement. [Loop motion](LOOP_MOTION.md) gives the exact region,
+operand and operation restrictions and the before/after test contract.
 
 Analyses are rebuilt for each transformation; no CFG/dominance cache crosses a
 shape change. The normal driver and canonical-IR tool verify transformed IR

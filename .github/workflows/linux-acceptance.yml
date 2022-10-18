@@ -133,6 +133,7 @@ jobs:
             .agent-local/sparse-optimization
             .agent-local/value-numbering
             .agent-local/dead-code
+            .agent-local/loop-motion
             .agent-local/local-memory
             .agent-local/copy-cleanup
             .agent-local/strength-reduction
