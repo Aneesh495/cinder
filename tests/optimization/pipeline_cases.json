@@ -1,0 +1,142 @@
+[
+  {
+    "pass": "constant-fold",
+    "source": "pipeline_constant_fold.c",
+    "expected": 35,
+    "metric": "add",
+    "changes": true
+  },
+  {
+    "pass": "constant-fold",
+    "source": "pipeline_float_fold_kept.c",
+    "expected": 2,
+    "metric": "fadd",
+    "changes": false
+  },
+  {
+    "pass": "cfg-simplify",
+    "source": "cfg_constant_if.c",
+    "expected": 17,
+    "metric": "blocks",
+    "changes": true
+  },
+  {
+    "pass": "cfg-simplify",
+    "source": "cfg_unknown_branch.c",
+    "expected": 18,
+    "metric": "blocks",
+    "changes": false
+  },
+  {
+    "pass": "mem2reg",
+    "source": "pipeline_mem2reg.c",
+    "expected": 17,
+    "metric": "local.load",
+    "changes": true
+  },
+  {
+    "pass": "mem2reg",
+    "source": "pipeline_volatile_slot.c",
+    "expected": 13,
+    "metric": "local.load",
+    "changes": false
+  },
+  {
+    "pass": "sparse-constants",
+    "source": "sparse_equal_phi.c",
+    "expected": 26,
+    "metric": "blocks",
+    "changes": true
+  },
+  {
+    "pass": "sparse-constants",
+    "source": "sparse_different_phi.c",
+    "expected": 30,
+    "metric": "blocks",
+    "changes": false
+  },
+  {
+    "pass": "dead-code",
+    "source": "dead_unsigned_sum.c",
+    "expected": 3,
+    "metric": "add",
+    "changes": true
+  },
+  {
+    "pass": "dead-code",
+    "source": "dead_memory_read_kept.c",
+    "expected": 3,
+    "metric": "memory.load",
+    "changes": false
+  },
+  {
+    "pass": "value-numbering",
+    "source": "value_same_block.c",
+    "expected": 0,
+    "metric": "add",
+    "changes": true
+  },
+  {
+    "pass": "value-numbering",
+    "source": "value_sibling_blocks.c",
+    "expected": 22,
+    "metric": "add",
+    "changes": false
+  },
+  {
+    "pass": "copy-cleanup",
+    "source": "copy_equal_phi.c",
+    "expected": 37,
+    "metric": "phi",
+    "changes": true
+  },
+  {
+    "pass": "copy-cleanup",
+    "source": "copy_unequal_phi.c",
+    "expected": 38,
+    "metric": "phi",
+    "changes": false
+  },
+  {
+    "pass": "local-memory",
+    "source": "memory_repeated_load.c",
+    "expected": 26,
+    "metric": "memory.load",
+    "changes": true
+  },
+  {
+    "pass": "local-memory",
+    "source": "memory_cast_volatile_kept.c",
+    "expected": 26,
+    "metric": "memory.load",
+    "changes": false
+  },
+  {
+    "pass": "loop-motion",
+    "source": "loop_unsigned_mul.c",
+    "expected": 108,
+    "metric": "motion:mul",
+    "changes": true
+  },
+  {
+    "pass": "loop-motion",
+    "source": "loop_division_zero_trip.c",
+    "expected": 0,
+    "metric": "motion:div.u",
+    "changes": false
+  },
+  {
+    "pass": "strength-reduction",
+    "source": "strength_unsigned_multiply.c",
+    "expected": 0,
+    "metric": "mul",
+    "changes": true
+  },
+  {
+    "pass": "strength-reduction",
+    "source": "strength_signed_multiply_kept.c",
+    "expected": 0,
+    "metric": "mul",
+    "changes": false
+  }
+]

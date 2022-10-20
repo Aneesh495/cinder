@@ -36,8 +36,14 @@ build/cindercc --dump-ast examples/hello.c
 build/cindercc --emit-ir examples/hello.c
 build/cindercc --dump-mir examples/hello.c
 build/cindercc --dump-regalloc examples/hello.c
+build/cindercc -O2 --dump-passes examples/hello.c
 build/cindercc -S examples/hello.c -o hello.s
 ```
+
+The optimizer exposes ten named passes with verified before/after IR, analysis
+invalidation records and CPU timing. See [`docs/PASS_PIPELINE.md`](docs/PASS_PIPELINE.md)
+for trace output and isolated pass inspection. `make test-passes` checks real
+positive/negative transformations and rejects altered proof artifacts.
 
 `-E`, `-S`, and `-c` use Cinder's own preprocessing and backend. Linking is deliberately an explicit boundary: on a declared Linux host the driver may pass Cinder-created objects and system libraries to the platform linker, but it never passes user C source to a host compiler.
 

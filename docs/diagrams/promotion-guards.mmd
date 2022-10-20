@@ -1,0 +1,13 @@
+flowchart TD
+  SLOT[Declared scalar local slot] --> FLAGS{Address taken or volatile}
+  FLAGS -->|Yes| RETAIN[Retain local memory operations and guards]
+  FLAGS -->|No| STATES[Compute possible alive and retired states across CFG]
+  STATES --> CHECK{Access or reset may follow retirement}
+  CHECK -->|Yes| RETAIN
+  CHECK -->|No| VALUE{Stored value may be indeterminate}
+  VALUE -->|Yes| RETAIN
+  VALUE -->|No| PHIS[Insert dominance-frontier phis for eligible slot]
+  PHIS --> RENAME[Rename local operations and only newly inserted phis]
+  RENAME --> READ[Retain undef read behavior through SSA definitions]
+  READ --> VERIFY[Verify and compare independent classifications]
+  VERIFY --> AGAIN[Second promotion preserves canonical bytes]

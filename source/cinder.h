@@ -853,7 +853,32 @@ typedef struct {
 const char *cinder_interp_class_name(CinderInterpClass classification);
 CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *function_name, const int64_t *args, size_t arg_count, unsigned step_limit, CinderDiagnostics *diags);
 
+typedef enum {
+    OPT_CONSTANT_FOLD, OPT_CFG_SIMPLIFY, OPT_MEM2REG, OPT_SPARSE_CONSTANTS,
+    OPT_DEAD_CODE, OPT_VALUE_NUMBERING, OPT_COPY_CLEANUP, OPT_LOCAL_MEMORY,
+    OPT_LOOP_MOTION, OPT_STRENGTH_REDUCTION, OPT_PASS_COUNT
+} CinderOptPass;
+
+enum { ANALYSIS_CFG = 1U, ANALYSIS_DOMINANCE = 2U, ANALYSIS_LOOPS = 4U,
+       ANALYSIS_USES = 8U, ANALYSIS_EFFECTS = 16U, ANALYSIS_LIVENESS = 32U };
+
 typedef struct {
+    CinderOptPass id;
+    const char *name;
+    const char *preconditions;
+    unsigned preserved_analyses, invalidated_analyses;
+    unsigned epoch_before, epoch_after;
+    unsigned functions_run, functions_changed;
+    unsigned transformation_events;
+    size_t operations_before, operations_after, blocks_before, blocks_after;
+    bool verified_before, verified_after, timer_available;
+    double cpu_seconds;
+} CinderPassRecord;
+
+typedef struct {
+    CinderPassRecord passes[OPT_PASS_COUNT];
+    size_t pass_count;
+    unsigned analysis_epoch;
     unsigned functions_changed;
     unsigned instructions_changed;
     unsigned constants_folded;
@@ -862,6 +887,11 @@ typedef struct {
     unsigned dead_instructions_removed;
 } CinderOptStats;
 int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags);
+int cinder_optimize_source(CinderIRModule *module, int level, const char *directory, CinderOptStats *stats, CinderDiagnostics *diags);
+int cinder_optimize_trace(CinderIRModule *module, int level, const char *directory, CinderOptStats *stats, CinderDiagnostics *diags);
+int cinder_optimize_only_trace(CinderIRModule *module, const char *name, const char *directory, CinderOptStats *stats, CinderDiagnostics *diags);
+int cinder_write_pass_stats(const CinderOptStats *stats, FILE *out);
+int cinder_save_pass_stats(const CinderOptStats *stats, const char *path, CinderDiagnostics *diags);
 int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStats *stats, CinderDiagnostics *diags);
 
 /* ---------- machine representation and allocation ---------- */
@@ -1001,6 +1031,9 @@ typedef struct {
     bool serialize_ir;
     bool dump_mir;
     bool dump_regalloc;
+    bool dump_passes;
+    const char *pass_stats;
+    const char *pass_trace;
     bool verify_each;
     bool interpret;
     bool debug;

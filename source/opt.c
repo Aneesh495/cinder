@@ -99,69 +99,32 @@ static unsigned propagate_copies(CinderIRFunction *function) {
     free(aliases); return changes;
 }
 
-int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, CinderDiagnostics *diags) {
-    stats->functions_changed = 0U; stats->instructions_changed = 0U; stats->constants_folded = 0U; stats->blocks_removed = 0U; stats->memory_forwarded = 0U; stats->dead_instructions_removed = 0U;
-    if (level <= 0) return 0;
-    for (size_t f = 0U; f < module->functions.len; ++f) {
-        CinderIRFunction *function = &module->functions.data[f];
-        int64_t *constant = cinder_alloc((function->value_count == 0U ? 1U : function->value_count) * sizeof(*constant));
-        bool *known = cinder_alloc((function->value_count == 0U ? 1U : function->value_count) * sizeof(*known));
-        for (size_t i = 0U; i < function->value_count; ++i) known[i] = false;
-        unsigned copies = propagate_copies(function);
-        stats->instructions_changed += copies;
-        bool changed_function = copies != 0U;
-        for (size_t b = 0U; b < function->blocks.len; ++b) {
-            CinderIRBlock *block = &function->blocks.data[b];
-            for (size_t i = 0U; i < block->instructions.len; ++i) {
-                CinderIRInst *inst = &block->instructions.data[i];
-                if (inst->op == IR_CONST) { known[inst->dst] = inst->type->kind != TYPE_POINTER; constant[inst->dst] = cinder_opt_normalize(inst->integer, inst->type); continue; }
-                if (inst->op == IR_COPY && known[inst->left]) { inst->op = IR_CONST; inst->integer = constant[inst->left]; inst->left = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = inst->integer; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
-                if (inst->right != CINDER_INVALID_VALUE && known[inst->left] && known[inst->right]) {
-                    int64_t result = 0;
-                    if (fold(inst, constant[inst->left], constant[inst->right], &result)) {
-                        if (inst->type->size < 8U) {
-                            unsigned width = (unsigned)(inst->type->size * 8U);
-                            if (inst->type->is_unsigned) result = (int64_t)((uint64_t)result & ((UINT64_C(1) << width) - 1U));
-                            else if (result < -(INT64_C(1) << (width - 1U)) || result >= (INT64_C(1) << (width - 1U))) continue;
-                        }
-                        result = cinder_opt_normalize(result, inst->type);
-                        inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; changed_function = true; stats->instructions_changed++; stats->constants_folded++; continue; }
-                }
-                if (inst->dst != CINDER_INVALID_VALUE) known[inst->dst] = false;
+unsigned cinder_fold_constants(CinderIRFunction *function, unsigned *folded) {
+    *folded = 0U;
+    int64_t *constant = cinder_alloc((function->value_count == 0U ? 1U : function->value_count) * sizeof(*constant));
+    bool *known = cinder_alloc((function->value_count == 0U ? 1U : function->value_count) * sizeof(*known));
+    for (size_t i = 0U; i < function->value_count; ++i) known[i] = false;
+    unsigned copies = propagate_copies(function);
+    unsigned changes = copies;
+    for (size_t b = 0U; b < function->blocks.len; ++b) {
+        CinderIRBlock *block = &function->blocks.data[b];
+        for (size_t i = 0U; i < block->instructions.len; ++i) {
+            CinderIRInst *inst = &block->instructions.data[i];
+            if (inst->op == IR_CONST) { known[inst->dst] = inst->type->kind != TYPE_POINTER; constant[inst->dst] = cinder_opt_normalize(inst->integer, inst->type); continue; }
+            if (inst->op == IR_COPY && known[inst->left]) { inst->op = IR_CONST; inst->integer = constant[inst->left]; inst->left = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = inst->integer; ++changes; ++*folded; continue; }
+            if (inst->right != CINDER_INVALID_VALUE && known[inst->left] && known[inst->right]) {
+                int64_t result = 0;
+                if (fold(inst, constant[inst->left], constant[inst->right], &result)) {
+                    if (inst->type->size < 8U) {
+                        unsigned width = (unsigned)(inst->type->size * 8U);
+                        if (inst->type->is_unsigned) result = (int64_t)((uint64_t)result & ((UINT64_C(1) << width) - 1U));
+                        else if (result < -(INT64_C(1) << (width - 1U)) || result >= (INT64_C(1) << (width - 1U))) continue;
+                    }
+                    result = cinder_opt_normalize(result, inst->type);
+                    inst->op = IR_CONST; inst->integer = result; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; known[inst->dst] = true; constant[inst->dst] = result; ++changes; ++*folded; continue; }
             }
+            if (inst->dst != CINDER_INVALID_VALUE) known[inst->dst] = false;
         }
-        size_t previous_blocks = function->blocks.len;
-        unsigned cfg_changes = cinder_simplify_cfg(function, diags);
-        if (level >= 2) cfg_changes += cinder_sparse_constants(function, diags);
-        if (level >= 2) cfg_changes += cinder_number_values(function, diags);
-        if (level >= 2) cfg_changes += cinder_reduce_strength(function);
-        cfg_changes += cinder_cleanup_copies(function, diags);
-        if (level >= 2) cfg_changes += cinder_move_loop_invariants(function, diags);
-        stats->blocks_removed += (unsigned)(previous_blocks - function->blocks.len);
-        stats->instructions_changed += cfg_changes;
-        if (diags->errors != 0U) { free(known); free(constant); return 1; }
-        unsigned forwarded = cinder_forward_local_memory(function);
-        unsigned dead = cinder_remove_dead_ir(function);
-        stats->memory_forwarded += forwarded;
-        stats->dead_instructions_removed += dead;
-        stats->instructions_changed += forwarded + dead;
-        if (changed_function || cfg_changes != 0U || forwarded != 0U || dead != 0U) stats->functions_changed++;
-        free(known); free(constant);
     }
-    return 0;
-}
-
-int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStats *stats, CinderDiagnostics *diags) {
-    memset(stats, 0, sizeof(*stats));
-    bool memory = strcmp(name, "local-memory") == 0;
-    bool loop = strcmp(name, "loop-motion") == 0;
-    if (!memory && !loop && strcmp(name, "copy-cleanup") != 0) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "unknown isolated optimizer pass '%s'", name); return 1; }
-    if (cinder_verify_ir(module, diags) != 0) return 1;
-    for (size_t f = 0U; f < module->functions.len; ++f) {
-        unsigned removed = memory ? cinder_forward_local_memory(&module->functions.data[f]) : loop ? cinder_move_loop_invariants(&module->functions.data[f], diags) : cinder_cleanup_copies(&module->functions.data[f], diags);
-        stats->instructions_changed += removed;
-        stats->functions_changed += removed != 0U;
-        if (diags->errors != 0U) return 1;
-    }
-    return cinder_verify_ir(module, diags);
+    free(known); free(constant); return changes;
 }

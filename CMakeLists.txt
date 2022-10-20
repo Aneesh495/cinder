@@ -39,6 +39,7 @@ set(CINDER_SOURCES
   source/interp_memory.c
   source/interp_variadic.c
   source/opt.c
+  source/opt_pipeline.c
   source/opt_cfg.c
   source/opt_sparse.c
   source/opt_values.c
