@@ -1,0 +1,13 @@
+flowchart TD
+  POINTER[Object pointer with bounds lifetime and declaration origin] --> WORD[Full-width integer address authority]
+  WORD --> MATH[Integer arithmetic or bitwise operation]
+  MATH --> SAME{Operand authority domains agree}
+  SAME -->|Yes or one origin| KEEP[Retain original object domain and readonly origin]
+  SAME -->|No| AMBIG[Mark ambiguous authority]
+  KEEP --> STORAGE[Copy phi call variadic or full-width storage]
+  STORAGE --> BACK[Decode pointer offset in original object token]
+  BACK --> CHECK[Check access bounds type lifetime initialization and readonly]
+  AMBIG --> CONVERT[Nonzero pointer conversion reports unsupported]
+  STORAGE -->|Partial byte or bit write| DROP[Drop prior word authority]
+  WORD -->|Narrowing or floating conversion| DROP
+  DROP --> REJECT[Numeric bytes cannot invent an object pointer]

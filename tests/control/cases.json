@@ -4758,5 +4758,89 @@
   {
     "source": "../optimization/pipeline_float_fold_kept.c",
     "exit": 2
+  },
+  {
+    "source": "../pointer_words/void_roundtrip.c",
+    "exit": 13
+  },
+  {
+    "source": "../pointer_words/add_zero.c",
+    "exit": 17
+  },
+  {
+    "source": "../pointer_words/xor_roundtrip.c",
+    "exit": 19
+  },
+  {
+    "source": "../pointer_words/complement_roundtrip.c",
+    "exit": 23
+  },
+  {
+    "source": "../pointer_words/unsigned_negation.c",
+    "exit": 29
+  },
+  {
+    "source": "../pointer_words/unsigned_wrap.c",
+    "exit": 31
+  },
+  {
+    "source": "../pointer_words/multiply_divide_identity.c",
+    "exit": 37
+  },
+  {
+    "source": "../pointer_words/bitwise_identity.c",
+    "exit": 41
+  },
+  {
+    "source": "../pointer_words/shift_zero.c",
+    "exit": 43
+  },
+  {
+    "source": "../pointer_words/phi_selection.c",
+    "exit": 47
+  },
+  {
+    "source": "../pointer_words/variadic_word.c",
+    "exit": 53
+  },
+  {
+    "source": "../pointer_words/variadic_stack.c",
+    "exit": 59
+  },
+  {
+    "source": "../pointer_words/aggregate_return.c",
+    "exit": 61
+  },
+  {
+    "source": "../pointer_words/global_storage.c",
+    "exit": 67
+  },
+  {
+    "source": "../pointer_words/array_storage.c",
+    "exit": 71
+  },
+  {
+    "source": "../pointer_words/array_byte_offset.c",
+    "exit": 73
+  },
+  {
+    "source": "../pointer_words/one_past_roundtrip.c",
+    "exit": 3
+  },
+  {
+    "source": "../pointer_words/const_read.c",
+    "exit": 79
+  },
+  {
+    "source": "../pointer_words/local_copy.c",
+    "exit": 83
+  },
+  {
+    "source": "../pointer_words/loop_carried.c",
+    "exit": 89
+  },
+  {
+    "source": "../pointer_words/qualified_choice.c",
+    "exit": 97
   }
 ]

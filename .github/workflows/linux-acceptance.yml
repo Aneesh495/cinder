@@ -64,6 +64,8 @@ jobs:
         run: make test-optimizer
       - name: Ten-pass records, promotion guards and evidence tampering
         run: make test-passes
+      - name: Integer address round trips and object authority guards
+        run: make test-pointer-words
       - name: Independent integer rewrite validation
         run: make test-rewrites
       - name: Authored aggregate ABI checks
@@ -138,6 +140,8 @@ jobs:
             .agent-local/loop-motion
             .agent-local/pass-pipeline
             .agent-local/promotion-guards
+            .agent-local/pointer_words
+            .agent-local/pointer-word-contracts
             .agent-local/local-memory
             .agent-local/copy-cleanup
             .agent-local/strength-reduction

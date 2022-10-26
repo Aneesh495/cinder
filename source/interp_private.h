@@ -17,12 +17,15 @@ typedef struct {
     bool fp;
     bool defined;
     bool pointer;
+    bool integer_word;
+    bool word_uncertain;
     InterpPointer address;
 } InterpValue;
 
 typedef struct {
     size_t offset;
     InterpPointer pointer;
+    unsigned word_kind; /* 0: pointer storage; 1: integer word; 2: ambiguous word */
 } InterpStoredPointer;
 
 typedef struct {
@@ -68,6 +71,7 @@ uint32_t cinder_interp_object(InterpContext *context, const CinderType *type, bo
 void cinder_interp_retire(InterpContext *context, uint32_t id);
 InterpValue cinder_interp_address(const InterpContext *context, uint32_t id);
 InterpValue cinder_interp_pointer_value(InterpPointer pointer);
+bool cinder_interp_word_pointer(const InterpValue *word, InterpValue *value);
 void cinder_interp_member_origin(InterpPointer parent, size_t field, size_t offset, InterpValue *value);
 int64_t cinder_interp_bit_value(uint64_t bits, const CinderType *type, unsigned width);
 bool cinder_interp_bit_load(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, InterpValue *value, CinderLoc loc);
