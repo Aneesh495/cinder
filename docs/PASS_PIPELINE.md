@@ -82,7 +82,13 @@ command output and nonempty target ELF code. Its default requires actual
 Linux x86-64 execution records for all forty objects. Local macOS tests can
 validate artifact semantics without satisfying that native gate. Tamper tests
 include consistently rehashed false counters, results, objects and commands.
-The complete acceptance registry still requires the remaining campaign readers.
+The `nonvacuous-passes` acceptance gate dispatches this reader on retained raw
+artifacts and checks the declared progress against its computed result. On
+Linux x86-64, `make acceptance` runs the implemented pass campaign, retains its
+raw package and records that gate's actual outcome. The overall command still
+fails until the other required campaign runners/readers are implemented.
+`make verify` invokes the dedicated reader rather than treating membership in
+a registered gate-name set as verification.
 
 See [pass invalidation](diagrams/pass-invalidation.mmd) and
 [promotion guards](diagrams/promotion-guards.mmd).
