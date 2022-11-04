@@ -897,6 +897,36 @@ int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStat
 /* ---------- machine representation and allocation ---------- */
 typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
 typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_XMM2, REG_XMM3, REG_XMM4, REG_XMM5, REG_XMM6, REG_XMM7, REG_NONE } CinderRegister;
+typedef enum { MIR_BANK_NONE, MIR_BANK_GPR, MIR_BANK_SSE } CinderMIRBank;
+typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE } CinderMIRKind;
+typedef struct {
+    CinderMIRBank bank;
+    const CinderType *type;
+} CinderMIRValue;
+typedef struct {
+    CinderMIRKind kind;
+    CinderIRInst operands;
+    unsigned char encoding[16];
+    unsigned encoding_size;
+    unsigned char float_opcode, condition_opcode, parity_opcode, parity_combine;
+    bool single_precision, shift_count;
+    uint64_t fixed_uses, clobbers;
+} CinderMIRInst;
+typedef struct {
+    CINDER_VEC_TYPE(CinderMIRInst) instructions;
+    CinderTerminator terminator;
+} CinderMIRBlock;
+typedef struct {
+    const CinderIRFunction *source;
+    CinderMIRValue *values;
+    size_t value_count;
+    CINDER_VEC_TYPE(CinderMIRBlock) blocks;
+} CinderMIRFunction;
+void cinder_selected_mir_init(CinderMIRFunction *machine);
+void cinder_selected_mir_destroy(CinderMIRFunction *machine);
+int cinder_select_mir(const CinderIRFunction *source, CinderMIRFunction *machine, CinderDiagnostics *diags);
+int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnostics *diags);
+void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out);
 typedef struct {
     CinderLocationKind kind;
     CinderRegister reg;
@@ -912,6 +942,7 @@ typedef struct {
 
 typedef struct {
     CinderIRFunction *ir;
+    CinderMIRFunction machine;
     CINDER_VEC_TYPE(CinderInterval) intervals;
     size_t frame_size;
     unsigned spills;

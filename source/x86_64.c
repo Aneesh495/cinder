@@ -80,7 +80,7 @@ static void load_value_alloc(CinderMachineObject *object, const CinderIRFunction
 }
 
 static void store_value_alloc(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
-    normalize_integer(object, cinder_ir_value_type(function, value));
+    normalize_integer(object, allocation->machine.values[value].type);
     const CinderLocation *location = location_for(allocation, value);
     if (location != NULL && location->kind == LOC_REGISTER) emit_mov_reg_reg(object, register_code(location->reg), 0U);
     else emit_mov_mem_rax(object, location != NULL ? location->stack_offset : value_offset(function, allocation, value));
@@ -134,13 +134,14 @@ static void integer_from_double(CinderMachineObject *object) {
     emit8(object, 0xF2U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0x2CU); emit8(object, 0xC0U);
 }
 
-static void emit_conversion(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+static void emit_conversion(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderIRInst *inst = &selected->operands;
     bool from_fp = cinder_ir_floating(inst->source_type);
     bool to_fp = cinder_ir_floating(inst->type);
     if (from_fp) load_float_value(object, function, allocation, inst->left, 0U);
     else load_value_alloc(object, function, allocation, inst->left);
     if (!from_fp && to_fp) {
-        bool single = inst->type->kind == TYPE_FLOAT;
+        bool single = selected->single_precision;
         if (inst->source_type->is_unsigned && inst->source_type->size == 8U) {
             emit8(object, 0x48U); emit8(object, 0x85U); emit8(object, 0xC0U);
             emit8(object, 0x0FU); emit8(object, 0x89U); size_t normal = object->text.len; emit32(object, 0U);
@@ -196,59 +197,40 @@ static void store_float_constant(CinderMachineObject *object, const CinderIRFunc
     store_float_value(object, function, allocation, value);
 }
 
-static void emit_float_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+static void emit_float_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderIRInst *inst = &selected->operands;
     load_float_value(object, function, allocation, inst->left, 0U);
     load_float_value(object, function, allocation, inst->right, 1U);
-    bool single = inst->type->kind == TYPE_FLOAT;
+    bool single = selected->single_precision;
     if (single) {
         emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U);
         emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC9U);
     }
-    uint8_t opcode = inst->op == IR_FADD ? 0x58U : inst->op == IR_FSUB ? 0x5CU : inst->op == IR_FMUL ? 0x59U : 0x5EU;
+    uint8_t opcode = selected->float_opcode;
     emit8(object, single ? 0xF3U : 0xF2U); emit8(object, 0x0FU); emit8(object, opcode); emit8(object, 0xC1U);
     if (single) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
     store_float_value(object, function, allocation, inst->dst);
 }
 
-static void emit_float_compare(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+static void emit_float_compare(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderIRInst *inst = &selected->operands;
     load_float_value(object, function, allocation, inst->left, 0U); load_float_value(object, function, allocation, inst->right, 1U); emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x2EU); emit8(object, 0xC1U);
-    uint8_t condition = 0x94U; switch (inst->op) { case IR_FCMP_EQ: condition = 0x94U; break; case IR_FCMP_NE: condition = 0x95U; break; case IR_FCMP_LT: condition = 0x92U; break; case IR_FCMP_LE: condition = 0x96U; break; case IR_FCMP_GT: condition = 0x97U; break; case IR_FCMP_GE: condition = 0x93U; break; default: break; }
+    uint8_t condition = selected->condition_opcode;
     emit8(object, 0x0FU); emit8(object, condition); emit8(object, 0xC0U);
-    if (inst->op == IR_FCMP_EQ || inst->op == IR_FCMP_LT || inst->op == IR_FCMP_LE || inst->op == IR_FCMP_NE) {
-        emit8(object, 0x0FU); emit8(object, inst->op == IR_FCMP_NE ? 0x9AU : 0x9BU); emit8(object, 0xC2U);
-        emit8(object, inst->op == IR_FCMP_NE ? 0x08U : 0x20U); emit8(object, 0xD0U);
+    if (selected->parity_opcode != 0U) {
+        emit8(object, 0x0FU); emit8(object, selected->parity_opcode); emit8(object, 0xC2U);
+        emit8(object, selected->parity_combine); emit8(object, 0xD0U);
     }
     emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); store_value_alloc(object, function, allocation, inst->dst);
 }
 
 
-static void emit_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+static void emit_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderIRInst *inst = &selected->operands;
     load_value_alloc(object, function, allocation, inst->left);
     load_value_to_r10(object, function, allocation, inst->right);
-    switch (inst->op) {
-        case IR_ADD: emit8(object, 0x4CU); emit8(object, 0x01U); emit8(object, 0xD0U); break;
-        case IR_SUB: emit8(object, 0x4CU); emit8(object, 0x29U); emit8(object, 0xD0U); break;
-        case IR_MUL: emit8(object, 0x49U); emit8(object, 0x0FU); emit8(object, 0xAFU); emit8(object, 0xC2U); break;
-        case IR_DIV_S: emit8(object, 0x48U); emit8(object, 0x99U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xFAU); break;
-        case IR_MOD_S: emit8(object, 0x48U); emit8(object, 0x99U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xFAU); emit_mov_reg_reg(object, 0U, 2U); break;
-        case IR_DIV_U: case IR_MOD_U:
-            emit8(object, 0x31U); emit8(object, 0xD2U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xF2U);
-            if (inst->op == IR_MOD_U) emit_mov_reg_reg(object, 0U, 2U);
-            break;
-        case IR_BIT_AND: emit8(object, 0x4CU); emit8(object, 0x21U); emit8(object, 0xD0U); break;
-        case IR_BIT_OR: emit8(object, 0x4CU); emit8(object, 0x09U); emit8(object, 0xD0U); break;
-        case IR_BIT_XOR: emit8(object, 0x4CU); emit8(object, 0x31U); emit8(object, 0xD0U); break;
-        case IR_SHL: load_value_to_rcx(object, function, allocation, inst->right); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xE0U); break;
-        case IR_SHR_S: load_value_to_rcx(object, function, allocation, inst->right); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xF8U); break;
-        case IR_SHR_U: load_value_to_rcx(object, function, allocation, inst->right); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xE8U); break;
-        case IR_CMP_EQ: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, 0x94U); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
-        case IR_CMP_NE: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, 0x95U); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
-        case IR_CMP_LT_S: case IR_CMP_LT_U: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, inst->op == IR_CMP_LT_U ? 0x92U : 0x9CU); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
-        case IR_CMP_LE_S: case IR_CMP_LE_U: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, inst->op == IR_CMP_LE_U ? 0x96U : 0x9EU); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
-        case IR_CMP_GT_S: case IR_CMP_GT_U: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, inst->op == IR_CMP_GT_U ? 0x97U : 0x9FU); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
-        case IR_CMP_GE_S: case IR_CMP_GE_U: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, inst->op == IR_CMP_GE_U ? 0x93U : 0x9DU); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
-        default: break;
-    }
+    if (selected->shift_count) load_value_to_rcx(object, function, allocation, inst->right);
+    for (unsigned n = 0U; n < selected->encoding_size; ++n) emit8(object, selected->encoding[n]);
     store_value_alloc(object, function, allocation, inst->dst);
 }
 
@@ -315,7 +297,7 @@ static int emit_call(CinderMachineObject *object, const CinderIRFunction *functi
     CinderABIArgument *arguments = cinder_alloc((inst->args.len == 0U ? 1U : inst->args.len) * sizeof(*arguments));
     size_t *staging = cinder_alloc((inst->args.len == 0U ? 1U : inst->args.len) * sizeof(*staging));
     for (size_t a = 0U; a < inst->args.len; ++a) {
-        const CinderType *type = inst->source_type != NULL ? inst->source_type->params.data[a].type : cinder_ir_value_type(function, inst->args.data[a]);
+        const CinderType *type = inst->source_type != NULL ? inst->source_type->params.data[a].type : allocation->machine.values[inst->args.data[a]].type;
         if (!cinder_abi_place(type, &state, &arguments[a])) { cinder_diag(diags, CINDER_FATAL, inst->loc, "unsupported ABI argument layout"); free(staging); free(arguments); return 1; }
     }
     size_t frame = state.stack;
@@ -333,7 +315,7 @@ static int emit_call(CinderMachineObject *object, const CinderIRFunction *functi
      * currently held in XMM2-XMM7. Register exhaustion rolls back an entire
      * aggregate, leaving both register banks available to later arguments. */
     for (size_t a = 0U; a < inst->args.len; ++a) {
-        const CinderType *type = inst->source_type != NULL ? inst->source_type->params.data[a].type : cinder_ir_value_type(function, inst->args.data[a]);
+        const CinderType *type = inst->source_type != NULL ? inst->source_type->params.data[a].type : allocation->machine.values[inst->args.data[a]].type;
         if (aggregate_type(type)) {
             if (arguments[a].stack_offset != SIZE_MAX) {
                 load_value_alloc(object, function, allocation, inst->args.data[a]); emit_mov_reg_reg(object, 6U, 0U);
@@ -634,9 +616,9 @@ static CinderValueId storage_key(const CinderLocation *location) {
 }
 
 static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderBlockId from, CinderBlockId to, CinderDiagnostics *diags) {
-    const CinderIRBlock *target = &function->blocks.data[to];
+    const CinderMIRBlock *target = &allocation->machine.blocks.data[to];
     size_t count = 0U;
-    for (size_t i = 0U; i < target->instructions.len; ++i) if (target->instructions.data[i].op == IR_PHI) ++count;
+    for (size_t i = 0U; i < target->instructions.len; ++i) if (target->instructions.data[i].operands.op == IR_PHI) ++count;
     if (count == 0U) return 0;
     CinderValueId *sources = cinder_alloc(count * sizeof(*sources));
     CinderValueId *destinations = cinder_alloc(count * sizeof(*destinations));
@@ -644,7 +626,7 @@ static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunctio
     CinderValueId *destination_values = cinder_alloc(count * sizeof(*destination_values));
     size_t index = 0U;
     for (size_t i = 0U; i < target->instructions.len; ++i) {
-        const CinderIRInst *phi = &target->instructions.data[i];
+        const CinderIRInst *phi = &target->instructions.data[i].operands;
         if (phi->op != IR_PHI) continue;
         size_t incoming = SIZE_MAX;
         for (size_t p = 0U; p < phi->phi_blocks.len; ++p) if (phi->phi_blocks.data[p] == from) incoming = p;
@@ -665,7 +647,7 @@ static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunctio
             if (sources[k] == move.source) source = source_values[k];
             if (destinations[k] == move.destination) destination = destination_values[k];
         }
-        bool floating = source != CINDER_INVALID_VALUE ? cinder_ir_floating(cinder_ir_value_type(function, source)) : temporary_float;
+        bool floating = source != CINDER_INVALID_VALUE ? cinder_ir_floating(allocation->machine.values[source].type) : temporary_float;
         if (move.source == CINDER_INVALID_VALUE) {
             if (floating) emit_movsd_xmm_xmm(object, 0U, 1U);
             else emit_mov_reg_reg(object, 0U, 11U);
@@ -693,6 +675,8 @@ void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.dat
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)assembly; (void)asm_out;
+    const CinderMIRFunction *machine = &allocation->machine;
+    if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0) return 1;
     CinderABIValue result;
     if (!cinder_abi_classify(function->type->return_type, &result)) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "unsupported function ABI return layout"); return 1; }
     CinderABIState state = {result.memory ? 1U : 0U, 0U, 0U};
@@ -737,9 +721,13 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     size_t *labels = cinder_alloc((function->blocks.len == 0U ? 1U : function->blocks.len) * sizeof(*labels));
     for (size_t i = 0U; i < function->blocks.len; ++i) labels[i] = SIZE_MAX;
     for (size_t b = 0U; b < function->blocks.len; ++b) {
-        const CinderIRBlock *block = &function->blocks.data[b]; labels[b] = object->text.len;
+        const CinderMIRBlock *block = &machine->blocks.data[b]; labels[b] = object->text.len;
         for (size_t i = 0U; i < block->instructions.len; ++i) {
-            const CinderIRInst *inst = &block->instructions.data[i];
+            const CinderMIRInst *selected = &block->instructions.data[i];
+            const CinderIRInst *inst = &selected->operands;
+            if (selected->kind == MIR_INTEGER_ALU) { emit_binary(object, function, allocation, selected); continue; }
+            if (selected->kind == MIR_FLOAT_ALU) { emit_float_binary(object, function, allocation, selected); continue; }
+            if (selected->kind == MIR_FLOAT_COMPARE) { emit_float_compare(object, function, allocation, selected); continue; }
             switch (inst->op) {
                 case IR_NOP: case IR_LOCAL_BEGIN: case IR_LOCAL_END: case IR_LOCAL_RESET: case IR_LOCAL_FREEZE: break;
                 case IR_CONST: emit_mov_rax_imm(object, inst->integer); store_value_alloc(object, function, allocation, inst->dst); break;
@@ -837,7 +825,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     else load_value_alloc(object, function, allocation, inst->left);
                     object_store(object, inst->type, 0x85U, false, local_offset(allocation, inst->slot));
                     break;
-                case IR_CONVERT: emit_conversion(object, function, allocation, inst); break;
+                case IR_CONVERT: emit_conversion(object, function, allocation, selected); break;
                 case IR_COPY:
                     if (cinder_ir_floating(inst->type)) { load_float_value(object, function, allocation, inst->left, 0U); store_float_value(object, function, allocation, inst->dst); }
                     else { load_value_alloc(object, function, allocation, inst->left); store_value_alloc(object, function, allocation, inst->dst); }
@@ -848,14 +836,12 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     emit8(object, 0x66U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0x6EU); emit8(object, 0xC8U);
                     emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x57U); emit8(object, 0xC1U);
                     store_float_value(object, function, allocation, inst->dst); break;
-                case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV: emit_float_binary(object, function, allocation, inst); break;
-                case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE: emit_float_compare(object, function, allocation, inst); break;
                 case IR_NEG: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_BIT_NOT: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD0U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_CALL:
                     if (emit_call(object, function, allocation, inst, diags) != 0) { free(parameters); free(labels); free(branches.data); return 1; }
                     break;
-                default: emit_binary(object, function, allocation, inst); break;
+                default: cinder_diag(diags, CINDER_FATAL, inst->loc, "unselected machine instruction"); free(parameters); free(labels); free(branches.data); return 1;
             }
         }
         switch (block->terminator.kind) {
