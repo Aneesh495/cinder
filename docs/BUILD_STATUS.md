@@ -1,6 +1,38 @@
 # Build status
 
-Updated: 2026-10-09
+Updated: 2026-10-10
+
+## Selected ABI plans
+
+Incoming function parameters, outgoing calls and variadic retrieval now own
+selected ABI layouts before allocation. The encoder consumes classified
+returns/arguments, register placement, stack offsets and aligned argument
+staging without repeating ABI classification. The machine verifier checks
+every field against the verified source signature. Missing call signatures
+produce a diagnostic before layout selection.
+
+Strict GCC/ASan builds passed all 64 authored aggregate, variadic and
+integer-address cases with original object identity and 1,314 rejected plans
+or signatures. Both reference compilers agreed on all focused source cases;
+their object/assembly checks passed. The existing scalar machine suite passed
+43 forms and 301 corrupted-plan rejections; 10,000 allocation graphs with
+1,000 mutations, 1,000 physical phi cycles, parallel copies, 353 constraints,
+CTest and evidence-integrity checks passed. All 53 implementation modules
+compiled to original target objects. The full 1,211-source and 2,422-CIR
+regressions are running against the frozen ABI-plan binaries.
+
+The pressure fixture had a call marker without a signature. This exposed a
+null dereference in selection. Selection now rejects that input; the fixture
+supplies real formal/actual signatures and retains its original pressure and
+mutation counts. The failure observation is preserved privately.
+
+Evidence: `.agent-local/mir-abi/`, `.agent-local/mir-abi-failure/` and
+`.agent-local/selfhost-object-audit/`. Memory/conversion selection, typed HIR
+and the remaining acceptance campaigns are still open.
+
+The preceding selected-scalar checkpoint `24d9562` passed hosted
+[native validation](https://github.com/Aneesh495/cinder/actions/runs/38014479847)
+and [bootstrap](https://github.com/Aneesh495/cinder/actions/runs/38014554072).
 
 ## Selected machine representation
 
@@ -27,7 +59,7 @@ Evidence: `.agent-local/selected-mir/`, `.agent-local/allocation/`,
 `.agent-local/selected-mir-byte-preservation.json`,
 `.agent-local/linux-vm/share/mir-first/` and
 `.agent-local/linux-vm/share/mir-ssa-first/`. Native hosted checks run after
-publication. Memory/call-frame/conversion/variadic target pseudos and a
+publication. Memory/conversion target pseudos and a
 separate typed HIR still require further representation work. Full acceptance
 is incomplete.
 

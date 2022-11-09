@@ -27,15 +27,80 @@ static const IntegerForm integer_forms[] = {
 };
 
 void cinder_selected_mir_init(CinderMIRFunction *machine) { memset(machine, 0, sizeof(*machine)); }
+static void destroy_call_plan(CinderMIRCallPlan *plan) {
+    if (plan == NULL) return;
+    free(plan->arguments); free(plan->argument_types); free(plan->staging); free(plan);
+}
 void cinder_selected_mir_destroy(CinderMIRFunction *machine) {
     for (size_t b = 0U; b < machine->blocks.len; ++b) {
         for (size_t i = 0U; i < machine->blocks.data[b].instructions.len; ++i) {
             CinderIRInst *inst = &machine->blocks.data[b].instructions.data[i].operands;
             free(inst->callee); free(inst->args.data); free(inst->arg_floats.data); free(inst->phi_blocks.data);
+            destroy_call_plan(machine->blocks.data[b].instructions.data[i].call);
+            free(machine->blocks.data[b].instructions.data[i].variadic_layout);
         }
         free(machine->blocks.data[b].instructions.data);
     }
-    free(machine->blocks.data); free(machine->values); cinder_selected_mir_init(machine);
+    free(machine->blocks.data); free(machine->values); destroy_call_plan(machine->signature); cinder_selected_mir_init(machine);
+}
+
+static CinderMIRCallPlan *call_plan(const CinderType *returned, const CinderType *const *types, size_t count, bool outgoing, CinderDiagnostics *diags, CinderLoc loc) {
+    if (count > 1000000U) { cinder_diag(diags, CINDER_FATAL, loc, "machine ABI argument extent exceeds the profile"); return NULL; }
+    CinderMIRCallPlan *plan = cinder_alloc(sizeof(*plan)); memset(plan, 0, sizeof(*plan));
+    if (!cinder_abi_classify(returned, &plan->result)) { cinder_diag(diags, CINDER_FATAL, loc, "unsupported selected ABI return layout"); destroy_call_plan(plan); return NULL; }
+    size_t capacity = count == 0U ? 1U : count;
+    plan->arguments = cinder_alloc(capacity * sizeof(*plan->arguments)); plan->argument_types = cinder_alloc(capacity * sizeof(*plan->argument_types));
+    plan->staging = cinder_alloc(capacity * sizeof(*plan->staging)); plan->argument_count = count;
+    plan->state = (CinderABIState){plan->result.memory ? 1U : 0U, 0U, 0U};
+    for (size_t a = 0U; a < count; ++a) {
+        plan->argument_types[a] = types[a]; plan->staging[a] = 0U;
+        if (!cinder_abi_place(types[a], &plan->state, &plan->arguments[a])) { cinder_diag(diags, CINDER_FATAL, loc, "unsupported selected ABI argument layout"); destroy_call_plan(plan); return NULL; }
+    }
+    if (outgoing) {
+        plan->frame_size = plan->state.stack;
+        for (size_t a = 0U; a < count; ++a) {
+            if (plan->arguments[a].stack_offset != SIZE_MAX) plan->staging[a] = plan->arguments[a].stack_offset;
+            else {
+                size_t bytes = (plan->arguments[a].value.size + 7U) & ~(size_t)7U;
+                if (plan->frame_size > 64U * 1024U * 1024U || bytes > 64U * 1024U * 1024U - plan->frame_size) { cinder_diag(diags, CINDER_FATAL, loc, "selected argument staging exceeds the frame limit"); destroy_call_plan(plan); return NULL; }
+                plan->staging[a] = plan->frame_size; plan->frame_size += bytes;
+            }
+        }
+        if (plan->frame_size > 64U * 1024U * 1024U - 15U) { cinder_diag(diags, CINDER_FATAL, loc, "selected call alignment exceeds the frame limit"); destroy_call_plan(plan); return NULL; }
+        plan->frame_size = (plan->frame_size + 15U) & ~(size_t)15U;
+    }
+    return plan;
+}
+
+static bool plan_matches(const CinderMIRCallPlan *plan, const CinderMIRCallPlan *expected) {
+    if (plan == NULL || expected == NULL || plan->argument_count != expected->argument_count || plan->frame_size != expected->frame_size || plan->state.gpr != expected->state.gpr || plan->state.sse != expected->state.sse || plan->state.stack != expected->state.stack || plan->result.memory != expected->result.memory || plan->result.size != expected->result.size || plan->result.align != expected->result.align || plan->result.count != expected->result.count) return false;
+    if (plan->argument_count != 0U && (plan->arguments == NULL || plan->argument_types == NULL || plan->staging == NULL)) return false;
+    for (unsigned p = 0U; p < 2U; ++p) if (plan->result.classes[p] != expected->result.classes[p]) return false;
+    for (size_t a = 0U; a < plan->argument_count; ++a) {
+        if (plan->argument_types[a] != expected->argument_types[a] || plan->staging[a] != expected->staging[a]) return false;
+        const CinderABIArgument *x = &plan->arguments[a], *y = &expected->arguments[a];
+        if (x->stack_offset != y->stack_offset || x->value.size != y->value.size || x->value.align != y->value.align || x->value.count != y->value.count || x->value.memory != y->value.memory) return false;
+        for (unsigned p = 0U; p < 2U; ++p) if (x->registers[p] != y->registers[p] || x->value.classes[p] != y->value.classes[p]) return false;
+    }
+    return true;
+}
+
+static CinderMIRCallPlan *function_plan(const CinderIRFunction *source, CinderDiagnostics *diags) {
+    size_t count = source->params.len; const CinderType **types = cinder_alloc((count == 0U ? 1U : count) * sizeof(*types));
+    for (size_t p = 0U; p < count; ++p) types[p] = source->params.data[p]->type;
+    CinderMIRCallPlan *plan = call_plan(source->type->return_type, types, count, false, diags, (CinderLoc){0}); free(types); return plan;
+}
+
+static CinderMIRCallPlan *instruction_plan(const CinderMIRFunction *machine, const CinderIRInst *inst, CinderDiagnostics *diags) {
+    if (inst->callee_type == NULL || inst->callee_type->kind != TYPE_FUNCTION || (inst->source_type != NULL && (inst->source_type->kind != TYPE_FUNCTION || inst->source_type->params.len != inst->args.len))) {
+        cinder_diag(diags, CINDER_FATAL, inst->loc, "machine call requires verified formal and actual signatures"); return NULL;
+    }
+    size_t count = inst->args.len; const CinderType **types = cinder_alloc((count == 0U ? 1U : count) * sizeof(*types));
+    for (size_t a = 0U; a < count; ++a) {
+        if ((size_t)inst->args.data[a] >= machine->value_count) { cinder_diag(diags, CINDER_FATAL, inst->loc, "machine call argument lies outside its definition table"); free(types); return NULL; }
+        types[a] = inst->source_type != NULL ? inst->source_type->params.data[a].type : machine->values[inst->args.data[a]].type;
+    }
+    CinderMIRCallPlan *plan = call_plan(inst->callee_type->return_type, types, count, true, diags, inst->loc); free(types); return plan;
 }
 
 static void select_operation(CinderMIRInst *machine) {
@@ -105,11 +170,25 @@ int cinder_select_mir(const CinderIRFunction *source, CinderMIRFunction *machine
         }
         cinder_vec_push((CinderVec *)&machine->blocks, &block);
     }
+    machine->signature = function_plan(source, diags); if (machine->signature == NULL) return 1;
+    for (size_t b = 0U; b < machine->blocks.len; ++b)
+        for (size_t i = 0U; i < machine->blocks.data[b].instructions.len; ++i) {
+            CinderMIRInst *selected = &machine->blocks.data[b].instructions.data[i];
+            if (selected->operands.op == IR_VA_ARG) {
+                selected->variadic_layout = cinder_alloc(sizeof(*selected->variadic_layout));
+                if (!cinder_abi_classify(selected->operands.source_type, selected->variadic_layout)) { cinder_diag(diags, CINDER_FATAL, selected->operands.loc, "unsupported selected va_arg layout"); return 1; }
+            }
+            if (selected->operands.op != IR_CALL) continue;
+            selected->call = instruction_plan(machine, &selected->operands, diags); if (selected->call == NULL) return 1;
+        }
     return cinder_verify_selected_mir(machine, diags);
 }
 
 int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnostics *diags) {
     if (machine->source == NULL || machine->value_count != machine->source->value_count || machine->blocks.len != machine->source->blocks.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "selected machine function has stale dimensions"); return 1; }
+    CinderMIRCallPlan *signature = function_plan(machine->source, diags);
+    if (!plan_matches(machine->signature, signature)) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "selected incoming ABI plan is inconsistent");
+    destroy_call_plan(signature);
     for (size_t b = 0U; b < machine->blocks.len; ++b) {
         const CinderMIRBlock *block = &machine->blocks.data[b];
         if (block->instructions.len != machine->source->blocks.data[b].instructions.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "selected machine block has stale instructions"); continue; }
@@ -119,6 +198,15 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderMIRInst *inst = &block->instructions.data[i];
             const CinderIRInst *original = &machine->source->blocks.data[b].instructions.data[i];
+            if (original->op == IR_VA_ARG) {
+                CinderABIValue expected_layout;
+                if (!cinder_abi_classify(original->source_type, &expected_layout) || inst->variadic_layout == NULL || inst->variadic_layout->size != expected_layout.size || inst->variadic_layout->align != expected_layout.align || inst->variadic_layout->count != expected_layout.count || inst->variadic_layout->memory != expected_layout.memory || inst->variadic_layout->classes[0] != expected_layout.classes[0] || inst->variadic_layout->classes[1] != expected_layout.classes[1]) cinder_diag(diags, CINDER_FATAL, original->loc, "selected variadic ABI layout is inconsistent");
+            } else if (inst->variadic_layout != NULL) cinder_diag(diags, CINDER_FATAL, original->loc, "non-variadic instruction owns a va_arg layout");
+            if (original->op == IR_CALL) {
+                CinderMIRCallPlan *call = instruction_plan(machine, original, diags);
+                if (!plan_matches(inst->call, call)) cinder_diag(diags, CINDER_FATAL, original->loc, "selected outgoing ABI plan is inconsistent");
+                destroy_call_plan(call);
+            } else if (inst->call != NULL) cinder_diag(diags, CINDER_FATAL, original->loc, "non-call machine instruction owns an ABI plan");
             const CinderIRInst *operand = &inst->operands;
             bool same_callee = operand->callee == NULL || original->callee == NULL ? operand->callee == original->callee : strcmp(operand->callee, original->callee) == 0;
             bool same_args = operand->args.len == original->args.len && (operand->args.len == 0U || (operand->args.data != NULL && memcmp(operand->args.data, original->args.data, operand->args.len * sizeof(*operand->args.data)) == 0));
@@ -140,6 +228,7 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
 
 void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
     fprintf(out, "selected-mir %s target=x86_64-sysv values=%zu\n", machine->source->name, machine->value_count);
+    fprintf(out, "incoming-abi arguments=%zu gpr=%u sse=%u stack=%zu sret=%s\n", machine->signature->argument_count, machine->signature->state.gpr, machine->signature->state.sse, machine->signature->state.stack, machine->signature->result.memory ? "yes" : "no");
     for (size_t b = 0U; b < machine->blocks.len; ++b) {
         fprintf(out, "machine-block %zu\n", b);
         for (size_t i = 0U; i < machine->blocks.data[b].instructions.len; ++i) {
@@ -148,6 +237,8 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
             for (unsigned n = 0U; n < inst->encoding_size; ++n) fprintf(out, "%02x", inst->encoding[n]);
             if (inst->kind == MIR_FLOAT_ALU) fprintf(out, "%02x0f%02xc1", inst->single_precision ? 0xf3U : 0xf2U, inst->float_opcode);
             if (inst->operands.dst != CINDER_INVALID_VALUE && (size_t)inst->operands.dst < machine->value_count) fprintf(out, " bank=%s", machine->values[inst->operands.dst].bank == MIR_BANK_SSE ? "sse" : "gpr");
+            if (inst->call != NULL) fprintf(out, " call-abi args=%zu gpr=%u sse=%u stack=%zu frame=%zu sret=%s", inst->call->argument_count, inst->call->state.gpr, inst->call->state.sse, inst->call->state.stack, inst->call->frame_size, inst->call->result.memory ? "yes" : "no");
+            if (inst->variadic_layout != NULL) fprintf(out, " va-layout size=%zu align=%zu classes=%u memory=%s", inst->variadic_layout->size, inst->variadic_layout->align, inst->variadic_layout->count, inst->variadic_layout->memory ? "yes" : "no");
             fputc('\n', out);
         }
     }

@@ -899,6 +899,8 @@ typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
 typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_XMM2, REG_XMM3, REG_XMM4, REG_XMM5, REG_XMM6, REG_XMM7, REG_NONE } CinderRegister;
 typedef enum { MIR_BANK_NONE, MIR_BANK_GPR, MIR_BANK_SSE } CinderMIRBank;
 typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE } CinderMIRKind;
+typedef struct CinderMIRCallPlan CinderMIRCallPlan;
+typedef struct CinderABIValue CinderABIValue;
 typedef struct {
     CinderMIRBank bank;
     const CinderType *type;
@@ -911,6 +913,8 @@ typedef struct {
     unsigned char float_opcode, condition_opcode, parity_opcode, parity_combine;
     bool single_precision, shift_count;
     uint64_t fixed_uses, clobbers;
+    CinderMIRCallPlan *call;
+    CinderABIValue *variadic_layout;
 } CinderMIRInst;
 typedef struct {
     CINDER_VEC_TYPE(CinderMIRInst) instructions;
@@ -921,6 +925,7 @@ typedef struct {
     CinderMIRValue *values;
     size_t value_count;
     CINDER_VEC_TYPE(CinderMIRBlock) blocks;
+    CinderMIRCallPlan *signature;
 } CinderMIRFunction;
 void cinder_selected_mir_init(CinderMIRFunction *machine);
 void cinder_selected_mir_destroy(CinderMIRFunction *machine);
@@ -1023,19 +1028,27 @@ void cinder_machine_destroy(CinderMachineObject *object);
 int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *object, CinderDiagnostics *diags);
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags);
 typedef enum { ABI_NONE, ABI_INTEGER, ABI_SSE, ABI_MEMORY } CinderABIClass;
-typedef struct {
+struct CinderABIValue {
     CinderABIClass classes[2];
     size_t size;
     size_t align;
     unsigned count;
     bool memory;
-} CinderABIValue;
+};
 typedef struct { unsigned gpr; unsigned sse; size_t stack; } CinderABIState;
 typedef struct {
     CinderABIValue value;
     unsigned registers[2];
     size_t stack_offset;
 } CinderABIArgument;
+struct CinderMIRCallPlan {
+    CinderABIValue result;
+    CinderABIState state;
+    CinderABIArgument *arguments;
+    const CinderType **argument_types;
+    size_t *staging;
+    size_t argument_count, frame_size;
+};
 bool cinder_abi_classify(const CinderType *type, CinderABIValue *value);
 bool cinder_abi_place(const CinderType *type, CinderABIState *state, CinderABIArgument *argument);
 bool cinder_va_pointer_type(const CinderType *type);

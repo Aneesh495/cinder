@@ -4,13 +4,16 @@ flowchart TD
   SELECT --> OWN[Own operands phi vectors and terminators]
   SELECT --> BANK[Build definition bank and type table]
   SELECT --> CONTRACT[Declare fixed operands and clobber masks]
+  SELECT --> ABI[Select incoming outgoing and variadic ABI layouts]
   OWN --> VERIFY[Verify sealed selected representation]
   BANK --> VERIFY
   CONTRACT --> VERIFY
+  ABI --> VERIFY
   VERIFY --> LIVE[CFG liveness and linear-scan allocation]
   BANK --> LIVE
   CONTRACT --> LIVE
   LIVE --> COPY[Resolve edge copies with selected phi operands]
   COPY --> ENCODE[Encode selected scalar forms and expand target pseudos]
+  ABI --> ENCODE
   ENCODE --> ELF[Original ELF writer]
   ELF --> CHECK[Independent object and native result checks]
