@@ -103,6 +103,59 @@ static CinderMIRCallPlan *instruction_plan(const CinderMIRFunction *machine, con
     CinderMIRCallPlan *plan = call_plan(inst->callee_type->return_type, types, count, true, diags, inst->loc); free(types); return plan;
 }
 
+static void select_normalization(CinderMIRValue *value) {
+    const CinderType *type = value->type;
+    value->incoming_bool = type != NULL && type->kind == TYPE_BOOL;
+    if (type == NULL || type->kind == TYPE_POINTER || type->size == 8U) return;
+    unsigned char *bytes = value->normalization;
+    if (type->kind == TYPE_BOOL) {
+        static const unsigned char boolean[] = {0x48,0x85,0xc0,0x0f,0x95,0xc0,0x0f,0xb6,0xc0};
+        memcpy(bytes, boolean, sizeof(boolean)); value->normalization_size = (unsigned char)sizeof(boolean);
+    } else if (type->size == 1U || type->size == 2U) {
+        if (!type->is_unsigned) bytes[value->normalization_size++] = 0x48U;
+        bytes[value->normalization_size++] = 0x0fU;
+        bytes[value->normalization_size++] = type->size == 1U ? (type->is_unsigned ? 0xb6U : 0xbeU) : (type->is_unsigned ? 0xb7U : 0xbfU);
+        bytes[value->normalization_size++] = 0xc0U;
+    } else if (type->size == 4U) {
+        if (type->is_unsigned) { bytes[0] = 0x89U; bytes[1] = 0xc0U; value->normalization_size = 2U; }
+        else { bytes[0] = 0x48U; bytes[1] = 0x63U; bytes[2] = 0xc0U; value->normalization_size = 3U; }
+    }
+}
+
+static bool select_access(const CinderType *type, CinderMIRAccess *access) {
+    if (type == NULL || (type->size != 1U && type->size != 2U && type->size != 4U && type->size != 8U)) return false;
+    access->floating = cinder_ir_floating(type); access->single = type->kind == TYPE_FLOAT;
+    for (unsigned extended = 0U; extended < 2U; ++extended) {
+        unsigned char *load = extended ? access->load_extended : access->load;
+        unsigned char *store = extended ? access->store_extended : access->store;
+        unsigned char nl = 0U, ns = 0U;
+        if (access->floating) {
+            load[nl++] = store[ns++] = access->single ? 0xf3U : 0xf2U;
+            if (extended) { load[nl++] = 0x41U; store[ns++] = 0x41U; }
+            load[nl++] = 0x0fU; load[nl++] = 0x10U;
+            store[ns++] = 0x0fU; store[ns++] = 0x11U;
+        } else {
+            if (type->size == 1U || type->size == 2U) {
+                load[nl++] = extended ? 0x49U : 0x48U; load[nl++] = 0x0fU;
+                load[nl++] = type->size == 1U ? (type->is_unsigned ? 0xb6U : 0xbeU) : (type->is_unsigned ? 0xb7U : 0xbfU);
+            } else if (type->size == 4U && !type->is_unsigned) {
+                load[nl++] = extended ? 0x49U : 0x48U; load[nl++] = 0x63U;
+            } else {
+                if (type->size == 8U) load[nl++] = extended ? 0x49U : 0x48U;
+                else if (extended) load[nl++] = 0x41U;
+                load[nl++] = 0x8bU;
+            }
+            if (type->size == 2U) store[ns++] = 0x66U;
+            if (type->size == 8U) store[ns++] = extended ? 0x49U : 0x48U;
+            else if (extended) store[ns++] = 0x41U;
+            store[ns++] = type->size == 1U ? 0x88U : 0x89U;
+        }
+        if (extended) { access->load_extended_size = nl; access->store_extended_size = ns; }
+        else { access->load_size = nl; access->store_size = ns; }
+    }
+    return true;
+}
+
 static void select_operation(CinderMIRInst *machine) {
     CinderIROp op = machine->operands.op;
     machine->single_precision = machine->operands.type != NULL && machine->operands.type->kind == TYPE_FLOAT;
@@ -131,6 +184,35 @@ static void select_operation(CinderMIRInst *machine) {
             machine->parity_combine = op == IR_FCMP_NE ? 0x08U : 0x20U;
         }
         machine->fixed_uses = SSE(0)|SSE(1); machine->clobbers = SSE(0)|SSE(1)|GPR(0)|GPR(2)|FLAGS; return;
+    }
+    if (op == IR_NEG || op == IR_BIT_NOT) {
+        machine->kind = MIR_INTEGER_UNARY; machine->encoding_size = 3U;
+        machine->encoding[0] = 0x48U; machine->encoding[1] = 0xf7U; machine->encoding[2] = op == IR_NEG ? 0xd8U : 0xd0U;
+        machine->fixed_uses = GPR(0); machine->clobbers = GPR(0)|FLAGS; return;
+    }
+    if (op == IR_LOCAL_LOAD || op == IR_LOCAL_STORE || op == IR_LOCAL_INIT || op == IR_GLOBAL_LOAD || op == IR_GLOBAL_STORE || op == IR_MEMORY_LOAD || op == IR_MEMORY_STORE || op == IR_MEMORY_INIT) {
+        machine->kind = MIR_MEMORY; (void)select_access(machine->operands.type, &machine->access);
+    }
+    if (op == IR_BIT_LOAD || op == IR_BIT_STORE || op == IR_BIT_INIT || op == IR_BIT_CONVERT) {
+        machine->kind = MIR_BITFIELD;
+        CinderType byte; memset(&byte, 0, sizeof(byte)); byte.kind = TYPE_CHAR; byte.size = 1U; byte.is_unsigned = true;
+        (void)select_access(&byte, &machine->access);
+        unsigned width = (unsigned)machine->operands.integer, offset = (unsigned)machine->operands.operator_code;
+        if (width != 0U && width <= 32U && offset < 32U && offset + width <= 32U) {
+            machine->bitfield.mask = (UINT64_C(1) << width) - 1U;
+            machine->bitfield.begin = offset / 8U; machine->bitfield.end = (offset + width + 7U) / 8U;
+            machine->bitfield.shift = offset % 8U;
+            machine->bitfield.positioned_mask = machine->bitfield.mask << machine->bitfield.shift;
+            machine->bitfield.signed_shift = machine->operands.type->kind != TYPE_BOOL && !machine->operands.type->is_unsigned ? 64U - width : 0U;
+        }
+    }
+    if (op == IR_CONVERT) {
+        machine->kind = MIR_CONVERSION;
+        const CinderType *from = machine->operands.source_type, *to = machine->operands.type;
+        bool from_fp = cinder_ir_floating(from), to_fp = cinder_ir_floating(to);
+        if (from_fp && to_fp) machine->conversion = MIR_CONVERT_FLOAT_PRECISION;
+        else if (from_fp && to != NULL) machine->conversion = to->kind == TYPE_BOOL ? MIR_CONVERT_FLOAT_BOOL : to->is_unsigned && to->size == 8U ? MIR_CONVERT_FLOAT_UNSIGNED : MIR_CONVERT_FLOAT_SIGNED;
+        else if (to_fp && from != NULL) machine->conversion = from->is_unsigned && from->size == 8U ? MIR_CONVERT_UNSIGNED_FLOAT : MIR_CONVERT_SIGNED_FLOAT;
     }
     if (op == IR_CALL) machine->clobbers = GPR(0)|GPR(1)|GPR(2)|GPR(6)|GPR(7)|GPR(8)|GPR(9)|GPR(10)|GPR(11)|UINT64_C(0xffff0000)|FLAGS;
     else if (op != IR_NOP && op != IR_PHI && op != IR_LOCAL_BEGIN && op != IR_LOCAL_END && op != IR_LOCAL_RESET && op != IR_LOCAL_FREEZE && op != IR_VA_END)
@@ -165,6 +247,7 @@ int cinder_select_mir(const CinderIRFunction *source, CinderMIRFunction *machine
             if (original->dst != CINDER_INVALID_VALUE && (size_t)original->dst < machine->value_count) {
                 machine->values[original->dst].type = original->type;
                 machine->values[original->dst].bank = cinder_ir_floating(original->type) ? MIR_BANK_SSE : MIR_BANK_GPR;
+                select_normalization(&machine->values[original->dst]);
             }
             cinder_vec_push((CinderVec *)&block.instructions, &instruction);
         }
@@ -217,9 +300,16 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
             CinderMIRInst expected; memset(&expected, 0, sizeof(expected)); expected.operands = *original; select_operation(&expected);
             if (inst->kind != expected.kind || inst->encoding_size != expected.encoding_size || memcmp(inst->encoding, expected.encoding, sizeof(inst->encoding)) != 0 || inst->fixed_uses != expected.fixed_uses || inst->clobbers != expected.clobbers || inst->float_opcode != expected.float_opcode || inst->condition_opcode != expected.condition_opcode || inst->parity_opcode != expected.parity_opcode || inst->parity_combine != expected.parity_combine || inst->single_precision != expected.single_precision || inst->shift_count != expected.shift_count)
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected x86 instruction contract");
+            if (inst->conversion != expected.conversion || memcmp(&inst->access, &expected.access, sizeof(inst->access)) != 0 || (inst->kind == MIR_MEMORY && inst->access.load_size == 0U))
+                cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected memory or conversion plan");
+            if (memcmp(&inst->bitfield, &expected.bitfield, sizeof(inst->bitfield)) != 0 || (inst->kind == MIR_BITFIELD && inst->bitfield.mask == 0U))
+                cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected bitfield plan");
             if (inst->operands.dst != CINDER_INVALID_VALUE && (size_t)inst->operands.dst < machine->value_count) {
                 const CinderMIRValue *value = &machine->values[inst->operands.dst];
                 if (value->type != original->type || value->bank != (cinder_ir_floating(original->type) ? MIR_BANK_SSE : MIR_BANK_GPR)) cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "selected machine value has an incorrect register bank");
+                CinderMIRValue expected_value; memset(&expected_value, 0, sizeof(expected_value)); expected_value.type = original->type; select_normalization(&expected_value);
+                if (value->normalization_size != expected_value.normalization_size || memcmp(value->normalization, expected_value.normalization, sizeof(value->normalization)) != 0 || value->incoming_bool != expected_value.incoming_bool)
+                    cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "selected scalar normalization is inconsistent");
             }
         }
     }
@@ -239,6 +329,12 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
             if (inst->operands.dst != CINDER_INVALID_VALUE && (size_t)inst->operands.dst < machine->value_count) fprintf(out, " bank=%s", machine->values[inst->operands.dst].bank == MIR_BANK_SSE ? "sse" : "gpr");
             if (inst->call != NULL) fprintf(out, " call-abi args=%zu gpr=%u sse=%u stack=%zu frame=%zu sret=%s", inst->call->argument_count, inst->call->state.gpr, inst->call->state.sse, inst->call->state.stack, inst->call->frame_size, inst->call->result.memory ? "yes" : "no");
             if (inst->variadic_layout != NULL) fprintf(out, " va-layout size=%zu align=%zu classes=%u memory=%s", inst->variadic_layout->size, inst->variadic_layout->align, inst->variadic_layout->count, inst->variadic_layout->memory ? "yes" : "no");
+            if (inst->kind == MIR_MEMORY || inst->kind == MIR_BITFIELD) {
+                fputs(" load-form=", out); for (unsigned n = 0U; n < inst->access.load_size; ++n) fprintf(out, "%02x", inst->access.load[n]);
+                fputs(" store-form=", out); for (unsigned n = 0U; n < inst->access.store_size; ++n) fprintf(out, "%02x", inst->access.store[n]);
+            }
+            if (inst->kind == MIR_CONVERSION) fprintf(out, " conversion=%u precision=%s", (unsigned)inst->conversion, inst->single_precision ? "f32" : "f64");
+            if (inst->kind == MIR_BITFIELD) fprintf(out, " occupied=%u:%u mask=%" PRIx64 " shift=%u sign-shift=%u", inst->bitfield.begin, inst->bitfield.end, inst->bitfield.mask, inst->bitfield.shift, inst->bitfield.signed_shift);
             fputc('\n', out);
         }
     }

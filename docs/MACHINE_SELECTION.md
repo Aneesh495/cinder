@@ -43,9 +43,20 @@ ABI classifier or placing arguments again. The verifier recomputes and checks
 each plan against the verified function and actual call signatures. Calls with
 missing signatures are rejected before layout selection.
 
-Memory and conversion operations still include typed target pseudo-operations
-expanded during encoding. Their complete selection and a separate typed HIR
-remain open. Full acceptance is incomplete.
+Scalar object accesses own selected load/store prefixes and opcodes for frame,
+RIP-relative and extended-base addressing. Their precision plans preserve the
+internal binary64 float representation and declared binary32 storage. Each
+definition owns its sign/zero-extension or boolean-normalization template;
+incoming ABI booleans retain the separate low-byte rule. Conversions select
+bit transfer, signed/unsigned integer-to-float, float-to-signed/unsigned integer,
+float-to-boolean or floating precision handling before encoding. Integer unary
+operations carry byte templates. Bitfield plans record occupied bytes, masks,
+shift and sign extension so masked updates preserve neighboring members.
+
+The verifier seals those encodings and layout choices as well as the original
+operand/type contracts. Pointer arithmetic, address formation and control/frame
+expansion still include typed target pseudos. Their complete selection and a
+separate typed HIR remain open. Full acceptance is incomplete.
 
 `make test-mir` executes 43 independently specified typed integer/floating
 cases through the interpreter and original object path. It rejects seven
@@ -62,5 +73,14 @@ plan and requires byte identity with the normal compiler's original object.
 Linux x86-64 links and executes these same objects. The allocator pressure
 fixture now supplies real formal and actual signatures; the null-signature
 crash found during this work is retained in the private failure evidence.
+
+`make test-mir-scalar` checks 142 authored sources and rejects 20,025 altered
+storage, conversion, bitfield, unary and value-normalization plans. It requires
+normal original-object identity, independent ELF inspection, twelve storage
+profiles, seven conversion modes and all three addressing families. Twelve
+new volatile-storage fixtures additionally compare GCC/Clang and original/
+assembled objects at O0/O2. Native Linux executes the retained original
+objects. Generic ELF inspection keeps fixture-specific symbol assertions in
+the object campaign that defines those symbols.
 
 See [the editable selection diagram](diagrams/machine-selection.mmd).

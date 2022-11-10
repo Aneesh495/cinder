@@ -2,6 +2,51 @@
 
 Updated: 2026-10-10
 
+## Selected storage and conversions
+
+Scalar memory accesses now carry selected load/store encodings for frame,
+global and pointer addressing. Value definitions carry selected normalization
+templates. Conversion modes, integer unary encodings and occupied-byte
+bitfield masks are chosen before allocation and checked before encoding.
+The encoder consumes these plans for the normal object and assembly paths.
+See [MACHINE_SELECTION.md](MACHINE_SELECTION.md).
+
+Strict GCC/ASan builds passed 142 authored scalar-plan cases, 20,025 corrupted
+plan rejections and normal original-object identity. All twelve storage
+profiles, seven conversion modes and three addressing families were exercised.
+Twelve new volatile-storage sources passed both reference compilers and the
+original/assembled O0/O2 object checks. The complete regression passed 1,223
+source cases and 2,446 CIR round trips with 36 malformed mutations. The scalar
+43-form/301-mutation and ABI 64-source/1,314-mutation suites, 1,000 physical phi
+cycles, 10,000 allocation graphs with 1,000 mutations, parallel copies,
+353 constraints, ten-pass records, twelve promotion guards, CTest and evidence
+checks passed. All 53 implementation modules compiled to original objects.
+The Linux VM executed all 142 original scalar-plan objects; full GCC/Clang
+reference observations are being retained separately.
+
+A generic ELF helper incorrectly treated every `narrow` symbol as the object
+campaign's static short. The valid conversion-return function exposed this.
+Fixture symbol checks now remain in that campaign, including all original
+and assembler-oracle objects. Generic section/symbol/relocation checks remain
+strict. The initial failure and eight complete two-unit fixture probes are
+retained privately. The VM also reproduced the existing source-bound generic
+bitfield reference disagreement. Its raw result is retained and the reference
+runner uses the existing adjudication registry.
+
+Evidence: `.agent-local/mir-scalar/`, `.agent-local/machine_memory/`,
+`.agent-local/mir-scalar-inspector-failure/`,
+`.agent-local/linux-vm/share/mir-scalar-final/` and
+`.agent-local/selfhost-object-audit/`. Pointer/control expansion, typed HIR,
+debugging and the remaining acceptance campaigns still require work.
+
+The selected ABI checkpoint `cb72093` additionally completed all 1,211
+source cases and 2,422 CIR round trips, and its 64 original VM objects plus
+256 GCC/Clang reference executions passed the independent frozen-source audit.
+The `24d9562` native bootstrap package was independently reread against its
+exact source archive: stage identity, complete authored suites, 1,000 generated
+programs, 8,000 native/4,000 interpreter outcomes and twenty tamper rejections
+passed.
+
 ## Selected ABI plans
 
 Incoming function parameters, outgoing calls and variadic retrieval now own
@@ -19,7 +64,7 @@ their object/assembly checks passed. The existing scalar machine suite passed
 1,000 mutations, 1,000 physical phi cycles, parallel copies, 353 constraints,
 CTest and evidence-integrity checks passed. All 53 implementation modules
 compiled to original target objects. The full 1,211-source and 2,422-CIR
-regressions are running against the frozen ABI-plan binaries.
+regressions passed against the frozen ABI-plan binaries.
 
 The pressure fixture had a call marker without a signature. This exposed a
 null dereference in selection. Selection now rejects that input; the fixture

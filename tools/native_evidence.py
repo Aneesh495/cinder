@@ -125,7 +125,7 @@ AUTHORED_COMMANDS = frozenset((
     'tests/test_alignment_contracts.py','tests/test_noreturn_contracts.py','tests/test_block_storage_contracts.py','tests/test_goto_contracts.py','tests/test_switch_contracts.py','tests/test_register_contracts.py','tests/test_offset_contracts.py','tests/test_runtime_headers.py','tests/test_flexible_contracts.py','tests/test_anonymous_contracts.py', 'tests/test_bitfield_contracts.py', 'tests/test_qualifier_contracts.py', 'tests/test_cfg_optimization.py', 'tests/test_sparse_optimization.py', 'tests/test_value_numbering.py', 'tests/test_dead_code.py', 'tests/test_strength_reduction.py', 'tests/test_copy_cleanup.py', 'tests/test_local_memory.py', 'tests/test_loop_motion.py', 'tests/test_pass_pipeline.py', 'tests/test_promotion_guards.py', 'tests/test_pass_evidence.py', 'tests/test_pointer_word_contracts.py',
     'tests/run_float.sh','tests/run_varargs.sh','tests/run_apps.sh','tests/run_abi.sh','tests/test_abi_boundary.py','tests/run_output.py',
 ))
-AUTHORED_GROUPS = frozenset(('initializers','aggregates','aggregate_abi','variadic','compound_literals','static_assertions','generic','alignment','noreturn','block_storage','goto','switch','register','offset','flexible','anonymous','bitfields','qualifiers','pointer_words'))
+AUTHORED_GROUPS = frozenset(('initializers','aggregates','aggregate_abi','variadic','compound_literals','static_assertions','generic','alignment','noreturn','block_storage','goto','switch','register','offset','flexible','anonymous','bitfields','qualifiers','pointer_words','machine_memory'))
 
 
 def bootstrap_inputs(root):

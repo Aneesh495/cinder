@@ -898,12 +898,25 @@ int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStat
 typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
 typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_XMM2, REG_XMM3, REG_XMM4, REG_XMM5, REG_XMM6, REG_XMM7, REG_NONE } CinderRegister;
 typedef enum { MIR_BANK_NONE, MIR_BANK_GPR, MIR_BANK_SSE } CinderMIRBank;
-typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE } CinderMIRKind;
+typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE, MIR_MEMORY, MIR_CONVERSION, MIR_INTEGER_UNARY, MIR_BITFIELD } CinderMIRKind;
+typedef enum { MIR_CONVERT_BITS, MIR_CONVERT_SIGNED_FLOAT, MIR_CONVERT_UNSIGNED_FLOAT, MIR_CONVERT_FLOAT_SIGNED, MIR_CONVERT_FLOAT_UNSIGNED, MIR_CONVERT_FLOAT_BOOL, MIR_CONVERT_FLOAT_PRECISION } CinderMIRConversion;
+typedef struct {
+    unsigned char load[4], load_extended[4], store[4], store_extended[4];
+    unsigned char load_size, load_extended_size, store_size, store_extended_size;
+    bool floating, single;
+} CinderMIRAccess;
+typedef struct {
+    uint64_t mask, positioned_mask;
+    unsigned begin, end, shift, signed_shift;
+} CinderMIRBitfield;
 typedef struct CinderMIRCallPlan CinderMIRCallPlan;
 typedef struct CinderABIValue CinderABIValue;
 typedef struct {
     CinderMIRBank bank;
     const CinderType *type;
+    unsigned char normalization[9];
+    unsigned char normalization_size;
+    bool incoming_bool;
 } CinderMIRValue;
 typedef struct {
     CinderMIRKind kind;
@@ -915,6 +928,9 @@ typedef struct {
     uint64_t fixed_uses, clobbers;
     CinderMIRCallPlan *call;
     CinderABIValue *variadic_layout;
+    CinderMIRAccess access;
+    CinderMIRConversion conversion;
+    CinderMIRBitfield bitfield;
 } CinderMIRInst;
 typedef struct {
     CINDER_VEC_TYPE(CinderMIRInst) instructions;
