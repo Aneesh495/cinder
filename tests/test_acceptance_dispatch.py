@@ -12,7 +12,8 @@ from gate_registry import read_gate_report
 
 root = pathlib.Path('.').resolve()
 compiler = pathlib.Path(sys.argv[1]).resolve()
-command = [sys.executable, '-B', 'tools/acceptance.py', 'run', str(compiler)]
+command = [sys.executable, '-B', 'tools/acceptance.py', 'run', str(compiler),
+           '--gate', 'nonvacuous-passes', '--gate', 'private-size']
 result = subprocess.run(command, capture_output=True, text=True, timeout=1800)
 assert result.returncode == 1 and 'Full acceptance is incomplete' in result.stderr, result
 base = root / '.agent-local/evidence'
@@ -20,7 +21,13 @@ manifest = base / 'ACCEPTANCE.json'
 data = json.loads(manifest.read_text())
 assert data['status'] == 'incomplete' and 'nonvacuous-passes' not in data['open_campaign_readers']
 assert data['open_campaign_readers'], 'this test requires remaining incomplete campaign readers'
+assert 'self-hosting' not in data['open_campaign_readers']
+assert data['gates']['self-hosting']['status'] == 'unverified'
+assert 'not selected' in data['gates']['self-hosting']['reason']
 verify_bindings(data, root, base, compiler)
+census_gate = data['gates']['private-size']
+assert census_gate['status'] == 'pass', census_gate
+read_gate_report('private-size', json.loads((base / census_gate['report']).read_text()), root, base, compiler)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
 gate = data['gates']['nonvacuous-passes']
 if native:

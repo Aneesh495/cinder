@@ -24,7 +24,7 @@ GATES = {
 
 # Connect dedicated readers only after their complete campaign artifacts exist.
 # A threshold and a self-reported status are insufficient evidence.
-AUDITED_REPORT_READERS = frozenset(('nonvacuous-passes',))
+AUDITED_REPORT_READERS = frozenset(('nonvacuous-passes', 'self-hosting', 'private-size'))
 
 
 def read_gate_report(key, report, source, base, compiler):
@@ -39,6 +39,20 @@ def read_gate_report(key, report, source, base, compiler):
         raw = artifact_path(base, report.get('raw_directory', ''))
         observed = verify_passes(raw, source, compiler)
         count = observed['passes']
+    elif key == 'self-hosting':
+        from native_evidence import verify_bootstrap
+        raw = artifact_path(base, report.get('raw_directory', ''))
+        observed = verify_bootstrap(raw, source, compiler)
+        count = observed['programs']
+    elif key == 'private-size':
+        import json
+        from source_census import census
+        path = artifact_path(base, report.get('raw_report', ''))
+        declared = json.loads(path.read_text())
+        observed = census(source)
+        if declared != observed:
+            raise EvidenceError('private census does not match recomputed source inventory')
+        count = observed['total_substantive_lines']
     else:
         raise EvidenceError('no dispatch for audited reader: ' + key)
     if type(report.get('observations')) is not int or report['observations'] != count or count < GATES[key]['minimum']:

@@ -80,15 +80,11 @@ def count_file(path: Path) -> int:
     return count
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
-    root = args.root.resolve()
+def census(root: Path) -> dict:
+    root = root.resolve()
     files = sorted((root / "source").rglob("*.c")) + sorted((root / "source").rglob("*.h"))
     entries = [{"path": str(path.relative_to(root)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "substantive_lines": count_file(path)} for path in files]
-    payload = {
+    return {
         "schema": 2,
         "rules": {
             "included": "Original source/**/*.c and source/**/*.h after quote-aware comment removal; exclude blank/punctuation-only lines, preprocessor directives/continuations, and single-line cinder API prototypes in headers",
@@ -97,6 +93,12 @@ def main() -> int:
         "files": entries,
         "total_substantive_lines": sum(entry["substantive_lines"] for entry in entries),
     }
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    payload = census(args.root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print("Private source census written.")

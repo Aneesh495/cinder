@@ -1,0 +1,17 @@
+flowchart TD
+  SOURCE[Bound source configuration and compiler] --> GEN[Selected campaign generation]
+  GEN --> PASS[Pass traces and native objects]
+  GEN --> BOOT[Native stage objects executions and dependencies]
+  GEN --> CENSUS[Private source inventory and exclusions]
+  PASS --> PR[Read pass boundaries effects and results]
+  BOOT --> BR[Read source seed stage identity and all executions]
+  CENSUS --> CR[Reconstruct private inventory and counts]
+  SOURCE --> PR
+  SOURCE --> BR
+  SOURCE --> CR
+  PR --> GATE[Computed gate outcomes]
+  BR --> GATE
+  CR --> GATE
+  GATE --> FULL{Every required reader connected and passed}
+  FULL -->|yes| ACCEPT[Complete acceptance]
+  FULL -->|no| OPEN[Incomplete manifest and nonzero outcome]

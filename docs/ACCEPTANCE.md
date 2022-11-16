@@ -1,7 +1,8 @@
 # Acceptance and artifact integrity
 
-`make verify` only reads existing evidence. It does not build the compiler, run
-it, recount source, generate reports, or update gates. Python bytecode writes
+`make verify` only reads existing evidence and bound source. It does not build
+or execute the compiler, launch campaign producers, generate reports or update
+gate values. Python bytecode writes
 are disabled in the wrapper. Source inventory includes tracked and untracked
 nonignored inputs, so an uncommitted edit or new configuration file invalidates
 the binding. Generated build configurations and the actual compiler binary have
@@ -20,6 +21,31 @@ the full compiler and campaigns are unfinished. It does not bless the existing
 smoke applications or reuse a generated workload summary as full acceptance.
 The completed runner must execute the complete expensive registry and retain
 raw progress before this command can succeed.
+
+Three dedicated readers are connected. The pass reader reconstructs ten
+positive/negative transformation pairs and their native original objects. The
+self-hosting reader checks strict stage-one compilation, every actual source
+module compiled by the preceding Cinder stage, stage-two/three object and
+executable identity, complete authored stage suites and the generated native
+subset. It binds the seed compiler and rejects emulated or incomplete packages.
+The private census reader reconstructs the exact inventory and exclusion rules
+from bound source bytes without writing the census. Seventeen full-campaign
+readers remain open.
+
+`tools/acceptance.py run COMPILER` runs all implemented campaign producers.
+Repeated `--gate` options select partial generation, whose manifest records
+that choice and leaves other gates unverified. For example:
+
+```sh
+python3 -B tools/acceptance.py run build/cindercc --gate nonvacuous-passes --gate private-size
+```
+
+`--bootstrap-evidence PATH` imports a complete retained bootstrap after the
+same source/seed verification used for fresh generation. Fresh bootstrap runs
+use separate owned directories and retain failure artifacts. Commands preserve
+actual argv, output, exit or timeout, and elapsed time. Complete acceptance
+requires every required gate to pass its dedicated reader.
+See [the editable reader flow](diagrams/acceptance-readers.mmd).
 
 Ordinary Linux CI runs incremental frontend/native/object checks, the typed IR
 campaign, sanitizer build, and integrity regression tests. It writes

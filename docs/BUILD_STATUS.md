@@ -2,6 +2,35 @@
 
 Updated: 2026-10-10
 
+## Bootstrap and private census gate dispatch
+
+Acceptance now dispatches the independently checked bootstrap reader and the
+private census reader alongside the nonvacuous-pass reader. Fresh self-hosting
+generates a complete native package; retained packages require exact source
+and seed verification before import. Partial generation records its selected
+gates and keeps the rest unverified. Complete status requires every required
+gate to pass a dedicated reader. Seventeen full-campaign readers remain open.
+
+The self-host gate accepted the complete frozen `24d9562` native bootstrap and
+rejected five altered gate envelopes while preserving all artifact bytes and
+timestamps. The source inventory determines whether the newer machine-storage
+fixture group belongs to that exact snapshot; current snapshots require it.
+The private census was recomputed from current bound source and eleven altered
+counts, inventories, rules or envelopes were rejected. Source bytes/timestamps
+remained unchanged. The generator integration passed on macOS with the actual
+private census result and explicit unverified native pass/self-host gates.
+Incomplete full acceptance remained nonzero and verification wrote nothing.
+
+The scalar checkpoint's 142 original objects and 568 reference outcomes also
+passed independent frozen-source/ELF/executable auditing, including exact-source
+adjudication of retained reference exclusions. The earlier ABI checkpoint
+`cb72093` passed hosted
+[native validation](https://github.com/Aneesh495/cinder/actions/runs/38088619554)
+and [bootstrap](https://github.com/Aneesh495/cinder/actions/runs/38088659628).
+Native runs for `9df7a64` are checked separately as they finish. The next work
+remains pointer/control selection, typed HIR, debugging, driver/explorer behavior
+and the remaining campaigns.
+
 ## Selected storage and conversions
 
 Scalar memory accesses now carry selected load/store encodings for frame,
