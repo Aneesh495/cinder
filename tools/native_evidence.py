@@ -141,6 +141,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
     # Storage-plan fixtures are required when they belong to the exact source
     # snapshot. Earlier complete snapshots retain their full original suite.
     authored_groups = AUTHORED_GROUPS if any((source_root/'tests/machine_memory').glob('*.c')) else AUTHORED_GROUPS - {'machine_memory'}
+    authored_commands = AUTHORED_COMMANDS | {'tests/test_driver.py'} if (source_root/'tests/test_driver.py').is_file() else AUTHORED_COMMANDS
     manifest=read(base,'manifest.json')
     require(manifest.get('schema')==2 and manifest.get('status')=='pass' and 'active_command' not in manifest, 'incomplete bootstrap')
     profile(manifest,'execution_profile')
@@ -190,7 +191,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
         observed_host.add(name)
     require(observed_host==modules, 'stage 1 actual compiler module inventory is incomplete')
     for stage,previous in [('stage2','stage1'),('stage3','stage2')]:
-        expected_roles.update({stage+'-compile':len(modules),stage+'-link':2,stage+'-authored':len(AUTHORED_COMMANDS),stage+'-authored-group':len(authored_groups),stage+'-allocated':1,stage+'-flexible-abi':1,stage+'-anonymous-abi':1,stage+'-bitfield-abi':1})
+        expected_roles.update({stage+'-compile':len(modules),stage+'-link':2,stage+'-authored':len(authored_commands),stage+'-authored-group':len(authored_groups),stage+'-allocated':1,stage+'-flexible-abi':1,stage+'-anonymous-abi':1,stage+'-bitfield-abi':1})
         compilations=[c for c in commands if c['role']==stage+'-compile']
         observed=set()
         for command in compilations:
@@ -205,7 +206,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
             exclude='ir_main.o' if name=='cindercc' else 'main.o'
             require({a for a in argv if a.endswith('.o')}=={str(old_root/stage/n) for n in object_names if n!=exclude}, 'stage link contains missing, host, or unrelated objects')
         authored=[c for c in commands if c['role']==stage+'-authored']
-        require({a for c in authored for a in c['argv'] if a in AUTHORED_COMMANDS}==AUTHORED_COMMANDS and all(c['argv'][-1]==str(old_root/stage/'cindercc') for c in authored), 'missing full authored stage command')
+        require({a for c in authored for a in c['argv'] if a in authored_commands}==authored_commands and all(c['argv'][-1]==str(old_root/stage/'cindercc') for c in authored), 'missing full authored stage command')
         groups=[c for c in commands if c['role']==stage+'-authored-group']
         require({c['argv'][-1] for c in groups}==authored_groups and all(c['argv'][-2]==str(old_root/stage/'cindercc') for c in groups), 'missing full authored initializer group')
         verify_stage_control(base,stage,source_root,stages[stage]['executables']['cindercc'])

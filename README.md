@@ -51,6 +51,9 @@ describes the owned machine representation and the remaining target pseudos.
 
 `-E`, `-S`, and `-c` use Cinder's own preprocessing and backend. Linking is deliberately an explicit boundary: on a declared Linux host the driver may pass Cinder-created objects and system libraries to the platform linker, but it never passes user C source to a host compiler.
 
+Dependency rules, C17 profile flags and versioned JSON diagnostics are described
+in [`docs/DRIVER_DIAGNOSTICS.md`](docs/DRIVER_DIAGNOSTICS.md).
+
 ## Language and target contract
 
 The supported profile is documented in [`docs/LANGUAGE.md`](docs/LANGUAGE.md). It covers the scalar integer subset, pointers, arrays, functions, control flow, macros, constant expressions, and a growing aggregate model. Unsupported constructs are diagnosed rather than silently discarded. The initial contract excludes long double, complex, atomics, thread-local execution, VLAs, GNU inline assembly/vector extensions, C++, and unimplemented ABI classes.

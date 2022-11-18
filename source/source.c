@@ -4,38 +4,44 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char *read_file(const char *path, size_t *size, FILE *err) {
+static void source_error(FILE *err, CinderDiagnostics *diags, const char *path, const char *reason) {
+    if (diags != NULL) cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "%s: %s", path, reason);
+    else fprintf(err, "cinder: %s: %s\n", path, reason);
+}
+
+static char *read_file(const char *path, size_t *size, FILE *err, CinderDiagnostics *diags) {
     FILE *file = fopen(path, "rb");
     if (file == NULL) {
-        fprintf(err, "cinder: cannot open %s: %s\n", path, strerror(errno));
+        if (diags != NULL) cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "cannot open %s: %s", path, strerror(errno));
+        else fprintf(err, "cinder: cannot open %s: %s\n", path, strerror(errno));
         return NULL;
     }
     if (fseek(file, 0L, SEEK_END) != 0) {
-        fprintf(err, "cinder: cannot seek %s\n", path);
+        source_error(err, diags, path, "cannot seek source file");
         fclose(file);
         return NULL;
     }
     long end = ftell(file);
     if (end < 0L) {
-        fprintf(err, "cinder: cannot determine size of %s\n", path);
+        source_error(err, diags, path, "cannot determine source size");
         fclose(file);
         return NULL;
     }
     if (fseek(file, 0L, SEEK_SET) != 0) {
-        fprintf(err, "cinder: cannot rewind %s\n", path);
+        source_error(err, diags, path, "cannot rewind source file");
         fclose(file);
         return NULL;
     }
     size_t length = (size_t)end;
     if (length > 16U * 1024U * 1024U) {
-        fprintf(err, "cinder: source file exceeds the 16 MiB input limit: %s\n", path);
+        source_error(err, diags, path, "source file exceeds the 16 MiB input limit");
         fclose(file);
         return NULL;
     }
     char *bytes = cinder_alloc(length + 1U);
     size_t got = fread(bytes, 1U, length, file);
     if (got != length || ferror(file) != 0) {
-        fprintf(err, "cinder: short read from %s\n", path);
+        source_error(err, diags, path, "short read from source file");
         free(bytes);
         fclose(file);
         return NULL;
@@ -76,30 +82,36 @@ void cinder_sources_destroy(CinderSourceManager *sources) {
     sources->preprocessed_size = 0U;
 }
 
-CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, FILE *err) {
+static CinderFileId load_source(CinderSourceManager *sources, const char *path, FILE *err, CinderDiagnostics *diags) {
     for (size_t i = 0U; i < sources->files.len; ++i) {
         if (strcmp(sources->files.data[i].path, path) == 0) {
-            return sources->files.data[i].id;
+            return sources->files.data[i].valid ? sources->files.data[i].id : CINDER_NO_FILE;
         }
     }
     size_t size = 0U;
-    char *bytes = read_file(path, &size, err);
+    char *bytes = read_file(path, &size, err, diags);
     if (bytes == NULL) {
         return CINDER_NO_FILE;
     }
     size_t invalid = 0U;
-    if (!cinder_utf8_validate(bytes, size, &invalid)) {
-        fprintf(err, "cinder: error: invalid UTF-8 or embedded NUL at byte %zu in %s\n", invalid, path);
-        free(bytes); return CINDER_NO_FILE;
-    }
+    bool valid = cinder_utf8_validate(bytes, size, &invalid);
     CinderSourceFile file;
     file.id = (CinderFileId)(sources->files.len + 1U);
     file.path = cinder_strndup(path, strlen(path));
     file.bytes = bytes;
     file.size = size;
+    file.valid = valid;
     cinder_vec_push((CinderVec *)&sources->files, &file);
+    if (!valid) {
+        if (diags != NULL) cinder_diag(diags, CINDER_ERROR, cinder_loc(file.id, invalid, 1U), "invalid UTF-8 or embedded NUL at byte %zu", invalid);
+        else fprintf(err, "cinder: error: invalid UTF-8 or embedded NUL at byte %zu in %s\n", invalid, path);
+        return CINDER_NO_FILE;
+    }
     return file.id;
 }
+
+CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, FILE *err) { return load_source(sources, path, err, NULL); }
+CinderFileId cinder_source_load_diagnostic(CinderSourceManager *sources, const char *path, CinderDiagnostics *diags) { return load_source(sources, path, NULL, diags); }
 
 CinderSourceFile *cinder_source_get(CinderSourceManager *sources, CinderFileId id) {
     if (id == CINDER_NO_FILE || id > sources->files.len) {

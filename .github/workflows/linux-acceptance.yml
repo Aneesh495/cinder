@@ -68,6 +68,8 @@ jobs:
         run: make test-mir-abi
       - name: Selected storage, conversion, bitfield and normalization plans
         run: make test-mir-scalar
+      - name: Dependency rules, C17 profiles and structured diagnostics
+        run: make test-driver
       - name: Ten-pass records, promotion guards and evidence tampering
         run: make test-passes
       - name: Actual pass gate generation and incomplete acceptance rejection
@@ -153,6 +155,7 @@ jobs:
             .agent-local/mir-abi
             .agent-local/mir-scalar
             .agent-local/machine_memory
+            .agent-local/driver
             .agent-local/evidence
             .agent-local/promotion-guards
             .agent-local/pointer_words

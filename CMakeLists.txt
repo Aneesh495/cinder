@@ -59,6 +59,7 @@ set(CINDER_SOURCES
   source/elf64.c
   source/assembly.c
   source/driver.c
+  source/dependencies.c
   source/inspect.c
 )
 

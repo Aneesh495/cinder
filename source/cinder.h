@@ -47,6 +47,7 @@ char *cinder_arena_strndup(CinderArena *arena, const char *text, size_t len);
 
 /* ---------- source and diagnostics ---------- */
 typedef uint32_t CinderFileId;
+typedef struct CinderDiagnostics CinderDiagnostics;
 typedef struct {
     CinderFileId file;
     size_t offset;
@@ -61,6 +62,7 @@ typedef struct {
     char *path;
     char *bytes;
     size_t size;
+    bool valid;
 } CinderSourceFile;
 
 typedef struct {
@@ -91,6 +93,7 @@ typedef struct {
 void cinder_sources_init(CinderSourceManager *sources);
 void cinder_sources_destroy(CinderSourceManager *sources);
 CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, FILE *err);
+CinderFileId cinder_source_load_diagnostic(CinderSourceManager *sources, const char *path, CinderDiagnostics *diags);
 CinderSourceFile *cinder_source_get(CinderSourceManager *sources, CinderFileId id);
 CinderLoc cinder_loc(CinderFileId file, size_t offset, size_t length);
 void cinder_loc_linecol(CinderSourceManager *sources, CinderLoc *loc);
@@ -113,12 +116,12 @@ typedef struct {
     char *message;
 } CinderDiagnostic;
 
-typedef struct {
+struct CinderDiagnostics {
     CINDER_VEC_TYPE(CinderDiagnostic) items;
     unsigned errors;
     unsigned warnings;
     bool json;
-} CinderDiagnostics;
+};
 
 void cinder_diags_init(CinderDiagnostics *diags);
 void cinder_diags_destroy(CinderDiagnostics *diags);
@@ -1097,9 +1100,18 @@ typedef struct {
     bool verify_each;
     bool interpret;
     bool debug;
+    bool json_diagnostics;
+    bool dependencies_only;
+    bool emit_dependencies;
+    const char *dependency_file;
+    const char *dependency_target;
     const char *explorer;
     int optimization;
 } CinderOptions;
+
+char *cinder_dependency_path(const char *target);
+int cinder_write_dependencies(CinderSourceManager *sources, const char *target, FILE *out, CinderDiagnostics *diags);
+bool cinder_output_same_path(const char *left, const char *right);
 
 int cinder_driver_run(const CinderOptions *options);
 void cinder_print_help(FILE *out);

@@ -183,7 +183,7 @@ int pp_process(PP *pp, const char *path, unsigned depth) {
         return 1;
     }
     char *canonical = realpath(path, NULL);
-    CinderFileId id = cinder_source_load(pp->sources, canonical == NULL ? path : canonical, stderr);
+    CinderFileId id = cinder_source_load_diagnostic(pp->sources, canonical == NULL ? path : canonical, pp->diags);
     free(canonical);
     CinderSourceFile *file = cinder_source_get(pp->sources, id);
     if (file == NULL) {

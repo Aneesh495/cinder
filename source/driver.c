@@ -50,6 +50,7 @@ static void discard_object(char *path) {
 
 void cinder_print_help(FILE *out) {
     fputs("Cinder c17-core compiler\n\nUsage: cindercc [options] file.c\n\n", out);
+    fputs("  -M                 emit actual preprocessing dependencies only\n  -MD                retain dependencies after successful compilation\n  -MF PATH           select dependency output\n  -MQ TARGET         quote one dependency target\n  -std=c17-core      select the documented C17 core profile\n  --diagnostics=json emit versioned diagnostic batches on stderr\n", out);
     fputs("  -E                 preprocess only\n  -S                 emit x86-64 assembly\n  -c                 emit ELF64 relocatable object\n  -o PATH             output path\n  -I DIR              quoted/angle include directory\n  -DNAME[=VALUE]      define a preprocessing macro\n  -fsyntax-only       stop after semantic analysis\n  -O0/-O1/-O2        select conservative optimization level\n  --dump-tokens       print preprocessing tokens\n  --dump-ast          print parsed/typed AST\n  --emit-ir           print typed CFG IR\n  --serialize-ir      write canonical round-trip IR\n  --dump-mir          print machine lowering boundary\n  --dump-regalloc     print allocation intervals and frame\n  --dump-passes       print verified optimizer records as JSON\n  --pass-stats PATH   save optimizer records atomically\n  --pass-trace DIR    retain before/after CIR in an existing directory\n  --interpret         execute main in the independent IR interpreter\n  --explorer DIR      write an offline stage summary report\n  -fverify-each       verify IR at each boundary\n  -g                  request debug profile (currently source contract only)\n  --help              show this help\n  --version           show compiler version\n", out);
 }
 
@@ -57,14 +58,46 @@ void cinder_print_version(FILE *out) { fprintf(out, "cindercc %s (C17-core, ELF6
 
 static int cinder_driver_run_multi(const CinderOptions *options);
 
+static bool source_destination(CinderSourceManager *sources, const char *input, const char *path) {
+    if (cinder_output_same_path(input, path)) return true;
+    for (size_t f = 0U; f < sources->files.len; ++f) if (cinder_output_same_path(sources->files.data[f].path, path)) return true;
+    return false;
+}
+
+static int driver_error(const CinderOptions *options, const char *message) {
+    CinderSourceManager sources; cinder_sources_init(&sources); CinderDiagnostics diags; cinder_diags_init(&diags);
+    diags.json = options->json_diagnostics; cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "%s", message);
+    cinder_diag_print(&diags, &sources, stderr); cinder_diags_destroy(&diags); cinder_sources_destroy(&sources); return 1;
+}
+
 int cinder_driver_run(const CinderOptions *options) {
     if (options->input_count > 1U) return cinder_driver_run_multi(options);
     CinderSourceManager sources; CinderDiagnostics diags; CinderTokenStream tokens; CinderTypeContext types; CinderAst ast; CinderSema sema; CinderIRModule module; CinderMachineObject machine;
     cinder_sources_init(&sources); cinder_diags_init(&diags); cinder_tokens_init(&tokens); cinder_types_init(&types);
+    diags.json = options->json_diagnostics;
     bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes || options->interpret || options->explorer != NULL);
     int result = 1;
     CinderOutput assembly_output = {0};
+    CinderOutput dependency_output = {0}; char *derived_dependency = NULL;
     if (cinder_preprocess(&sources, options->input, options->include_dirs, options->include_count, options->defines, options->define_count, &diags) != 0) goto done;
+    if (options->output != NULL && strcmp(options->output, "-") != 0 && source_destination(&sources, options->input, options->output)) {
+        cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "output would replace an input source: %s", options->output); goto done;
+    }
+    if (options->emit_dependencies) {
+        const char *target = options->dependency_target != NULL ? options->dependency_target : (options->emit_object || options->emit_assembly) && options->output != NULL ? options->output : default_object_name(options->input);
+        const char *path = options->dependency_file;
+        if (path == NULL && options->dependencies_only) path = options->output;
+        if (path == NULL && !options->dependencies_only) { derived_dependency = cinder_dependency_path(target); path = derived_dependency; }
+        if (path == NULL || strcmp(path, "-") == 0) {
+            if (!options->dependencies_only) { cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "-MD requires a dependency file separate from standard output"); goto done; }
+            result = cinder_write_dependencies(&sources, target, stdout, &diags) || fflush(stdout) != 0 ? 1 : 0; goto done;
+        }
+        if (source_destination(&sources, options->input, path) || (!options->dependencies_only && options->output != NULL && cinder_output_same_path(path, options->output))) {
+            cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "dependency output collides with source or primary output: %s", path); goto done;
+        }
+        if (cinder_output_begin(&dependency_output, path, &diags) != 0 || cinder_write_dependencies(&sources, target, dependency_output.stream, &diags) != 0 || cinder_output_seal(&dependency_output, &diags) != 0) goto done;
+        if (options->dependencies_only) { result = 0; goto done; }
+    }
     if (options->preprocess_only) {
         const char *text = sources.preprocessed == NULL ? "" : sources.preprocessed;
         if (options->output == NULL || strcmp(options->output, "-") == 0) {
@@ -81,13 +114,13 @@ int cinder_driver_run(const CinderOptions *options) {
     }
     if (cinder_lex(&sources, &tokens, &diags) != 0) goto done;
     if (options->dump_tokens) cinder_dump_tokens(&tokens, &sources, stdout);
-    if (inspection_only && !options->dump_ast && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
+    if (inspection_only && !options->syntax_only && !options->dump_ast && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
     cinder_ast_init(&ast, &types, &tokens, &diags);
     if (cinder_parse(&ast) != 0) goto done_ast;
-    if (options->dump_ast) cinder_dump_ast(&ast, &sources, stdout);
-    if (inspection_only && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done_ast; }
     cinder_sema_init(&sema, &ast, &types, &diags);
     if (cinder_sema_run(&sema) != 0) goto done_sema;
+    if (options->dump_ast) cinder_dump_ast(&ast, &sources, stdout);
+    if (inspection_only && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done_sema; }
     if (options->syntax_only) { result = 0; goto done_sema; }
     cinder_ir_init(&module, &types);
     if (cinder_lower_ir(&module, &ast, &diags) != 0) goto done_ir;
@@ -176,6 +209,8 @@ done_sema:
 done_ast:
     cinder_ast_destroy(&ast);
 done:
+    if (dependency_output.temporary != NULL && result == 0 && diags.errors == 0U) result = cinder_output_commit(&dependency_output, &diags);
+    cinder_output_abort(&dependency_output); free(derived_dependency);
     if (diags.items.len != 0U) cinder_diag_print(&diags, &sources, stderr);
     bool ok = result == 0 && diags.errors == 0U;
     cinder_tokens_destroy(&tokens); cinder_types_destroy(&types); cinder_diags_destroy(&diags); cinder_sources_destroy(&sources); return ok ? 0 : 1;
@@ -228,12 +263,13 @@ static const char *default_assembly_name(const char *input) {
 
 static int cinder_driver_run_multi(const CinderOptions *options) {
     if (options->input_count < 2U) return 1;
-    if (options->pass_stats != NULL || options->pass_trace != NULL) { fputs("cindercc: pass file paths require one translation unit\n", stderr); return 1; }
-    if (options->explorer != NULL || options->interpret) { fprintf(stderr, "cindercc: --explorer and --interpret require one translation unit\n"); return 1; }
-    if (options->preprocess_only && options->output != NULL) { fprintf(stderr, "cindercc: -E with multiple inputs cannot use one output path\n"); return 1; }
-    if (options->emit_assembly && options->output != NULL) { fprintf(stderr, "cindercc: -S with multiple inputs requires one output per translation unit\n"); return 1; }
-    if (options->emit_object && options->output != NULL) { fprintf(stderr, "cindercc: -c with multiple inputs requires one output per translation unit\n"); return 1; }
-    if (options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes) {
+    if (options->dependency_file != NULL) return driver_error(options, "one dependency file requires one translation unit");
+    if (options->pass_stats != NULL || options->pass_trace != NULL) return driver_error(options, "pass file paths require one translation unit");
+    if (options->explorer != NULL || options->interpret) return driver_error(options, "--explorer and --interpret require one translation unit");
+    if ((options->preprocess_only || options->dependencies_only) && options->output != NULL) return driver_error(options, "preprocessing with multiple inputs cannot use one output path");
+    if (options->emit_assembly && options->output != NULL) return driver_error(options, "-S with multiple inputs requires one output per translation unit");
+    if (options->emit_object && options->output != NULL) return driver_error(options, "-c with multiple inputs requires one output per translation unit");
+    if (options->dependencies_only || options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes) {
         for (size_t i = 0U; i < options->input_count; ++i) {
             CinderOptions child = *options;
             child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U;
@@ -257,7 +293,7 @@ static int cinder_driver_run_multi(const CinderOptions *options) {
         }
         return 0;
     }
-    CinderDiagnostics diags; cinder_diags_init(&diags);
+    CinderDiagnostics diags; cinder_diags_init(&diags); diags.json = options->json_diagnostics;
     CINDER_VEC_TYPE(char *) objects = {NULL, 0U, 0U};
     for (size_t i = 0U; i < options->input_count; ++i) {
         char *path = owned_object_path(&diags);
@@ -268,10 +304,11 @@ static int cinder_driver_run_multi(const CinderOptions *options) {
         cinder_vec_push((CinderVec *)&objects, &path);
         CinderOptions child = *options;
         child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U; child.output = path; child.emit_object = true;
+        child.dependency_target = default_object_name(child.input);
         if (cinder_driver_run(&child) != 0) { for (size_t j = 0U; j < objects.len; ++j) { discard_object(objects.data[j]); } free(objects.data); cinder_diags_destroy(&diags); return 1; }
     }
     int result = write_linked_many(objects.data, objects.len, options->output, &diags);
-    for (size_t i = 0U; i < diags.items.len; ++i) fprintf(stderr, "cindercc: %s\n", diags.items.data[i].message);
+    if (diags.items.len != 0U) { CinderSourceManager sources; cinder_sources_init(&sources); cinder_diag_print(&diags, &sources, stderr); cinder_sources_destroy(&sources); }
     cinder_diags_destroy(&diags);
     for (size_t i = 0U; i < objects.len; ++i) { discard_object(objects.data[i]); }
     free(objects.data);

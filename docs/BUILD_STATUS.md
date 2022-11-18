@@ -2,6 +2,43 @@
 
 Updated: 2026-10-10
 
+## Dependencies, profiles and JSON diagnostics
+
+The driver implements original-preprocessor `-M`/`-MD` output, `-MF`, quoted
+`-MQ` targets, deterministic active include inventories and Make escaping.
+The C17/core profile flags reject other language modes. Schema-one JSON
+diagnostics preserve token ranges and available macro definitions on stderr,
+including source-read and malformed-UTF-8 failures. Typed AST inspection now
+requires successful semantic analysis. Source/output aliases, dependency
+collisions and directory destinations are rejected before compilation output.
+See [DRIVER_DIAGNOSTICS.md](DRIVER_DIAGNOSTICS.md).
+
+Strict GCC/ASan builds passed all 41 driver commands, GNU Make rule parsing,
+multi-unit dependencies, structured errors/warnings, token-range assertions and
+preservation of existing source/object/dependency files. All 54 implementation
+modules compiled to original objects. The seventeen target-header probes,
+74 preprocessor cases, 353 constraints, existing driver/frontend/IR/float/
+variadic smoke, CTest and artifact-integrity checks passed. The new opaque
+directory-handle interface passed six original/assembled/parsed Linux VM
+executions and four GCC/Clang references, with independent frozen-source,
+object and executable auditing. The complete 1,223-source and 2,446-CIR
+regressions passed against these frozen binaries, including 36 malformed CIR
+rejections.
+
+Evidence: `.agent-local/driver/`, `.agent-local/runtime-headers/`,
+`.agent-local/linux-vm/share/directory-driver-final/` and
+`.agent-local/selfhost-object-audit/`. Complete include-instance traces,
+reproducible-prefix mapping, typed HIR, debug output and the remaining product
+campaigns are still open. The bootstrap producer/reader now requires the new
+driver suite when it belongs to the exact verified source snapshot.
+
+The `9df7a64` selected-storage checkpoint passed hosted
+[native validation](https://github.com/Aneesh495/cinder/actions/runs/38089645870)
+and [bootstrap](https://github.com/Aneesh495/cinder/actions/runs/38089705999).
+Its downloaded bootstrap was independently reread against the exact archive
+and all twenty corruption checks passed. `b5931a8` was subsequently pushed
+after the account's usage allowance returned; the hosted tip was verified.
+
 ## Bootstrap and private census gate dispatch
 
 Acceptance now dispatches the independently checked bootstrap reader and the

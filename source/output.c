@@ -2,6 +2,7 @@
 #include "cinder.h"
 
 #include <errno.h>
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -9,6 +10,10 @@
 int cinder_output_begin(CinderOutput *output, const char *path, CinderDiagnostics *diags) {
     memset(output, 0, sizeof(*output));
     output->destination = path;
+    DIR *directory = opendir(path);
+    if (directory != NULL) {
+        closedir(directory); cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "output destination is a directory: %s", path); return 1;
+    }
     size_t length = strlen(path);
     const char suffix[] = ".cinder-XXXXXX";
     if (length > SIZE_MAX - sizeof(suffix)) {

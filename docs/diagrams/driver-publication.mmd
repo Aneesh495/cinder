@@ -1,0 +1,13 @@
+flowchart TD
+  CLI[Profile dependency and diagnostic options] --> PP[Original preprocessing with actual include identities]
+  PP --> M{Dependency-only mode}
+  M -->|yes| RULE[Quoted deterministic Make rule]
+  M -->|no| CHECK[Check source output and dependency destinations]
+  CHECK --> STAGE[Stage and seal dependency file]
+  STAGE --> PIPE[Typed frontend optimizer and original backend]
+  PIPE --> PRIMARY[Publish complete primary output]
+  PRIMARY --> DEP[Publish staged dependencies]
+  PIPE -->|failure| ABORT[Discard owned temporaries preserve prior outputs]
+  CHECK -->|collision or directory| ABORT
+  PP -->|source or preprocessing error| DIAG[Text or schema-one JSON diagnostic batch]
+  ABORT --> DIAG
