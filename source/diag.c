@@ -76,17 +76,36 @@ static void json_range(FILE *out, CinderSourceManager *sources, CinderLoc loc) {
     if (loc.offset > file->size) loc.offset = file->size;
     if (loc.length > file->size - loc.offset) loc.length = file->size - loc.offset;
     CinderLoc end = cinder_loc(loc.file, loc.offset + loc.length, 0U);
+    end.frame = loc.frame;
     cinder_loc_linecol(sources, &loc); cinder_loc_linecol(sources, &end);
     fputs("{\"file\":", out); json_string(out, cinder_loc_name(sources, loc));
-    fprintf(out, ",\"offset\":%zu,\"length\":%zu,\"line\":%u,\"column\":%u,\"end_line\":%u,\"end_column\":%u}", loc.offset, loc.length, loc.line, loc.column, end.line, end.column);
+    fprintf(out, ",\"offset\":%zu,\"length\":%zu,\"line\":%u,\"column\":%u,\"end_line\":%u,\"end_column\":%u,\"frame\":%u,\"origin\":%u}", loc.offset, loc.length, loc.line, loc.column, end.line, end.column, loc.frame, loc.origin);
 }
 
 static const CinderSourceSpan *macro_span(const CinderSourceManager *sources, CinderLoc loc) {
+    if (loc.origin != 0U && loc.origin <= sources->spans.len) {
+        const CinderSourceSpan *span = &sources->spans.data[loc.origin - 1U];
+        return span->definition.file != CINDER_NO_FILE ? span : NULL;
+    }
     for (size_t p = 0U; p < sources->spans.len; ++p) {
         const CinderSourceSpan *span = &sources->spans.data[p];
-        if (span->expansion.file == loc.file && span->expansion.offset == loc.offset && span->definition.file != CINDER_NO_FILE) return span;
+        if (span->expansion.file == loc.file && span->expansion.frame == loc.frame && span->expansion.offset == loc.offset && span->definition.file != CINDER_NO_FILE) return span;
     }
     return NULL;
+}
+
+static void json_includes(FILE *out, CinderSourceManager *sources, CinderLoc loc) {
+    fputc('[', out); bool first = true; uint32_t frame = loc.frame;
+    for (size_t depth = 0U; frame != 0U && frame <= sources->frames.len && depth < 129U; ++depth) {
+        const CinderSourceFrame *record = &sources->frames.data[frame - 1U];
+        if (record->included_from.file != CINDER_NO_FILE) {
+            if (!first) fputc(',', out);
+            json_range(out, sources, record->included_from); first = false;
+        }
+        if (record->parent >= frame) break;
+        frame = record->parent;
+    }
+    fputc(']', out);
 }
 
 static void print_json(CinderDiagnostics *diags, CinderSourceManager *sources, FILE *out) {
@@ -99,6 +118,8 @@ static void print_json(CinderDiagnostics *diags, CinderSourceManager *sources, F
         fputs(",\"range\":", out); json_range(out, sources, item->loc);
         const CinderSourceSpan *span = macro_span(sources, item->loc);
         fputs(",\"macro_definition\":", out); if (span != NULL) json_range(out, sources, span->definition); else fputs("null", out);
+        fputs(",\"spelling_range\":", out); if (span != NULL) json_range(out, sources, span->spelling); else json_range(out, sources, item->loc);
+        fputs(",\"include_backtrace\":", out); json_includes(out, sources, item->loc);
         fputc('}', out);
     }
     fputs("]}\n", out);
@@ -111,14 +132,19 @@ void cinder_diag_print(CinderDiagnostics *diags, CinderSourceManager *sources, F
         CinderLoc loc = item->loc;
         cinder_loc_linecol(sources, &loc);
         fprintf(out, "%s:%u:%u: %s: %s\n", cinder_loc_name(sources, loc), loc.line, loc.column, severity_name(item->severity), item->message);
-        for (size_t p = 0U; p < sources->spans.len; ++p) {
-            const CinderSourceSpan *span = &sources->spans.data[p];
-            if (span->expansion.file == item->loc.file && span->expansion.offset == item->loc.offset && span->definition.file != CINDER_NO_FILE) {
-                CinderLoc definition = span->definition;
-                cinder_loc_linecol(sources, &definition);
-                fprintf(out, "%s:%u:%u: note: expanded from macro defined here\n", cinder_loc_name(sources, definition), definition.line, definition.column);
-                break;
+        const CinderSourceSpan *span = macro_span(sources, item->loc);
+        if (span != NULL) {
+            CinderLoc definition = span->definition; cinder_loc_linecol(sources, &definition);
+            fprintf(out, "%s:%u:%u: note: expanded from macro defined here\n", cinder_loc_name(sources, definition), definition.line, definition.column);
+        }
+        uint32_t frame = item->loc.frame;
+        for (size_t depth = 0U; frame != 0U && frame <= sources->frames.len && depth < 129U; ++depth) {
+            const CinderSourceFrame *record = &sources->frames.data[frame - 1U]; CinderLoc from = record->included_from;
+            if (from.file != CINDER_NO_FILE) {
+                cinder_loc_linecol(sources, &from); fprintf(out, "%s:%u:%u: note: included from here\n", cinder_loc_name(sources, from), from.line, from.column);
             }
+            if (record->parent >= frame) break;
+            frame = record->parent;
         }
     }
 }

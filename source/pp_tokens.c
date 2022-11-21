@@ -16,6 +16,7 @@ bool pp_is(PPToken token, const char *text) {
 }
 
 PPToken pp_token(PP *pp, PPKind kind, const char *text, size_t length, CinderLoc loc) {
+    if (loc.frame == 0U && loc.file != CINDER_NO_FILE) loc.frame = pp->current_frame;
     PPToken token;
     memset(&token, 0, sizeof(token));
     token.kind = kind;
@@ -56,9 +57,13 @@ static size_t literal_prefix(const char *text, size_t remaining) {
     return SIZE_MAX;
 }
 
+static CinderLoc scan_location(const PP *pp, CinderFileId file, size_t offset, size_t length) {
+    CinderLoc loc = cinder_loc(file, offset, length); loc.frame = pp->current_frame; return loc;
+}
+
 int pp_scan(PP *pp, const char *bytes, size_t length, CinderFileId file, size_t offset, PPTokens *output) {
     if (length > SIZE_MAX / sizeof(size_t) - 1U) {
-        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file, offset, 0U), "source mapping size overflow");
+        cinder_diag(pp->diags, CINDER_ERROR, scan_location(pp, file, offset, 0U), "source mapping size overflow");
         return 1;
     }
     /* Splicing precedes tokenization, including inside comments and literals. */
@@ -78,7 +83,7 @@ int pp_scan(PP *pp, const char *bytes, size_t length, CinderFileId file, size_t 
     while (i < n) {
         if (whitespace((unsigned char)text[i])) { space = true; ++i; continue; }
         if (text[i] == '\n') {
-            pp_push(output, pp_token(pp, PP_NEWLINE, "\n", 1U, cinder_loc(file, positions[i], 1U)));
+            pp_push(output, pp_token(pp, PP_NEWLINE, "\n", 1U, scan_location(pp, file, positions[i], 1U)));
             ++i; space = false; continue;
         }
         if (starts(text + i, n - i, "//")) {
@@ -90,11 +95,11 @@ int pp_scan(PP *pp, const char *bytes, size_t length, CinderFileId file, size_t 
             size_t start = i;
             i += 2U;
             while (i < n && !starts(text + i, n - i, "*/")) {
-                if (text[i] == '\n') pp_push(output, pp_token(pp, PP_NEWLINE, "\n", 1U, cinder_loc(file, positions[i], 1U)));
+                if (text[i] == '\n') pp_push(output, pp_token(pp, PP_NEWLINE, "\n", 1U, scan_location(pp, file, positions[i], 1U)));
                 ++i;
             }
             if (i == n) {
-                cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file, positions[start], 2U), "unterminated block comment");
+                cinder_diag(pp->diags, CINDER_ERROR, scan_location(pp, file, positions[start], 2U), "unterminated block comment");
                 break;
             }
             i += 2U; space = true; continue;
@@ -111,7 +116,7 @@ int pp_scan(PP *pp, const char *bytes, size_t length, CinderFileId file, size_t 
                 else ++i;
             }
             if (i < n && text[i] == quote) ++i;
-            else cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file, positions[start], positions[i] - positions[start]), "unterminated literal");
+            else cinder_diag(pp->diags, CINDER_ERROR, scan_location(pp, file, positions[start], positions[i] - positions[start]), "unterminated literal");
         } else if (pp_ident_start((unsigned char)text[i])) {
             kind = PP_IDENT;
             while (i < n && pp_ident_continue((unsigned char)text[i])) ++i;
@@ -132,11 +137,11 @@ int pp_scan(PP *pp, const char *bytes, size_t length, CinderFileId file, size_t 
                 if (starts(text + i, n - i, punct[p])) { matched = strlen(punct[p]); break; }
             }
             if (text[i] == '\0' || strchr("[](){}.&*+-~!/%<>^|?:;=,#", text[i]) == NULL) {
-                cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file, positions[i], 1U), "unsupported source byte 0x%02x", (unsigned)(unsigned char)text[i]);
+                cinder_diag(pp->diags, CINDER_ERROR, scan_location(pp, file, positions[i], 1U), "unsupported source byte 0x%02x", (unsigned)(unsigned char)text[i]);
             }
             i += matched;
         }
-        CinderLoc loc = cinder_loc(file, positions[start], positions[i] - positions[start]);
+        CinderLoc loc = scan_location(pp, file, positions[start], positions[i] - positions[start]);
         PPToken token = pp_token(pp, kind, text + start, i - start, loc);
         token.space = space;
         if (pp_is(token, "%:")) token = pp_token(pp, PP_PUNCT, "#", 1U, loc);

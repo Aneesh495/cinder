@@ -45,6 +45,7 @@ typedef struct {
     unsigned next_macro;
     size_t expansion_steps;
     size_t produced_tokens;
+    uint32_t current_frame;
     const char *date;
     const char *time;
 } PP;
@@ -62,7 +63,7 @@ int pp_define(PP *pp, const PPTokens *line, bool predefined);
 void pp_undef(PP *pp, PPToken name);
 int pp_expand(PP *pp, const PPTokens *input, PPTokens *output, unsigned depth);
 int pp_evaluate(PP *pp, const PPTokens *tokens, bool *result);
-int pp_process(PP *pp, const char *path, unsigned depth);
+int pp_process(PP *pp, const char *path, unsigned depth, CinderLoc included_from);
 void pp_render(PP *pp);
 void pp_pragma(PP *pp, const PPTokens *line, CinderLoc loc);
 

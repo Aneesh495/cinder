@@ -1,0 +1,12 @@
+flowchart TD
+  ROOT[Root translation unit] --> FRAME[Create an include-instance frame]
+  FRAME --> INCLUDE[Enter header with parent and directive location]
+  INCLUDE --> CHILD[Create child frame]
+  CHILD --> LINE[Record logical line and filename for this frame]
+  LINE --> TOKEN[Keep spelling expansion and definition locations]
+  TOKEN --> ORIGIN[Record exact preprocessed token origin]
+  ORIGIN --> AST[Typed source location]
+  AST --> DIAG[Text and JSON ranges]
+  FRAME --> DIAG
+  CHILD --> DIAG
+  DIAG --> TRACE[Traverse actual parent include chain]

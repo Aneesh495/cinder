@@ -32,7 +32,10 @@ core profile. Other language modes receive a nonzero diagnostic.
 translation unit can produce one newline-delimited batch; requested stage or
 artifact output stays on its normal stream. `--diagnostics=text` selects the
 readable default. A diagnostic includes severity, message, its bounded source
-range, and an available macro-definition range. Offsets are zero-based bytes;
+range, spelling range, macro-definition range and actual include backtrace.
+Repeated inclusion has distinct frame IDs and `#line` state. Source tokens
+retain their exact preprocessed origin rather than searching by physical
+filename/offset alone. Offsets are zero-based bytes;
 lines and columns are one-based. Unknown locations are null. UTF-8 paths and
 JSON control characters are escaped consistently. Source-read/UTF-8 failures
 use the same formatter as preprocessing and semantic errors. `--dump-ast`
@@ -46,7 +49,9 @@ build/cindercc --diagnostics=json -fsyntax-only examples/hello.c
 rules, checks the active include inventory, diagnostic token ranges and macro
 definitions, and verifies preservation of source/previous outputs on failures.
 `make test-runtime-headers` includes the opaque POSIX directory-handle ABI used
-by destination checks. Complete include-instance traces, reproducible-prefix
-options, debug output and the full product gate still require further work.
+by destination checks. `make test-source-instances` checks repeated-header
+logical locations, macro definitions, twelve nested semantic/preprocessor/UTF-8
+failure chains and logical-line execution. Reproducible-prefix options, debug
+output and the full product gate still require further work.
 
 See [the editable publication flow](diagrams/driver-publication.mmd).

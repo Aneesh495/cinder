@@ -54,6 +54,8 @@ typedef struct {
     size_t length;
     unsigned line;
     unsigned column;
+    uint32_t frame;
+    uint32_t origin;
 } CinderLoc;
 
 #define CINDER_NO_FILE ((CinderFileId)0)
@@ -79,13 +81,21 @@ typedef struct {
     unsigned physical_line;
     unsigned logical_line;
     const char *path;
+    uint32_t frame;
 } CinderLineDirective;
+
+typedef struct {
+    CinderFileId file;
+    uint32_t parent;
+    CinderLoc included_from;
+} CinderSourceFrame;
 
 typedef struct {
     CinderArena arena;
     CINDER_VEC_TYPE(CinderSourceFile) files;
     CINDER_VEC_TYPE(CinderSourceSpan) spans;
     CINDER_VEC_TYPE(CinderLineDirective) line_directives;
+    CINDER_VEC_TYPE(CinderSourceFrame) frames;
     char *preprocessed;
     size_t preprocessed_size;
 } CinderSourceManager;

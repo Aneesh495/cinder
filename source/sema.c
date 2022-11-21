@@ -503,7 +503,16 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
                 if ((add || sub) && pointer_step_type(left, expr->parse_index) && integer_type(right)) {
                     expr->as.binary.right = convert_expr(sema, expr->as.binary.right, promote_expression(sema, expr->as.binary.right, right)); expr->type = left; return left;
                 }
-                if (sub && pointer_step_type(left, expr->parse_index) && pointer_compatible(left, right)) { expr->type = sema->types->long_type; return expr->type; }
+                if (sub && pointer_step_type(left, expr->parse_index) && pointer_step_type(right, expr->parse_index)) {
+                    CinderType a = *left->base, b = *right->base; a.qualifiers = 0U; b.qualifiers = 0U;
+                    if (cinder_type_compatible(&a, &b)) {
+                        CinderType *base = cinder_type_qualified(sema->types, left->base, left->base->qualifiers | right->base->qualifiers);
+                        CinderType *common = cinder_type_pointer(sema->types, base);
+                        expr->as.binary.left = convert_expr(sema, expr->as.binary.left, common);
+                        expr->as.binary.right = convert_expr(sema, expr->as.binary.right, common);
+                        expr->type = sema->types->long_type; return expr->type;
+                    }
+                }
                 bool compare = op == TOK_EQEQ || op == TOK_NEQ || op == '<' || op == '>' || op == TOK_LE || op == TOK_GE;
                 bool equal = op == TOK_EQEQ || op == TOK_NEQ;
                 if (compare && left->kind == TYPE_POINTER && right->kind == TYPE_POINTER && (pointer_compatible(left, right) || pointer_compatible(right, left)) && (equal || (pointer_step_type(left, expr->parse_index) && pointer_step_type(right, expr->parse_index)))) {

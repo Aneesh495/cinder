@@ -2,6 +2,47 @@
 
 Updated: 2026-10-10
 
+## Include instances and qualified pointer subtraction
+
+Each preprocessing inclusion now has a stable frame, parent and actual include
+directive location. Tokens preserve that frame and their exact preprocessed
+origin. Logical `#line` state belongs to an inclusion rather than a physical
+file shared by every inclusion. Text/JSON diagnostics use the precise macro
+definition/spelling and traverse the real include chain.
+
+A retained reproducer included one header with `first.h:10` and later with
+`second.h:20`. The first function's error incorrectly reported the later alias.
+Both first/second error variants now report their own logical file/line and
+root directive. Strict GCC/ASan builds passed those cases, twelve nested
+semantic/preprocessor/UTF-8 failure chains and logical-line interpreter
+execution. The existing 41 driver and 74 preprocessor cases passed.
+
+Self-compilation exposed a separate const/mutable pointer-subtraction lowering
+failure in the origin lookup. Semantic analysis now inserts a pointer type
+with the union of compatible pointee qualifiers before lowering subtraction.
+The IR operand-type verifier remains strict. Eight scalar/record cases cover
+both directions and const, volatile, combined and mixed qualifiers; all passed
+GCC/Clang and original/assembled O0/O2 checks. All 54 actual implementation
+modules now compile to original objects. The Linux VM executed 34 original/
+assembled pointer and logical-line objects with 36 reference outcomes; frozen
+source, object and executable hashes were independently audited.
+
+The first broad regression was invalidated when its compiler was rebuilt.
+Those partial artifacts are retained and are excluded from acceptance. Fresh
+separate GCC/ASan binaries are frozen for the replacement 1,231-source and
+2,462-CIR regression. Both complete replacement runs passed, including all
+36 malformed-CIR rejections. Constraints, CTest, census and evidence checks
+passed.
+
+Evidence: `.agent-local/source-instances/`,
+`.agent-local/provenance-instances-repro/`, `.agent-local/pointer_difference/`,
+`.agent-local/origin-regression-invalidated/`,
+`.agent-local/linux-vm/share/origin-final/` and
+`.agent-local/selfhost-object-audit/`. See
+[the editable source-instance diagram](diagrams/source-instances.mmd).
+Reproducible-prefix mapping, typed HIR, debug output and full acceptance remain
+open.
+
 ## Dependencies, profiles and JSON diagnostics
 
 The driver implements original-preprocessor `-M`/`-MD` output, `-MF`, quoted

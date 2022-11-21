@@ -164,7 +164,7 @@ typedef struct {
 typedef struct { const char *data; size_t length; } Word;
 
 static void parse_error(Reader *reader, const char *reason) {
-    if (!reader->failed) cinder_diag(reader->diags, CINDER_ERROR, (CinderLoc){CINDER_NO_FILE, reader->cursor, 0U, reader->line, 1U}, "IR text: %s", reason);
+    if (!reader->failed) cinder_diag(reader->diags, CINDER_ERROR, (CinderLoc){.file=CINDER_NO_FILE, .offset=reader->cursor, .line=reader->line, .column=1U}, "IR text: %s", reason);
     reader->failed = true;
 }
 

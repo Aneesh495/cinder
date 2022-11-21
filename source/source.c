@@ -59,6 +59,7 @@ void cinder_sources_init(CinderSourceManager *sources) {
     sources->files.cap = 0U;
     sources->spans.data = NULL; sources->spans.len = 0U; sources->spans.cap = 0U;
     sources->line_directives.data = NULL; sources->line_directives.len = 0U; sources->line_directives.cap = 0U;
+    sources->frames.data = NULL; sources->frames.len = 0U; sources->frames.cap = 0U;
     sources->preprocessed = NULL;
     sources->preprocessed_size = 0U;
 }
@@ -72,12 +73,14 @@ void cinder_sources_destroy(CinderSourceManager *sources) {
     free(sources->preprocessed);
     free(sources->spans.data);
     free(sources->line_directives.data);
+    free(sources->frames.data);
     cinder_arena_destroy(&sources->arena);
     sources->files.data = NULL;
     sources->files.len = 0U;
     sources->files.cap = 0U;
     sources->spans.data = NULL; sources->spans.len = 0U; sources->spans.cap = 0U;
     sources->line_directives.data = NULL; sources->line_directives.len = 0U; sources->line_directives.cap = 0U;
+    sources->frames.data = NULL; sources->frames.len = 0U; sources->frames.cap = 0U;
     sources->preprocessed = NULL;
     sources->preprocessed_size = 0U;
 }
@@ -127,6 +130,7 @@ CinderLoc cinder_loc(CinderFileId file, size_t offset, size_t length) {
     loc.length = length;
     loc.line = 0U;
     loc.column = 0U;
+    loc.frame = 0U; loc.origin = 0U;
     return loc;
 }
 
@@ -158,7 +162,7 @@ const char *cinder_source_name(CinderSourceManager *sources, CinderFileId id) {
 static const CinderLineDirective *line_directive(const CinderSourceManager *sources, CinderLoc loc) {
     for (size_t i = sources->line_directives.len; i > 0U; --i) {
         const CinderLineDirective *record = &sources->line_directives.data[i - 1U];
-        if (record->file == loc.file && record->offset <= loc.offset) return record;
+        if (record->file == loc.file && record->frame == loc.frame && record->offset <= loc.offset) return record;
     }
     return NULL;
 }
@@ -191,7 +195,9 @@ const CinderSourceSpan *cinder_preprocessed_span(CinderSourceManager *sources, s
 
 CinderLoc cinder_preprocessed_loc(CinderSourceManager *sources, size_t offset, size_t length) {
     const CinderSourceSpan *span = cinder_preprocessed_span(sources, offset);
-    if (span != NULL) return span->expansion;
+    if (span != NULL) {
+        CinderLoc loc = span->expansion; loc.origin = (uint32_t)(span - sources->spans.data + 1); return loc;
+    }
     if (sources->spans.len != 0U && offset >= sources->preprocessed_size) {
         CinderLoc loc = sources->spans.data[sources->spans.len - 1U].expansion;
         loc.offset += loc.length;

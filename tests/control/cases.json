@@ -4890,5 +4890,37 @@
   {
     "source": "../machine_memory/pointer.c",
     "exit": 34
+  },
+  {
+    "source": "../pointer_difference/integer_const.c",
+    "exit": 41
+  },
+  {
+    "source": "../pointer_difference/integer_volatile.c",
+    "exit": 42
+  },
+  {
+    "source": "../pointer_difference/integer_const_volatile.c",
+    "exit": 43
+  },
+  {
+    "source": "../pointer_difference/record_const.c",
+    "exit": 44
+  },
+  {
+    "source": "../pointer_difference/record_volatile.c",
+    "exit": 45
+  },
+  {
+    "source": "../pointer_difference/record_const_volatile.c",
+    "exit": 46
+  },
+  {
+    "source": "../pointer_difference/integer_mixed_qualifiers.c",
+    "exit": 47
+  },
+  {
+    "source": "../pointer_difference/record_mixed_qualifiers.c",
+    "exit": 48
   }
 ]

@@ -132,7 +132,7 @@ static void include_file(PP *pp, const char *current, const PPTokens *line, Cind
     if (name != NULL) {
         char *path = *name == '\0' ? NULL : resolve_include(pp, current, name, quoted);
         if (path == NULL) cinder_diag(pp->diags, CINDER_ERROR, loc, "cannot resolve include '%s'", name);
-        else { pp_process(pp, path, depth + 1U); free(path); }
+        else { pp_process(pp, path, depth + 1U, loc); free(path); }
         free(name);
     }
     pp_destroy_tokens(&expanded);
@@ -161,7 +161,7 @@ static void line_control(PP *pp, const PPTokens *line, CinderFileId file, size_t
         const char *path = cinder_loc_name(pp->sources, loc);
         char *decoded = expanded.len == 2U ? decode_header(pp, expanded.data[1]) : NULL;
         if (decoded != NULL) path = cinder_arena_strndup(&pp->sources->arena, decoded, strlen(decoded));
-        CinderLineDirective record = {file, next_offset, physical.line, (unsigned)number, path};
+        CinderLineDirective record = {file, next_offset, physical.line, (unsigned)number, path, pp->current_frame};
         cinder_vec_push((CinderVec *)&pp->sources->line_directives, &record);
         free(decoded);
     }
@@ -177,22 +177,30 @@ static void require_empty(PP *pp, const PPTokens *tokens, CinderLoc loc, const c
     if (tokens->len != 0U) cinder_diag(pp->diags, CINDER_ERROR, loc, "trailing tokens after #%s", directive);
 }
 
-int pp_process(PP *pp, const char *path, unsigned depth) {
+int pp_process(PP *pp, const char *path, unsigned depth, CinderLoc included_from) {
     if (depth > 128U) {
         cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "include nesting limit exceeded");
         return 1;
     }
     char *canonical = realpath(path, NULL);
+    size_t first_diagnostic = pp->diags->items.len;
     CinderFileId id = cinder_source_load_diagnostic(pp->sources, canonical == NULL ? path : canonical, pp->diags);
     free(canonical);
+    if (pp->sources->frames.len >= 1000000U) { cinder_diag(pp->diags, CINDER_ERROR, included_from, "include-instance limit exceeded"); return 1; }
+    CinderFileId actual_file = id;
+    if (actual_file == CINDER_NO_FILE && first_diagnostic < pp->diags->items.len) actual_file = pp->diags->items.data[first_diagnostic].loc.file;
+    CinderSourceFrame frame = {actual_file, included_from.frame, included_from};
+    cinder_vec_push((CinderVec *)&pp->sources->frames, &frame);
+    uint32_t current_frame = (uint32_t)pp->sources->frames.len;
+    for (size_t d = first_diagnostic; d < pp->diags->items.len; ++d) pp->diags->items.data[d].loc.frame = current_frame;
     CinderSourceFile *file = cinder_source_get(pp->sources, id);
     if (file == NULL) {
-        cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "cannot read input '%s'", path);
         return 1;
     }
     PPFile *state = file_state(pp, id);
     if (state->included && state->once) return 0;
     state->included = true;
+    uint32_t saved_frame = pp->current_frame; pp->current_frame = current_frame;
     /* Keep heap-owned path/bytes stable when recursive includes grow the file vector. */
     const char *source_path = file->path;
     size_t file_size = file->size;
@@ -282,6 +290,7 @@ int pp_process(PP *pp, const char *path, unsigned depth) {
     if (condition_count != 0U) cinder_diag(pp->diags, CINDER_ERROR, conditions[condition_count - 1U].opening, "unterminated conditional directive");
     pp_destroy_tokens(&pending);
     pp_destroy_tokens(&tokens);
+    pp->current_frame = saved_frame;
     return pp->diags->errors == 0U ? 0 : 1;
 }
 
@@ -345,7 +354,7 @@ int cinder_preprocess(CinderSourceManager *sources, const char *path, const char
         define_text(&pp, copy, false);
         free(copy);
     }
-    if (diags->errors == 0U) pp_process(&pp, path, 0U);
+    if (diags->errors == 0U) pp_process(&pp, path, 0U, (CinderLoc){0});
     pp_render(&pp);
     for (size_t i = 0U; i < pp.macros.len; ++i) {
         free(pp.macros.data[i].params.data);
