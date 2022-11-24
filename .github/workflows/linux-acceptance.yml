@@ -100,84 +100,20 @@ jobs:
         run: make test-evidence
       - name: Incremental evidence inventory
         run: python3 -B tools/acceptance.py snapshot build/cindercc
+      - name: Archive evidence with original POSIX filenames
+        if: always()
+        run: |
+          paths=()
+          for path in .agent-local build artifacts; do
+            if test -d "$path"; then paths+=("$path"); fi
+          done
+          if test "${#paths[@]}" -gt 0; then
+            tar -czf "$RUNNER_TEMP/cinder-linux-acceptance.tar.gz" "${paths[@]}"
+          fi
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cinder-linux-acceptance
-          path: |
-            .agent-local/evidence
-            .agent-local/generated-summary.json
-            .agent-local/ir-text
-            .agent-local/ir-campaign
-            .agent-local/ssa
-            .agent-local/control
-            .agent-local/constraints
-            .agent-local/memory
-            .agent-local/literals
-            .agent-local/linkage
-            .agent-local/static-addresses
-            .agent-local/initializers
-            .agent-local/aggregates
-            .agent-local/compound_literals
-            .agent-local/static_assertions
-            .agent-local/generic
-            .agent-local/alignment
-            .agent-local/alignment-contracts
-            .agent-local/noreturn
-            .agent-local/noreturn-contracts
-            .agent-local/block_storage
-            .agent-local/block-storage-contracts
-            .agent-local/goto
-            .agent-local/goto-contracts
-            .agent-local/switch
-            .agent-local/switch-contracts
-            .agent-local/register
-            .agent-local/register-contracts
-            .agent-local/offset
-            .agent-local/offset-contracts
-            .agent-local/runtime-headers
-            .agent-local/flexible
-            .agent-local/flexible-contracts
-            .agent-local/flexible-allocated
-            .agent-local/anonymous
-            .agent-local/anonymous-contracts
-            .agent-local/anonymous-abi-contracts
-            .agent-local/bitfields
-            .agent-local/bitfield-contracts
-            .agent-local/qualifiers
-            .agent-local/qualifier-contracts
-            .agent-local/cfg-optimization
-            .agent-local/sparse-optimization
-            .agent-local/value-numbering
-            .agent-local/dead-code
-            .agent-local/loop-motion
-            .agent-local/pass-pipeline
-            .agent-local/selected-mir
-            .agent-local/mir-abi
-            .agent-local/mir-scalar
-            .agent-local/machine_memory
-            .agent-local/driver
-            .agent-local/source-instances
-            .agent-local/pointer_difference
-            .agent-local/evidence
-            .agent-local/promotion-guards
-            .agent-local/pointer_words
-            .agent-local/pointer-word-contracts
-            .agent-local/local-memory
-            .agent-local/copy-cleanup
-            .agent-local/strength-reduction
-            .agent-local/rewrite-checks
-            .agent-local/bitfields-abi-contracts
-            .agent-local/flexible-abi-contracts
-            .agent-local/aggregate_abi
-            .agent-local/abi-boundary
-            .agent-local/abi-callbacks
-            .agent-local/abi-aggregates
-            .agent-local/abi-variadic
-            .agent-local/variadic
-            .agent-local/allocation
-            .agent-local/objects
-            artifacts
-            build
+          path: ${{ runner.temp }}/cinder-linux-acceptance.tar.gz
           if-no-files-found: ignore

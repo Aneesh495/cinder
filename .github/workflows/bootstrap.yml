@@ -36,12 +36,18 @@ jobs:
             python3 -B tests/test_native_evidence.py "$(dirname "$manifest")"
             python3 -B tests/test_selfhost_gate.py "$(dirname "$manifest")"
           done
+      - name: Archive raw stage and execution evidence
+        if: always()
+        run: |
+          if test -d .agent-local/selfhost; then
+            tar -czf "$RUNNER_TEMP/cinder-bootstrap.tar.gz" .agent-local/selfhost
+          fi
       - name: Upload raw stage and execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cinder-bootstrap
-          path: .agent-local/selfhost
+          path: ${{ runner.temp }}/cinder-bootstrap.tar.gz
           include-hidden-files: true
           compression-level: 1
           if-no-files-found: error

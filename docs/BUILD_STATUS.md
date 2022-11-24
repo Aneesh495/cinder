@@ -2,6 +2,21 @@
 
 Updated: 2026-10-10
 
+## Hosted evidence transport
+
+The driver checkpoint's native bootstrap completed compilation and checks,
+but run `38101192726` failed during artifact upload. GitHub rejected the
+colon in the deliberately tested `leaf: space$.h` filename. The complete job
+log is retained privately; no downloadable artifact was published by that run.
+Both workflows now transport raw trees as tar.gz archives, preserving the
+original POSIX names and bytes. A local round trip checked colon, quote,
+newline and Unicode names. Reader contracts remain unchanged after safe
+extraction. Hosted validation/bootstrap are rerun for this transport fix.
+
+Evidence: `.agent-local/driver-bootstrap-upload-failure.log` and
+`.agent-local/artifact-filename-archive-check/`. See
+[ACCEPTANCE.md](ACCEPTANCE.md) for extraction and read-only verification.
+
 ## Include instances and qualified pointer subtraction
 
 Each preprocessing inclusion now has a stable frame, parent and actual include

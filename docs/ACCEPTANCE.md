@@ -47,6 +47,21 @@ actual argv, output, exit or timeout, and elapsed time. Complete acceptance
 requires every required gate to pass its dedicated reader.
 See [the editable reader flow](diagrams/acceptance-readers.mmd).
 
+Hosted artifacts contain a tar.gz transport archive. This preserves POSIX
+filenames exercised by dependency/recovery tests, including colon-containing
+header names, which the artifact service cannot upload as individual paths.
+Extract into a separate directory before invoking the readers. On Python 3.12
+or later, use the data extraction filter:
+
+```sh
+python3 -c 'import tarfile; tarfile.open("cinder-bootstrap.tar.gz").extractall("extracted", filter="data")'
+python3 -B tests/test_native_evidence.py extracted/.agent-local/selfhost/RUN
+```
+
+Use the actual retained run directory for `RUN`. The archive does not rename,
+omit or regenerate raw evidence; existing source/tool/artifact bindings apply
+after extraction.
+
 Ordinary Linux CI runs incremental frontend/native/object checks, the typed IR
 campaign, sanitizer build, and integrity regression tests. It writes
 `INCREMENTAL.json`, whose status is partial and whose purpose is explicit.
