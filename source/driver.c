@@ -51,6 +51,7 @@ static void discard_object(char *path) {
 void cinder_print_help(FILE *out) {
     fputs("Cinder c17-core compiler\n\nUsage: cindercc [options] file.c\n\n", out);
     fputs("  -M                 emit actual preprocessing dependencies only\n  -MD                retain dependencies after successful compilation\n  -MF PATH           select dependency output\n  -MQ TARGET         quote one dependency target\n  -std=c17-core      select the documented C17 core profile\n  --diagnostics=json emit versioned diagnostic batches on stderr\n", out);
+    fputs("  -ffile-prefix-map=OLD=NEW  map source display and __FILE__ prefixes\n  -fmacro-prefix-map=OLD=NEW map __FILE__ prefixes\n", out);
     fputs("  -E                 preprocess only\n  -S                 emit x86-64 assembly\n  -c                 emit ELF64 relocatable object\n  -o PATH             output path\n  -I DIR              quoted/angle include directory\n  -DNAME[=VALUE]      define a preprocessing macro\n  -fsyntax-only       stop after semantic analysis\n  -O0/-O1/-O2        select conservative optimization level\n  --dump-tokens       print preprocessing tokens\n  --dump-ast          print parsed/typed AST\n  --emit-ir           print typed CFG IR\n  --serialize-ir      write canonical round-trip IR\n  --dump-mir          print machine lowering boundary\n  --dump-regalloc     print allocation intervals and frame\n  --dump-passes       print verified optimizer records as JSON\n  --pass-stats PATH   save optimizer records atomically\n  --pass-trace DIR    retain before/after CIR in an existing directory\n  --interpret         execute main in the independent IR interpreter\n  --explorer DIR      write an offline stage summary report\n  -fverify-each       verify IR at each boundary\n  -g                  request debug profile (currently source contract only)\n  --help              show this help\n  --version           show compiler version\n", out);
 }
 
@@ -79,6 +80,10 @@ int cinder_driver_run(const CinderOptions *options) {
     int result = 1;
     CinderOutput assembly_output = {0};
     CinderOutput dependency_output = {0}; char *derived_dependency = NULL;
+    for (size_t i = 0U; i < options->prefix_map_count; ++i) {
+        const char *argument = options->prefix_maps[i], *specification = strchr(argument, '=');
+        if (specification == NULL || cinder_source_prefix_map(&sources, specification + 1, strncmp(argument, "-fmacro-", 8U) == 0, &diags) != 0) goto done;
+    }
     if (cinder_preprocess(&sources, options->input, options->include_dirs, options->include_count, options->defines, options->define_count, &diags) != 0) goto done;
     if (options->output != NULL && strcmp(options->output, "-") != 0 && source_destination(&sources, options->input, options->output)) {
         cinder_diag(&diags, CINDER_ERROR, (CinderLoc){0}, "output would replace an input source: %s", options->output); goto done;

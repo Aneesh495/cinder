@@ -1,0 +1,9 @@
+flowchart LR
+  RULES[Ordered per-unit prefix configuration] --> DISPLAY[Last matching rule and one substitution]
+  PHYSICAL[Canonical physical source and include instance] --> IO[Include reads and identity]
+  PHYSICAL --> DEPS[Physical dependency rules and collision checks]
+  PHYSICAL --> LOGICAL[Per-instance logical line filename]
+  LOGICAL --> DISPLAY
+  DISPLAY --> DIAG[Diagnostic and token display names]
+  DISPLAY --> MACRO[FILE literal using file and macro rules]
+  MACRO --> OBJECT[Original ELF data and interpreter behavior]

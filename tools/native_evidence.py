@@ -143,6 +143,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
     authored_groups = AUTHORED_GROUPS if any((source_root/'tests/machine_memory').glob('*.c')) else AUTHORED_GROUPS - {'machine_memory'}
     authored_commands = AUTHORED_COMMANDS | {'tests/test_driver.py'} if (source_root/'tests/test_driver.py').is_file() else AUTHORED_COMMANDS
     if (source_root/'tests/test_source_instances.py').is_file(): authored_commands = authored_commands | {'tests/test_source_instances.py'}
+    if (source_root/'tests/test_prefix_maps.py').is_file(): authored_commands = authored_commands | {'tests/test_prefix_maps.py'}
     manifest=read(base,'manifest.json')
     require(manifest.get('schema')==2 and manifest.get('status')=='pass' and 'active_command' not in manifest, 'incomplete bootstrap')
     profile(manifest,'execution_profile')

@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-driver test-source-instances test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -193,6 +193,9 @@ test-driver: build
 
 test-source-instances: build
 	@python3 -B tests/test_source_instances.py $(BUILD_DIR)/cindercc
+
+test-prefix-maps: build
+	@python3 -B tests/test_prefix_maps.py $(BUILD_DIR)/cindercc
 	@python3 -B tests/test_initializers.py $(BUILD_DIR)/cindercc pointer_difference
 
 test-parallel-copy: build

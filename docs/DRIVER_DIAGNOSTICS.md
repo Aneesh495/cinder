@@ -51,7 +51,8 @@ definitions, and verifies preservation of source/previous outputs on failures.
 `make test-runtime-headers` includes the opaque POSIX directory-handle ABI used
 by destination checks. `make test-source-instances` checks repeated-header
 logical locations, macro definitions, twelve nested semantic/preprocessor/UTF-8
-failure chains and logical-line execution. Reproducible-prefix options, debug
-output and the full product gate still require further work.
+failure chains and logical-line execution. [Prefix mapping](REPRODUCIBILITY.md)
+has separate file/macro options, one-pass substitution and physical dependency
+identities. Debug output and the full product gate still require further work.
 
 See [the editable publication flow](diagrams/driver-publication.mmd).

@@ -314,7 +314,7 @@ static PPToken builtin_token(PP *pp, PPToken token) {
         return pp_token(pp, PP_NUMBER, number, n > 0 ? (size_t)n : 0U, token.loc);
     }
     if (pp_is(token, "__FILE__")) {
-        const char *path = cinder_loc_name(pp->sources, token.loc);
+        const char *path = cinder_macro_loc_name(pp->sources, token.loc);
         PPTokens filename = {0};
         PPToken literal = pp_token(pp, PP_LITERAL, path, strlen(path), token.loc);
         pp_push(&filename, literal);

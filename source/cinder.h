@@ -90,12 +90,17 @@ typedef struct {
     CinderLoc included_from;
 } CinderSourceFrame;
 
+typedef struct { const char *before; const char *after; bool macro_only; } CinderPrefixMap;
+typedef struct { const char *physical; const char *display; bool macro; } CinderDisplayName;
+
 typedef struct {
     CinderArena arena;
     CINDER_VEC_TYPE(CinderSourceFile) files;
     CINDER_VEC_TYPE(CinderSourceSpan) spans;
     CINDER_VEC_TYPE(CinderLineDirective) line_directives;
     CINDER_VEC_TYPE(CinderSourceFrame) frames;
+    CINDER_VEC_TYPE(CinderPrefixMap) prefix_maps;
+    CINDER_VEC_TYPE(CinderDisplayName) display_names;
     char *preprocessed;
     size_t preprocessed_size;
 } CinderSourceManager;
@@ -109,6 +114,9 @@ CinderLoc cinder_loc(CinderFileId file, size_t offset, size_t length);
 void cinder_loc_linecol(CinderSourceManager *sources, CinderLoc *loc);
 void cinder_loc_physical_linecol(CinderSourceManager *sources, CinderLoc *loc);
 const char *cinder_loc_name(CinderSourceManager *sources, CinderLoc loc);
+const char *cinder_macro_loc_name(CinderSourceManager *sources, CinderLoc loc);
+const char *cinder_unmapped_loc_name(CinderSourceManager *sources, CinderLoc loc);
+int cinder_source_prefix_map(CinderSourceManager *sources, const char *specification, bool macro_only, CinderDiagnostics *diags);
 CinderLoc cinder_preprocessed_loc(CinderSourceManager *sources, size_t offset, size_t length);
 const CinderSourceSpan *cinder_preprocessed_span(CinderSourceManager *sources, size_t offset);
 const char *cinder_source_name(CinderSourceManager *sources, CinderFileId id);
@@ -1094,6 +1102,8 @@ typedef struct {
     size_t include_count;
     const char *const *defines;
     size_t define_count;
+    const char *const *prefix_maps;
+    size_t prefix_map_count;
     bool preprocess_only;
     bool emit_assembly;
     bool emit_object;

@@ -72,6 +72,8 @@ jobs:
         run: make test-driver
       - name: Repeated source instances, include traces and qualified pointer differences
         run: make test-source-instances
+      - name: Reproducible source prefixes and physical dependencies
+        run: make test-prefix-maps
       - name: Ten-pass records, promotion guards and evidence tampering
         run: make test-passes
       - name: Actual pass gate generation and incomplete acceptance rejection

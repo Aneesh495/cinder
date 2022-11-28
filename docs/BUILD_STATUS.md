@@ -1,6 +1,6 @@
 # Build status
 
-Updated: 2026-10-10
+Updated: 2026-10-11
 
 ## Hosted evidence transport
 
@@ -11,11 +11,36 @@ log is retained privately; no downloadable artifact was published by that run.
 Both workflows now transport raw trees as tar.gz archives, preserving the
 original POSIX names and bytes. A local round trip checked colon, quote,
 newline and Unicode names. Reader contracts remain unchanged after safe
-extraction. Hosted validation/bootstrap are rerun for this transport fix.
+extraction. Hosted validation `38102437887` and bootstrap `38102478417` both passed
+for this transport fix. The downloaded archive is retained for independent
+source-bound verification.
 
 Evidence: `.agent-local/driver-bootstrap-upload-failure.log` and
 `.agent-local/artifact-filename-archive-check/`. See
 [ACCEPTANCE.md](ACCEPTANCE.md) for extraction and read-only verification.
+
+## Reproducible source prefixes
+
+File and macro prefix options now map `__FILE__`, while file-prefix options
+also map text/JSON diagnostic and token names. Last matching option wins;
+substitution is performed once. Logical `#line` names are stored unmapped so
+later line controls cannot apply a rule twice. Physical include reads,
+canonical identities, source offsets and dependency rules remain physical.
+
+Strict GCC and ASan/UBSan builds passed 33 focused commands each, including
+identical O0/O2 original objects from two relocated trees, physical dependencies,
+logical names, overlap/order handling, invalid-option output preservation and
+independent units within one driver process. The existing 41 driver, 74
+preprocessor and source-instance checks passed under sanitizers. All actual
+compiler modules compiled through Cinder to original objects. Eight original/
+assembled objects and eight GCC/Clang outcomes ran in the owned Linux VM;
+source, object and executable bindings passed independent audit. This VM proof
+is emulated functional evidence, not a native performance measurement.
+
+Evidence: `.agent-local/prefix-maps/`, `.agent-local/selfhost-object-audit/`
+and `.agent-local/linux-vm/share/prefix-final/`. See
+[REPRODUCIBILITY.md](REPRODUCIBILITY.md). Typed HIR, useful debug records and
+remaining full acceptance readers are still open.
 
 ## Include instances and qualified pointer subtraction
 

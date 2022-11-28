@@ -52,7 +52,8 @@ describes the owned machine representation and the remaining target pseudos.
 `-E`, `-S`, and `-c` use Cinder's own preprocessing and backend. Linking is deliberately an explicit boundary: on a declared Linux host the driver may pass Cinder-created objects and system libraries to the platform linker, but it never passes user C source to a host compiler.
 
 Dependency rules, C17 profile flags and versioned JSON diagnostics are described
-in [`docs/DRIVER_DIAGNOSTICS.md`](docs/DRIVER_DIAGNOSTICS.md).
+in [`docs/DRIVER_DIAGNOSTICS.md`](docs/DRIVER_DIAGNOSTICS.md). Source-name mapping
+and deterministic date policy are in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 
 ## Language and target contract
 

@@ -60,6 +60,8 @@ void cinder_sources_init(CinderSourceManager *sources) {
     sources->spans.data = NULL; sources->spans.len = 0U; sources->spans.cap = 0U;
     sources->line_directives.data = NULL; sources->line_directives.len = 0U; sources->line_directives.cap = 0U;
     sources->frames.data = NULL; sources->frames.len = 0U; sources->frames.cap = 0U;
+    sources->prefix_maps.data = NULL; sources->prefix_maps.len = 0U; sources->prefix_maps.cap = 0U;
+    sources->display_names.data = NULL; sources->display_names.len = 0U; sources->display_names.cap = 0U;
     sources->preprocessed = NULL;
     sources->preprocessed_size = 0U;
 }
@@ -74,6 +76,7 @@ void cinder_sources_destroy(CinderSourceManager *sources) {
     free(sources->spans.data);
     free(sources->line_directives.data);
     free(sources->frames.data);
+    free(sources->prefix_maps.data); free(sources->display_names.data);
     cinder_arena_destroy(&sources->arena);
     sources->files.data = NULL;
     sources->files.len = 0U;
@@ -81,6 +84,8 @@ void cinder_sources_destroy(CinderSourceManager *sources) {
     sources->spans.data = NULL; sources->spans.len = 0U; sources->spans.cap = 0U;
     sources->line_directives.data = NULL; sources->line_directives.len = 0U; sources->line_directives.cap = 0U;
     sources->frames.data = NULL; sources->frames.len = 0U; sources->frames.cap = 0U;
+    sources->prefix_maps.data = NULL; sources->prefix_maps.len = 0U; sources->prefix_maps.cap = 0U;
+    sources->display_names.data = NULL; sources->display_names.len = 0U; sources->display_names.cap = 0U;
     sources->preprocessed = NULL;
     sources->preprocessed_size = 0U;
 }
@@ -176,10 +181,40 @@ void cinder_loc_linecol(CinderSourceManager *sources, CinderLoc *loc) {
     }
 }
 
-const char *cinder_loc_name(CinderSourceManager *sources, CinderLoc loc) {
+static const char *physical_loc_name(CinderSourceManager *sources, CinderLoc loc) {
     const CinderLineDirective *record = line_directive(sources, loc);
     return record == NULL ? cinder_source_name(sources, loc.file) : record->path;
 }
+
+int cinder_source_prefix_map(CinderSourceManager *sources, const char *specification, bool macro_only, CinderDiagnostics *diags) {
+    const char *equal = strchr(specification, '=');
+    if (equal == NULL) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "prefix mapping requires OLD=NEW"); return 1; }
+    if (sources->files.len != 0U || sources->display_names.len != 0U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "prefix maps must be configured before source loading"); return 1; }
+    CinderPrefixMap map = {cinder_arena_strndup(&sources->arena, specification, (size_t)(equal - specification)), cinder_arena_strndup(&sources->arena, equal + 1, strlen(equal + 1)), macro_only};
+    cinder_vec_push((CinderVec *)&sources->prefix_maps, &map); return 0;
+}
+
+static const char *display_name(CinderSourceManager *sources, const char *physical, bool macro) {
+    if (sources->prefix_maps.len == 0U) return physical;
+    for (size_t i = 0U; i < sources->display_names.len; ++i) {
+        CinderDisplayName *cached = &sources->display_names.data[i];
+        if (cached->macro == macro && strcmp(cached->physical, physical) == 0) return cached->display;
+    }
+    const char *display = physical;
+    for (size_t i = sources->prefix_maps.len; i > 0U; --i) {
+        const CinderPrefixMap *map = &sources->prefix_maps.data[i - 1U]; size_t before = strlen(map->before);
+        if ((!macro && map->macro_only) || strncmp(physical, map->before, before) != 0) continue;
+        size_t after = strlen(map->after), suffix = strlen(physical + before);
+        if (after > SIZE_MAX - suffix - 1U) break;
+        char *copy = cinder_arena_alloc(&sources->arena, after + suffix + 1U, 1U);
+        memcpy(copy, map->after, after); memcpy(copy + after, physical + before, suffix + 1U); display = copy; break;
+    }
+    CinderDisplayName cached = {physical, display, macro}; cinder_vec_push((CinderVec *)&sources->display_names, &cached); return display;
+}
+
+const char *cinder_loc_name(CinderSourceManager *sources, CinderLoc loc) { return display_name(sources, physical_loc_name(sources, loc), false); }
+const char *cinder_macro_loc_name(CinderSourceManager *sources, CinderLoc loc) { return display_name(sources, physical_loc_name(sources, loc), true); }
+const char *cinder_unmapped_loc_name(CinderSourceManager *sources, CinderLoc loc) { return physical_loc_name(sources, loc); }
 
 const CinderSourceSpan *cinder_preprocessed_span(CinderSourceManager *sources, size_t offset) {
     size_t left = 0U, right = sources->spans.len;

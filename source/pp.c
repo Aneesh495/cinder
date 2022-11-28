@@ -158,7 +158,7 @@ static void line_control(PP *pp, const PPTokens *line, CinderFileId file, size_t
     else {
         CinderLoc physical = cinder_loc(file, next_offset, 0U);
         cinder_loc_physical_linecol(pp->sources, &physical);
-        const char *path = cinder_loc_name(pp->sources, loc);
+        const char *path = cinder_unmapped_loc_name(pp->sources, loc);
         char *decoded = expanded.len == 2U ? decode_header(pp, expanded.data[1]) : NULL;
         if (decoded != NULL) path = cinder_arena_strndup(&pp->sources->arena, decoded, strlen(decoded));
         CinderLineDirective record = {file, next_offset, physical.line, (unsigned)number, path, pp->current_frame};
