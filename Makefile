@@ -193,10 +193,10 @@ test-driver: build
 
 test-source-instances: build
 	@python3 -B tests/test_source_instances.py $(BUILD_DIR)/cindercc
+	@python3 -B tests/test_initializers.py $(BUILD_DIR)/cindercc pointer_difference
 
 test-prefix-maps: build
 	@python3 -B tests/test_prefix_maps.py $(BUILD_DIR)/cindercc
-	@python3 -B tests/test_initializers.py $(BUILD_DIR)/cindercc pointer_difference
 
 test-parallel-copy: build
 	@tests/run_parallel_copy.sh $(BUILD_DIR)/cindercc
