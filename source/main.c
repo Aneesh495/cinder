@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
         if (strcmp(arg, "-O1") == 0) { options.optimization = 1; continue; }
         if (strcmp(arg, "-O2") == 0) { options.optimization = 2; continue; }
         if (strcmp(arg, "--dump-tokens") == 0) { options.dump_tokens = true; continue; }
+        if (strcmp(arg, "--dump-hir") == 0) { options.dump_hir = true; continue; }
         if (strcmp(arg, "--dump-ast") == 0) { options.dump_ast = true; continue; }
         if (strcmp(arg, "--serialize-ir") == 0) { options.serialize_ir = true; continue; }
         if (strcmp(arg, "--emit-ir") == 0) { options.dump_ir = true; continue; }
@@ -94,7 +95,7 @@ int main(int argc, char **argv) {
     if ((options.dependency_file != NULL || options.dependency_target != NULL) && !options.emit_dependencies) {
         cli_error(&options, "dependency paths require -M or -MD", NULL); free(inputs.data); free(includes.data); free(defines.data); free(maps.data); return 2;
     }
-    if (options.dependencies_only && (options.dump_tokens || options.dump_ast || options.dump_ir || options.serialize_ir || options.dump_mir || options.dump_regalloc || options.dump_passes || options.pass_stats != NULL || options.pass_trace != NULL || options.interpret || options.explorer != NULL)) {
+    if (options.dependencies_only && (options.dump_tokens || options.dump_ast || options.dump_hir || options.dump_ir || options.serialize_ir || options.dump_mir || options.dump_regalloc || options.dump_passes || options.pass_stats != NULL || options.pass_trace != NULL || options.interpret || options.explorer != NULL)) {
         cli_error(&options, "-M cannot share standard output with stage inspection", NULL); free(inputs.data); free(includes.data); free(defines.data); free(maps.data); return 2;
     }
     if ((options.preprocess_only || options.syntax_only) && (options.dump_passes || options.pass_stats != NULL || options.pass_trace != NULL)) {

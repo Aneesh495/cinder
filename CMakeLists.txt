@@ -30,6 +30,7 @@ set(CINDER_SOURCES
   source/static_address.c
   source/sema.c
   source/control.c
+  source/hir.c
   source/ir.c
   source/ir_ops.c
   source/ir_verify.c
@@ -111,3 +112,7 @@ target_link_libraries(cinderir PRIVATE cinder_core)
 add_executable(cinder_ir_campaign EXCLUDE_FROM_ALL tests/ir_campaign.c)
 cinder_target_profile(cinder_ir_campaign)
 target_link_libraries(cinder_ir_campaign PRIVATE cinder_core)
+
+add_executable(cinder_hir_probe EXCLUDE_FROM_ALL tests/hir_probe.c)
+cinder_target_profile(cinder_hir_probe)
+target_link_libraries(cinder_hir_probe PRIVATE cinder_core)

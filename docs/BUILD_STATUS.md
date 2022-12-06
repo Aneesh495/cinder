@@ -2,6 +2,36 @@
 
 Updated: 2026-10-11
 
+## Owned typed expression HIR
+
+The normal source pipeline now builds owned HIR expressions and verifies them
+before CFG lowering. Scalar reads, addresses, conversions, member/index places,
+updates and calls are explicit. Layout queries become constants and generic
+selection removes unevaluated syntax. Variadic setup/copy/end have typed HIR
+operations, fixing an untyped pseudo-callee exposed by compiling `diag.c`.
+The first failing self-compilation snapshot remains retained. The corrected
+compiler emits original objects for every current production module.
+
+Strict GCC and sanitizer builds passed five new semantic fixtures at O0/O2,
+deterministic source-linked dumps, GCC/Clang reference results, AST/HIR mutation
+isolation through the actual consumer and ten malformed-graph rejections.
+The full 1,236-source reference/interpreter/object suite and 2,472 CIR
+round trips/backend comparisons passed, including 36 malformed-CIR rejections.
+Sanitizers passed 353 source constraints, 25 arithmetic undefined cases,
+136 memory undefined cases and 57 malformed memory contracts. Existing driver,
+prefix-map and source-instance checks passed. The owned Linux VM executed 30
+original/assembled/parsed objects, 20 independent reference outcomes and a
+Cinder-compiled API probe linked with original core objects; source/object/
+executable bindings passed independent audit. This is emulated functional
+proof, separate from the real Linux bootstrap and performance gates.
+Structured control/declaration/static-address plans still depend on semantic
+AST metadata; the full HIR boundary is not complete.
+
+Evidence: `.agent-local/hir/`, `.agent-local/selfhost-object-audit/` and
+`.agent-local/linux-vm/share/hir-final/`. See [HIR.md](HIR.md) and
+[the actual lowering flow](diagrams/typed-hir.mmd). Next transfer control/storage
+plans, then complete debug output, remaining machine selection and full readers.
+
 ## Hosted evidence transport
 
 The driver checkpoint's native bootstrap completed compilation and checks,

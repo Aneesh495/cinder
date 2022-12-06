@@ -72,6 +72,8 @@ jobs:
         run: make test-driver
       - name: Repeated source instances, include traces and qualified pointer differences
         run: make test-source-instances
+      - name: Owned typed HIR expressions and actual CFG consumer
+        run: make test-hir
       - name: Reproducible source prefixes and physical dependencies
         run: make test-prefix-maps
       - name: Ten-pass records, promotion guards and evidence tampering

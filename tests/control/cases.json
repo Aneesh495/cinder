@@ -4922,5 +4922,25 @@
   {
     "source": "../pointer_difference/record_mixed_qualifiers.c",
     "exit": 48
+  },
+  {
+    "source": "../hir/owned-expression.c",
+    "exit": 17
+  },
+  {
+    "source": "../hir/unevaluated.c",
+    "exit": 16
+  },
+  {
+    "source": "../hir/returned-member.c",
+    "exit": 10
+  },
+  {
+    "source": "../hir/update-once.c",
+    "exit": 26
+  },
+  {
+    "source": "../hir/variadic-operations.c",
+    "exit": 7
   }
 ]

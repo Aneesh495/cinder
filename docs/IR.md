@@ -1,6 +1,7 @@
 # Cinder IR and verification
 
-`source/ir.c` lowers typed scalar expressions into explicit operations and CFG
+`source/ir.c` consumes [owned typed HIR expressions](HIR.md) and semantic
+control/object plans, lowering them into explicit operations and CFG
 terminators. Values record target types. Assignments, calls, and returns carry
 frontend conversions rather than asking the encoder to infer source semantics.
 Global loads/stores remain explicit effects keyed by symbol name. Volatile

@@ -572,6 +572,58 @@ bool cinder_expression_designates_bitfield(CinderAst *ast, const CinderExpr *exp
 size_t cinder_generic_selection(const CinderType *control, const CinderExpr *expr);
 void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *out);
 
+/* ---------- typed expression HIR ---------- */
+typedef enum {
+    HIR_INT, HIR_FLOAT, HIR_STRING, HIR_NAME, HIR_BINARY, HIR_UNARY,
+    HIR_ASSIGN, HIR_CALL, HIR_VA_ARG, HIR_CONDITIONAL, HIR_CAST,
+    HIR_DECAY, HIR_INDEX, HIR_MEMBER, HIR_COMPOUND_LITERAL,
+    HIR_LOAD, HIR_ADDRESS, HIR_VA_START, HIR_VA_COPY, HIR_VA_END
+} CinderHIRKind;
+typedef struct CinderHIRExpr CinderHIRExpr;
+struct CinderHIRExpr {
+    uint32_t id;
+    CinderHIRKind kind;
+    CinderLoc loc;
+    CinderType *type;
+    bool is_lvalue;
+    bool is_place;
+    unsigned bit_offset;
+    unsigned bit_width;
+    CinderDecl *resolved_decl;
+    size_t literal_length;
+    union {
+        int64_t integer;
+        double floating;
+        char *string;
+        char *name;
+        struct { int op; CinderHIRExpr *left; CinderHIRExpr *right; } binary;
+        struct { int op; CinderHIRExpr *value; bool postfix; } unary;
+        struct { CinderHIRExpr *target; CinderHIRExpr *value; int op; CinderType *operation_type; } assign;
+        struct { CinderHIRExpr *callee; CINDER_VEC_TYPE(CinderHIRExpr *) args; } call;
+        struct { CinderHIRExpr *list; CinderType *type; } va_arg;
+        struct { CinderHIRExpr *condition; CinderHIRExpr *yes; CinderHIRExpr *no; } conditional;
+        struct { CinderType *cast_type; CinderHIRExpr *value; } cast;
+        struct { CinderHIRExpr *base; CinderHIRExpr *index; } index;
+        struct { CinderHIRExpr *base; char *name; size_t field; bool arrow; CINDER_VEC_TYPE(size_t) path; } member;
+        CinderDecl *compound_literal;
+    } as;
+};
+typedef struct { const CinderExpr *source; CinderHIRExpr *place; CinderHIRExpr *value; } CinderHIRBinding;
+typedef struct {
+    CinderArena arena;
+    CINDER_VEC_TYPE(CinderHIRExpr *) expressions;
+    CinderHIRBinding *bindings;
+    size_t binding_capacity;
+    size_t binding_count;
+    CinderTypeContext *types;
+} CinderHIR;
+void cinder_hir_init(CinderHIR *hir, CinderTypeContext *types);
+void cinder_hir_destroy(CinderHIR *hir);
+int cinder_build_hir(CinderHIR *hir, CinderAst *ast, CinderDiagnostics *diags);
+CinderHIRExpr *cinder_hir_value(const CinderHIR *hir, const CinderExpr *source);
+int cinder_verify_hir(const CinderHIR *hir, CinderDiagnostics *diags);
+void cinder_dump_hir(const CinderHIR *hir, CinderSourceManager *sources, FILE *out);
+
 typedef struct {
     CinderStmt *owner;
     int parent;
@@ -765,6 +817,7 @@ typedef struct {
     bool global;
     bool is_noreturn;
     CinderAst *ast;
+    CinderHIR *hir;
 } CinderIRFunction;
 
 typedef struct {
@@ -805,6 +858,7 @@ typedef struct {
 void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types);
 void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
+int cinder_lower_hir_ir(CinderIRModule *module, CinderAst *ast, CinderHIR *hir, CinderDiagnostics *diags);
 size_t cinder_ir_local_alignment(const CinderIRFunction *function, size_t slot);
 bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderExpr *expr, CinderIRAddress *address, CinderDiagnostics *diags);
 bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags);
@@ -1110,6 +1164,7 @@ typedef struct {
     bool syntax_only;
     bool dump_tokens;
     bool dump_ast;
+    bool dump_hir;
     bool dump_ir;
     bool serialize_ir;
     bool dump_mir;

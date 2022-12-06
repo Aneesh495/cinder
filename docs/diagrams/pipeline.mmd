@@ -3,7 +3,10 @@ flowchart LR
   pp --> lex[lex.c token stream]
   lex --> parse[parser.c AST]
   parse --> sema[sema.c typed scopes]
-  sema --> ir[ir.c CFG IR]
+  sema --> hir[hir.c owned typed expression graph]
+  hir --> ir[ir.c CFG IR]
+  sema --> plans[Semantic control and object plans]
+  plans --> ir
   ir --> verify[ir_verify.c]
   verify --> ssa[ssa.c scalar promotion]
   ssa --> opt[opt_pipeline.c verified pass contracts]

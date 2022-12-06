@@ -61,7 +61,7 @@ The supported profile is documented in [`docs/LANGUAGE.md`](docs/LANGUAGE.md). I
 
 Aggregate layout and constant global storage are now part of the implemented slice. The compiler parses inline struct/union definitions, emits target-sized `.data`, `.rodata`, and `.bss` sections, records data symbols, and accepts multiple input paths for separate object emission. See [`docs/AGGREGATES.md`](docs/AGGREGATES.md) and [`docs/MULTI_TU.md`](docs/MULTI_TU.md).
 
-The implementation separates source/diagnostics, tokens/preprocessing, types/parser/sema, typed AST lowering and CFG/SSA IR, analysis/optimization, selected MIR/allocation, x86-64 encoding, ELF64 objects, driver, and inspection. A separate typed HIR remains open. Design contracts and limitations live under [`docs/`](docs/), while acceptance output is generated under the ignored `.agent-local/` directory. Demonstration and benchmark outputs may also use the ignored `artifacts/` directory.
+The implementation separates source/diagnostics, tokens/preprocessing, types/parser/sema, owned typed expression HIR and CFG/SSA IR, analysis/optimization, selected MIR/allocation, x86-64 encoding, ELF64 objects, driver, and inspection. [HIR expressions](docs/HIR.md) are consumed by CFG lowering; owned high-level control/storage records remain open. Design contracts and limitations live under [`docs/`](docs/), while acceptance output is generated under the ignored `.agent-local/` directory. Demonstration and benchmark outputs may also use the ignored `artifacts/` directory.
 
 ## Current status
 

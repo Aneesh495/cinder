@@ -1,0 +1,13 @@
+flowchart LR
+  SEMA[Semantically typed expressions and bindings] --> BUILD[hir.c owned expression graph]
+  BUILD --> LOAD[Explicit scalar loads and addressable places]
+  BUILD --> RESOLVE[Selected generic branch and layout constants]
+  BUILD --> VARIADIC[Explicit variadic state operations]
+  LOAD --> VERIFY[Owned operands types and acyclic dependencies]
+  RESOLVE --> VERIFY
+  VARIADIC --> VERIFY
+  VERIFY --> IR[ir.c typed CFG and storage effects]
+  SEMA --> PLANS[Semantic declaration control and initializer plans]
+  PLANS --> IR
+  VERIFY --> DUMP[Stable IDs and actual source origins]
+  IR --> INTERP[Independent interpreter and native object checks]
