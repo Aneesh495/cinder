@@ -2,6 +2,15 @@
 
 Updated: 2026-10-11
 
+## Independent HIR inspection units
+
+The multi-unit driver now treats `--dump-hir` as stage inspection, matching
+its other dump options. Each unit produces its own graph without entering the
+link path. The regression keeps a previous executable sentinel and requires
+that no object, assembly or temporary output is created. Separate strict and
+sanitizer builds verify this dispatch change while the semantic regression
+binaries from the expression checkpoint remain frozen.
+
 ## Owned typed expression HIR
 
 The normal source pipeline now builds owned HIR expressions and verifies them

@@ -20,9 +20,9 @@ base = (pathlib.Path('.agent-local/hir') / identity).resolve(); base.mkdir(paren
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
 commands, rows = [], []
 
-def run(argv, success=True):
-    result = subprocess.run(list(map(str, argv)), capture_output=True, text=True, timeout=120)
-    commands.append(dict(argv=list(map(str, argv)), exit=result.returncode, stdout=result.stdout, stderr=result.stderr))
+def run(argv, success=True, cwd=None):
+    result = subprocess.run(list(map(str, argv)), cwd=cwd, capture_output=True, text=True, timeout=120)
+    commands.append(dict(argv=list(map(str, argv)), cwd=str(cwd or pathlib.Path.cwd()), exit=result.returncode, stdout=result.stdout, stderr=result.stderr))
     save()
     assert (result.returncode == 0) == success, commands[-1]
     return result
@@ -67,6 +67,16 @@ bad = base / 'bad.c'; bad.write_text('int main(void) { return unknown; }\n')
 result = run([compiler, '--dump-hir', bad], False); assert not result.stdout
 result = run([compiler, '-M', '--dump-hir', pathlib.Path('tests/hir/owned-expression.c')], False); assert not result.stdout
 result = run([compiler, '-fsyntax-only', '--dump-hir', pathlib.Path('tests/hir/owned-expression.c')]); assert result.stdout.startswith('typed expression HIR 1\n')
+
+multi = base / 'multi'; multi.mkdir(exist_ok=True)
+first, second = multi / 'first.c', multi / 'second.c'
+first.write_text('int first(void) { return 11; }\n')
+second.write_text('int second(void) { return 22; }\n')
+sentinel = multi / 'a.out'; sentinel.write_bytes(b'previous unrelated executable\n')
+result = run([compiler, '--dump-hir', first, second], cwd=multi)
+assert result.stdout.count('typed expression HIR 1\n') == 2 and 'constant=11' in result.stdout and 'constant=22' in result.stdout
+assert sentinel.read_bytes() == b'previous unrelated executable\n'
+assert not list(multi.glob('*.o')) and not list(multi.glob('*.s')) and not list(multi.glob('*.cinder-*'))
 
 if native:
     obj = base / 'hir-probe.o'; probe = base / 'hir-probe'

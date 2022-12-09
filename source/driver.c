@@ -280,7 +280,7 @@ static int cinder_driver_run_multi(const CinderOptions *options) {
     if ((options->preprocess_only || options->dependencies_only) && options->output != NULL) return driver_error(options, "preprocessing with multiple inputs cannot use one output path");
     if (options->emit_assembly && options->output != NULL) return driver_error(options, "-S with multiple inputs requires one output per translation unit");
     if (options->emit_object && options->output != NULL) return driver_error(options, "-c with multiple inputs requires one output per translation unit");
-    if (options->dependencies_only || options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes) {
+    if (options->dependencies_only || options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_hir || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes) {
         for (size_t i = 0U; i < options->input_count; ++i) {
             CinderOptions child = *options;
             child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U;

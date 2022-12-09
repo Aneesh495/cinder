@@ -27,6 +27,7 @@ and operation semantics are checked again at the typed CFG/SSA boundary.
 
 ```sh
 build/cindercc --dump-hir examples/hello.c
+build/cindercc --dump-hir examples/hello.c examples/varargs.c
 make test-hir
 ```
 
@@ -38,6 +39,8 @@ expressions, temporary aggregate members, single evaluation of updates,
 variadic operations and scalar address/load/conversion/call behavior. Their
 O0/O2 native objects are independently executed where the target is available,
 and GCC/Clang references run at both levels.
+Multiple input units produce independent HIR dumps without invoking the linker
+or publishing objects/executables in inspection-only mode.
 
 This is the expression boundary. Structured statements, declaration/storage
 plans and static constant-address construction still use semantic AST metadata.
