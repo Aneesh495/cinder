@@ -580,6 +580,8 @@ typedef enum {
     HIR_LOAD, HIR_ADDRESS, HIR_VA_START, HIR_VA_COPY, HIR_VA_END
 } CinderHIRKind;
 typedef struct CinderHIRExpr CinderHIRExpr;
+typedef struct CinderHIRDecl CinderHIRDecl;
+typedef struct CinderHIRStmt CinderHIRStmt;
 struct CinderHIRExpr {
     uint32_t id;
     CinderHIRKind kind;
@@ -589,7 +591,7 @@ struct CinderHIRExpr {
     bool is_place;
     unsigned bit_offset;
     unsigned bit_width;
-    CinderDecl *resolved_decl;
+    CinderHIRDecl *resolved_decl;
     size_t literal_length;
     union {
         int64_t integer;
@@ -605,10 +607,63 @@ struct CinderHIRExpr {
         struct { CinderType *cast_type; CinderHIRExpr *value; } cast;
         struct { CinderHIRExpr *base; CinderHIRExpr *index; } index;
         struct { CinderHIRExpr *base; char *name; size_t field; bool arrow; CINDER_VEC_TYPE(size_t) path; } member;
-        CinderDecl *compound_literal;
+        CinderHIRDecl *compound_literal;
     } as;
 };
 typedef struct { const CinderExpr *source; CinderHIRExpr *place; CinderHIRExpr *value; } CinderHIRBinding;
+typedef struct { size_t offset; CinderType *type; CinderHIRExpr *value; bool zero; unsigned bit_offset; unsigned bit_width; } CinderHIRInitAction;
+typedef struct { CinderHIRStmt *owner; int parent; CINDER_VEC_TYPE(CinderHIRDecl *) objects; } CinderHIRControlScope;
+typedef struct {
+    CINDER_VEC_TYPE(CinderHIRControlScope) scopes;
+    CINDER_VEC_TYPE(CinderHIRStmt *) labels;
+    CINDER_VEC_TYPE(CinderHIRStmt *) cases;
+} CinderHIRControl;
+struct CinderHIRDecl {
+    uint32_t id;
+    CinderDeclKind kind;
+    CinderLoc loc;
+    char *name;
+    char *storage_symbol;
+    CinderType *type;
+    bool is_static;
+    bool is_extern;
+    bool is_definition;
+    bool is_noreturn;
+    bool literal_evaluated;
+    bool initializer_list;
+    bool has_initializer;
+    size_t alignment;
+    CinderHIRExpr *initializer;
+    CINDER_VEC_TYPE(CinderHIRInitAction) init_actions;
+    CINDER_VEC_TYPE(CinderHIRDecl *) params;
+    CinderHIRDecl *next;
+    CinderHIRDecl *canonical;
+    CinderHIRStmt *body;
+    CinderHIRControl control;
+    int lowering_slot;
+};
+struct CinderHIRStmt {
+    uint32_t id;
+    CinderStmtKind kind;
+    CinderLoc loc;
+    int control_scope;
+    CINDER_VEC_TYPE(CinderHIRDecl *) literal_objects;
+    union {
+        CinderHIRExpr *expr;
+        struct { CINDER_VEC_TYPE(CinderHIRStmt *) items; } block;
+        struct { CinderHIRExpr *value; } ret;
+        struct { CinderHIRExpr *condition; CinderHIRStmt *then_branch; CinderHIRStmt *else_branch; } if_stmt;
+        struct { CinderHIRExpr *condition; CinderHIRStmt *body; } loop;
+        struct { CinderHIRStmt *init; CinderHIRExpr *condition; CinderHIRExpr *step; CinderHIRStmt *body; } for_stmt;
+        CinderHIRDecl *decl;
+        struct { char *name; CinderHIRStmt *body; uint32_t block; } label;
+        struct { char *name; CinderHIRStmt *target; } jump;
+        struct { CinderHIRExpr *control; CinderHIRStmt *body; CINDER_VEC_TYPE(CinderHIRStmt *) cases; CinderHIRStmt *default_label; } selection;
+        struct { int64_t value; CinderHIRStmt *body; uint32_t block; } case_label;
+    } as;
+};
+typedef struct { const void *source; void *owned; } CinderHIRMemo;
+typedef struct CinderIRModule CinderIRModule;
 typedef struct {
     CinderArena arena;
     CINDER_VEC_TYPE(CinderHIRExpr *) expressions;
@@ -616,6 +671,13 @@ typedef struct {
     size_t binding_capacity;
     size_t binding_count;
     CinderTypeContext *types;
+    CINDER_VEC_TYPE(CinderHIRDecl *) declarations;
+    CINDER_VEC_TYPE(CinderHIRDecl *) roots;
+    CINDER_VEC_TYPE(CinderHIRStmt *) statements;
+    CinderHIRMemo *memo;
+    size_t memo_capacity;
+    size_t memo_count;
+    CinderIRModule *static_objects;
 } CinderHIR;
 void cinder_hir_init(CinderHIR *hir, CinderTypeContext *types);
 void cinder_hir_destroy(CinderHIR *hir);
@@ -803,10 +865,11 @@ typedef struct {
     CINDER_VEC_TYPE(CinderBlockId) successors;
 } CinderIRBlock;
 
+typedef struct { char *name; CinderType *type; CinderLoc loc; } CinderIRParameter;
 typedef struct {
     char *name;
     CinderType *type;
-    CINDER_VEC_TYPE(CinderDecl *) params;
+    CINDER_VEC_TYPE(CinderIRParameter *) params;
     CINDER_VEC_TYPE(CinderIRBlock) blocks;
     size_t value_count;
     size_t local_count;
@@ -816,7 +879,6 @@ typedef struct {
     CINDER_VEC_TYPE(size_t) local_alignments;
     bool global;
     bool is_noreturn;
-    CinderAst *ast;
     CinderHIR *hir;
 } CinderIRFunction;
 
@@ -848,17 +910,18 @@ typedef struct {
     CinderLoc loc;
 } CinderIRGlobal;
 
-typedef struct {
+struct CinderIRModule {
     CINDER_VEC_TYPE(CinderIRFunction) functions;
     CINDER_VEC_TYPE(CinderIRGlobal) globals;
     CinderArena arena;
     CinderTypeContext *types;
-} CinderIRModule;
+};
 
 void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types);
 void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
-int cinder_lower_hir_ir(CinderIRModule *module, CinderAst *ast, CinderHIR *hir, CinderDiagnostics *diags);
+int cinder_lower_hir_ir(CinderIRModule *module, CinderHIR *hir, CinderDiagnostics *diags);
+int cinder_prepare_static_objects(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
 size_t cinder_ir_local_alignment(const CinderIRFunction *function, size_t slot);
 bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderExpr *expr, CinderIRAddress *address, CinderDiagnostics *diags);
 bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags);

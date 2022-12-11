@@ -1,13 +1,15 @@
 flowchart LR
-  SEMA[Semantically typed expressions and bindings] --> BUILD[hir.c owned expression graph]
-  BUILD --> LOAD[Explicit scalar loads and addressable places]
-  BUILD --> RESOLVE[Selected generic branch and layout constants]
-  BUILD --> VARIADIC[Explicit variadic state operations]
-  LOAD --> VERIFY[Owned operands types and acyclic dependencies]
-  RESOLVE --> VERIFY
-  VARIADIC --> VERIFY
-  VERIFY --> IR[ir.c typed CFG and storage effects]
-  SEMA --> PLANS[Semantic declaration control and initializer plans]
-  PLANS --> IR
-  VERIFY --> DUMP[Stable IDs and actual source origins]
-  IR --> INTERP[Independent interpreter and native object checks]
+  SEMA[Semantic syntax and resolved binding/control rules] --> BUILD[Owned expression declaration and statement graphs]
+  BUILD --> LOAD[Explicit scalar loads addresses and conversions]
+  BUILD --> INIT[Active typed initialization actions]
+  BUILD --> CONTROL[Owned scopes labels loops and switch plans]
+  SEMA --> CONSTANT[Checked static data and relocation construction]
+  CONSTANT --> OBJECT[HIR owned typed static objects]
+  LOAD --> VERIFY[Owned references types and graph invariants]
+  INIT --> VERIFY
+  CONTROL --> VERIFY
+  OBJECT --> VERIFY
+  VERIFY --> IR[CFG effects with independent parameter and static-data ownership]
+  VERIFY --> DUMP[Stable IDs source origins and actual plans]
+  IR --> INTERP[Interpreter after AST and HIR retirement]
+  IR --> NATIVE[Original native objects and reference behavior]

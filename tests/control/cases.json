@@ -4942,5 +4942,13 @@
   {
     "source": "../hir/variadic-operations.c",
     "exit": 7
+  },
+  {
+    "source": "../hir/early-storage-plan.c",
+    "exit": 17
+  },
+  {
+    "source": "../hir/global-control.c",
+    "exit": 26
   }
 ]

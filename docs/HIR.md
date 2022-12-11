@@ -1,29 +1,43 @@
-# Typed expression HIR
+# Typed high-level IR
 
-`source/hir.c` constructs an owned expression graph after semantic analysis.
-Runtime expression lowering in `source/ir.c` consumes `CinderHIRExpr` nodes,
-with stable per-unit IDs, target types, source origins, place/value categories
-and owned operands. Names, literal bytes, call argument arrays and member paths
-belong to the HIR arena. Target types and resolved declaration metadata remain
-borrowed from the semantic unit.
+`source/hir.c` and `source/hir_control.c` construct an owned high-level unit
+from semantic syntax. CFG lowering consumes its expressions, declarations,
+structured statements, initialization actions and scope/label/case plans.
+Target types belong to a separate type context. Type tags, member names and
+parameter names are copied into that context before the AST is retired.
+Names, literal bytes, call arguments, member paths and statement references
+belong to HIR. Stable IDs follow registration order, including declarations
+that insert initializer expressions while another expression is being built.
 
-Scalar place reads become explicit `load` nodes. Address-taking, array/function
-decay, conversions, updates, calls, conditional selection and aggregate places
-remain distinct operations. Read-modify-write operations own a single target
-place, so `values[index++] += value` evaluates the target once. Aggregate
-return members use readable temporary places without becoming modifiable C
-lvalues.
+Scalar place reads are explicit `load` operations. Address-taking, decay,
+conversions, updates, calls and aggregate places are distinct operations.
+Read-modify-write operations hold one target place, preserving single
+lvalue evaluation. Aggregate return members use readable temporary places
+without becoming modifiable C lvalues. Layout queries become constants;
+`_Generic` contributes only its selected expression to the runtime graph.
+Variadic setup/copy/end are explicit operations. The final named parameter
+of `va_start` is a semantic contract, not a runtime read.
 
-`sizeof`, alignment queries and `offsetof` become typed constants. `_Generic`
-selects its semantically resolved expression; its controlling and unselected
-expressions do not enter the runtime graph. Variadic setup/copy/end are explicit
-operations, with no untyped pseudo-callee. The final-parameter contract of
-`va_start` is checked by semantic analysis and is not a runtime value read.
+Declarations own typed initializer actions. Canceled override entries are
+removed during construction; remaining actions retain their order. Bitfield
+bounds use the occupied byte extent. The semantic control algorithm supplies
+scope transitions and resolved labels, which are transferred into owned
+records. The lowering context uses those records for lifetime entry/exit,
+loop exits, switch selection and goto transitions.
 
-The verifier checks owned IDs/operands, scalar load/place consistency,
-addressability, conversion targets and argument bounds. A dependency traversal
-rejects cycles without recursively walking arbitrarily deep graphs. Conversion
-and operation semantics are checked again at the typed CFG/SSA boundary.
+Checked constant/address helpers prepare static data and symbolic relocations
+at HIR construction. HIR and IR share the typed static-object record contract;
+CFG lowering deep-copies bytes, names and relocation paths into its own
+module. It does not re-evaluate AST constants. IR parameter records also
+belong to the IR module. Repeated lowering and destruction of HIR therefore
+cannot invalidate an already constructed IR module.
+
+The verifier checks owned IDs and operands, scalar place/load consistency,
+addressability, conversion targets, initializers, scope parents, label/case
+kinds and structured children. Iterative graph traversals reject expression,
+statement and declaration-list cycles. Legitimate canonical-declaration and
+goto references remain distinct from hierarchical child edges. CFG/SSA
+verification checks the lowered operations again.
 
 ```sh
 build/cindercc --dump-hir examples/hello.c
@@ -31,22 +45,21 @@ build/cindercc --dump-hir examples/hello.c examples/varargs.c
 make test-hir
 ```
 
-The ownership probe changes an AST initializer after HIR construction and
-confirms its original value survives lowering. Changing the corresponding HIR
-constant changes the interpreted program result. Ten corrupted graph variants
-must fail verification. Five authored fixtures cover selected/unevaluated
-expressions, temporary aggregate members, single evaluation of updates,
-variadic operations and scalar address/load/conversion/call behavior. Their
-O0/O2 native objects are independently executed where the target is available,
-and GCC/Clang references run at both levels.
-Multiple input units produce independent HIR dumps without invoking the linker
-or publishing objects/executables in inspection-only mode.
+The version-two text dump includes real declarations, initializers, structured
+statements, static object/relocation summaries and expressions with source
+origins. Multiple input units produce independent graphs without linking or
+publishing native output in inspection-only mode.
 
-This is the expression boundary. Structured statements, declaration/storage
-plans and static constant-address construction still use semantic AST metadata.
-They must move into owned high-level control/object records before the full HIR
-boundary is complete. The current lifetime therefore keeps that metadata alive
-through CFG lowering. HIR inspection reports this implemented expression graph.
+Seven authored fixtures cover scalar ownership, unevaluated selection,
+aggregate return members, single evaluation of updates, variadic operations,
+early compound-literal storage plans and combined global/control behavior.
+The API probe mutates and destroys the AST before lowering. HIR expression
+changes affect actual interpreted results. A second probe lowers globals,
+loops, switch and goto, changes HIR static data, then destroys HIR; the
+previous IR module must preserve its original result. Sixteen corrupted
+expression/control/object-ownership graphs must fail verification. GCC/Clang
+references run at O0/O2, with independent native object execution where the
+target is available.
 
 See [the lowering flow](diagrams/typed-hir.mmd) and
 [the ownership decision](ADRs/0013-owned-expression-hir.md).

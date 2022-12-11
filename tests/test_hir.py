@@ -30,13 +30,15 @@ def run(argv, success=True, cwd=None):
 def save():
     (base / 'observations.json').write_text(json.dumps(dict(inputs=hashes, compiler_sha256=digest(compiler), native=native, commands=commands, cases=rows), indent=2) + '\n')
 
-for filename, expected in (('owned-expression.c', 17), ('unevaluated.c', 16), ('returned-member.c', 10), ('update-once.c', 26), ('variadic-operations.c', 7)):
+for filename, expected in (('owned-expression.c', 17), ('unevaluated.c', 16), ('returned-member.c', 10), ('update-once.c', 26), ('variadic-operations.c', 7), ('early-storage-plan.c', 17), ('global-control.c', 26)):
     source = pathlib.Path('tests/hir') / filename
     first = run([compiler, '--dump-hir', source]); second = run([compiler, '--dump-hir', source])
-    assert first.stdout == second.stdout and first.stdout.startswith('typed expression HIR 1\n')
+    assert first.stdout == second.stdout and first.stdout.startswith('typed HIR 2\n')
+    assert ' declaration name=' in first.stdout and ' statement kind=' in first.stdout and 'body=s' in first.stdout
     assert '0x' not in first.stdout and ' load ' in first.stdout
     assert 'generic' not in first.stdout and 'sizeof' not in first.stdout
-    if filename == 'unevaluated.c': assert 'name=unused' not in first.stdout and 'constant=4' in first.stdout and 'constant=9' in first.stdout
+    if filename == 'unevaluated.c': assert 'binding type=function category=place name=unused' not in first.stdout and 'constant=4' in first.stdout and 'constant=9' in first.stdout
+    if filename == 'global-control.c': assert 'object name=values' in first.stdout and 'object name=anchor' in first.stdout and 'relocations=1' in first.stdout and ' target=s' in first.stdout
     if filename == 'owned-expression.c': assert ' address ' in first.stdout and ' convert ' in first.stdout and ' call ' in first.stdout
     if filename == 'returned-member.c': assert ' member-place ' in first.stdout and ' call ' in first.stdout
     if filename == 'update-once.c': assert ' update ' in first.stdout and ' index-place ' in first.stdout
@@ -66,7 +68,7 @@ for filename, expected in (('owned-expression.c', 17), ('unevaluated.c', 16), ('
 bad = base / 'bad.c'; bad.write_text('int main(void) { return unknown; }\n')
 result = run([compiler, '--dump-hir', bad], False); assert not result.stdout
 result = run([compiler, '-M', '--dump-hir', pathlib.Path('tests/hir/owned-expression.c')], False); assert not result.stdout
-result = run([compiler, '-fsyntax-only', '--dump-hir', pathlib.Path('tests/hir/owned-expression.c')]); assert result.stdout.startswith('typed expression HIR 1\n')
+result = run([compiler, '-fsyntax-only', '--dump-hir', pathlib.Path('tests/hir/owned-expression.c')]); assert result.stdout.startswith('typed HIR 2\n')
 
 multi = base / 'multi'; multi.mkdir(exist_ok=True)
 first, second = multi / 'first.c', multi / 'second.c'
@@ -74,7 +76,7 @@ first.write_text('int first(void) { return 11; }\n')
 second.write_text('int second(void) { return 22; }\n')
 sentinel = multi / 'a.out'; sentinel.write_bytes(b'previous unrelated executable\n')
 result = run([compiler, '--dump-hir', first, second], cwd=multi)
-assert result.stdout.count('typed expression HIR 1\n') == 2 and 'constant=11' in result.stdout and 'constant=22' in result.stdout
+assert result.stdout.count('typed HIR 2\n') == 2 and 'constant=11' in result.stdout and 'constant=22' in result.stdout
 assert sentinel.read_bytes() == b'previous unrelated executable\n'
 assert not list(multi.glob('*.o')) and not list(multi.glob('*.s')) and not list(multi.glob('*.cinder-*'))
 
@@ -93,8 +95,8 @@ if native:
     run([linker, '-no-pie', *link_profile, obj, *core, '-o', probe])
 else:
     probe = compiler.parent / 'cinder_hir_probe'; assert probe.is_file(), 'build the cinder_hir_probe target first'
-result = run([probe, pathlib.Path('tests/hir/owned-expression.c').resolve()])
-assert result.stdout == 'HIR ownership: AST mutation isolated, HIR mutation consumed, ten malformed graphs rejected\n'
+result = run([probe, pathlib.Path('tests/hir/owned-expression.c').resolve(), pathlib.Path('tests/hir/global-control.c').resolve()])
+assert result.stdout == 'HIR ownership: retired AST and HIR isolated, control/object plans consumed, sixteen malformed graphs rejected\n'
 assert hashes == {str(p): digest(p) for p in sources}, 'HIR source changed during verification'
 assert identity == hashlib.sha256(compiler.read_bytes() + json.dumps(hashes, sort_keys=True).encode()).hexdigest()
-print('Typed HIR: five semantic/native-object fixtures, deterministic dumps, owned consumer and ten verifier rejections passed')
+print('Typed HIR: seven semantic/native-object fixtures, deterministic dumps, retired AST/HIR consumers and sixteen verifier rejections passed')

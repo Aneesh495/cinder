@@ -69,7 +69,7 @@ typedef struct {
     CINDER_VEC_TYPE(size_t) loop_scopes;
     CINDER_VEC_TYPE(size_t) break_scopes;
     CINDER_VEC_TYPE(int) expression_temporaries;
-    CinderControlMap control;
+    CinderHIRControl control;
 } LowerContext;
 
 static int find_local(const LowerContext *context, const char *name) {
@@ -78,7 +78,7 @@ static int find_local(const LowerContext *context, const char *name) {
 }
 
 static const char *object_symbol(const CinderHIRExpr *expr) {
-    CinderDecl *decl = expr->resolved_decl;
+    CinderHIRDecl *decl = expr->resolved_decl;
     if (decl == NULL || (decl->kind == DECL_VAR && !decl->is_static && !decl->is_extern && decl->canonical == NULL)) return NULL;
     if (decl->canonical != NULL) decl = decl->canonical;
     return decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
@@ -95,7 +95,7 @@ static CinderValueId lower_aggregate(LowerContext *context, CinderHIRExpr *expr)
 static CinderValueId aggregate_snapshot(LowerContext *context, CinderValueId source, CinderType *type, CinderLoc loc);
 static CinderValueId aggregate_temporary(LowerContext *context, CinderType *type, CinderLoc loc, int *slot);
 static void freeze_temporary(LowerContext *context, int slot, CinderLoc loc);
-static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int slot);
+static void lower_initializer_plan(LowerContext *context, CinderHIRDecl *decl, int slot);
 
 static bool aggregate_value(const CinderType *type) {
     return type != NULL && (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION);
@@ -142,7 +142,7 @@ static CinderValueId lower_call(LowerContext *context, CinderHIRExpr *expr) {
     CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CALL, expr->loc);
     inst->dst = expr->type != NULL && expr->type->kind == TYPE_VOID ? CINDER_INVALID_VALUE : new_value(context->function); inst->floating_result = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
     inst->type = aggregate_value(expr->type) ? cinder_type_pointer(context->function->types, expr->type) : expr->type;
-    CinderDecl *contract = direct ? expr->as.call.callee->resolved_decl : NULL;
+    CinderHIRDecl *contract = direct ? expr->as.call.callee->resolved_decl : NULL;
     if (contract != NULL && contract->canonical != NULL) contract = contract->canonical;
     inst->noreturn_call = contract != NULL && contract->is_noreturn;
     inst->slot = result_slot;
@@ -258,9 +258,12 @@ static char *literal_storage(LowerContext *context, CinderType *type, const Cind
 
 static CinderValueId lower_address(LowerContext *context, CinderHIRExpr *target) {
     if (target->kind == HIR_COMPOUND_LITERAL) {
-        CinderDecl *decl = target->as.compound_literal;
+        CinderHIRDecl *decl = target->as.compound_literal;
         if (decl->is_static) {
-            if (!cinder_lower_static_object(context->module, context->function->ast, decl, context->diags)) return CINDER_INVALID_VALUE;
+            const char *symbol = decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
+            bool prepared = false;
+            for (size_t g = 0U; g < context->module->globals.len; ++g) if (strcmp(context->module->globals.data[g].name, symbol) == 0) prepared = true;
+            if (!prepared) { cinder_diag(context->diags, CINDER_FATAL, target->loc, "HIR static object was not prepared"); return CINDER_INVALID_VALUE; }
         } else {
             if (decl->lowering_slot < 0) { cinder_diag(context->diags, CINDER_FATAL, target->loc, "compound literal has no enclosing storage scope"); return CINDER_INVALID_VALUE; }
             lower_initializer_plan(context, decl, decl->lowering_slot);
@@ -617,8 +620,8 @@ static void ensure_block_jump(LowerContext *context, CinderBlockId target, Cinde
     }
 }
 
-static void begin_declarations(LowerContext *context, CinderDecl *first) {
-    for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
+static void begin_declarations(LowerContext *context, CinderHIRDecl *first) {
+    for (CinderHIRDecl *decl = first; decl != NULL; decl = decl->next) {
         if (decl->kind != DECL_VAR || decl->name == NULL || decl->is_static || decl->is_extern) continue;
         if (decl->lowering_slot < 0) decl->lowering_slot = new_local(context, decl->type);
         context->function->local_alignments.data[decl->lowering_slot] = decl->alignment;
@@ -634,25 +637,24 @@ static void end_scope(LowerContext *context, size_t mark, CinderLoc loc) {
     }
 }
 
-static void prepare_control(LowerContext *context, CinderStmt *body) {
-    cinder_control_init(&context->control);
-    (void)cinder_control_build(&context->control, body, context->diags);
+static void prepare_control(LowerContext *context, CinderHIRDecl *definition) {
+    context->control = definition->control;
     for (size_t s = 0U; s < context->control.scopes.len; ++s) {
-        CinderControlScope *scope = &context->control.scopes.data[s];
+        CinderHIRControlScope *scope = &context->control.scopes.data[s];
         for (size_t d = 0U; d < scope->objects.len; ++d) {
-            CinderDecl *decl = scope->objects.data[d]; decl->lowering_slot = new_local(context, decl->type);
+            CinderHIRDecl *decl = scope->objects.data[d]; decl->lowering_slot = new_local(context, decl->type);
             context->function->local_alignments.data[decl->lowering_slot] = decl->alignment;
         }
     }
     for (size_t l = 0U; l < context->control.labels.len; ++l) {
-        CinderStmt *label = context->control.labels.data[l]; label->as.label.block = create_block(context, label->as.label.name);
+        CinderHIRStmt *label = context->control.labels.data[l]; label->as.label.block = create_block(context, label->as.label.name);
     }
     for (size_t l = 0U; l < context->control.cases.len; ++l) {
-        CinderStmt *label = context->control.cases.data[l]; label->as.case_label.block = create_block(context, label->kind == ST_CASE ? "switch.case" : "switch.default");
+        CinderHIRStmt *label = context->control.cases.data[l]; label->as.case_label.block = create_block(context, label->kind == ST_CASE ? "switch.case" : "switch.default");
     }
 }
 
-static bool ancestor_scope(const CinderControlMap *map, int ancestor, int scope) {
+static bool ancestor_scope(const CinderHIRControl *map, int ancestor, int scope) {
     for (int current = scope; current >= 0; current = map->scopes.data[current].parent) if (current == ancestor) return true;
     return ancestor < 0;
 }
@@ -661,18 +663,18 @@ static void transition_scopes(LowerContext *context, int from, int to, CinderLoc
     int common = from;
     while (!ancestor_scope(&context->control, common, to)) common = context->control.scopes.data[common].parent;
     for (int scope = from; scope != common; scope = context->control.scopes.data[scope].parent) {
-        CinderControlScope *leaving = &context->control.scopes.data[scope];
+        CinderHIRControlScope *leaving = &context->control.scopes.data[scope];
         for (size_t d = leaving->objects.len; d > 0U; --d) {
-            CinderDecl *decl = leaving->objects.data[d - 1U];
+            CinderHIRDecl *decl = leaving->objects.data[d - 1U];
             CinderIRInst *end = add_inst_ptr(context->function, context->current, IR_LOCAL_END, loc); end->slot = decl->lowering_slot; end->type = decl->type;
         }
     }
     CINDER_VEC_TYPE(int) entering = {NULL, 0U, 0U};
     for (int scope = to; scope != common; scope = context->control.scopes.data[scope].parent) cinder_vec_push((CinderVec *)&entering, &scope);
     for (size_t s = entering.len; s > 0U; --s) {
-        CinderControlScope *scope = &context->control.scopes.data[entering.data[s - 1U]];
+        CinderHIRControlScope *scope = &context->control.scopes.data[entering.data[s - 1U]];
         for (size_t d = 0U; d < scope->objects.len; ++d) {
-            CinderDecl *decl = scope->objects.data[d];
+            CinderHIRDecl *decl = scope->objects.data[d];
             CinderIRInst *begin = add_inst_ptr(context->function, context->current, IR_LOCAL_BEGIN, loc); begin->slot = decl->lowering_slot; begin->type = decl->type;
         }
     }
@@ -698,14 +700,14 @@ static void zero_initializer_span(LowerContext *context, CinderValueId base, siz
     zero->left = address; zero->integer = (int64_t)(end - begin); zero->type = context->function->types->char_type;
 }
 
-static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int slot) {
+static void lower_initializer_plan(LowerContext *context, CinderHIRDecl *decl, int slot) {
     CinderIRInst *root = add_inst_ptr(context->function, context->current, IR_LOCAL_ADDRESS, decl->loc);
     root->dst = new_value(context->function); root->slot = slot; root->type = cinder_type_pointer(context->function->types, decl->type);
     CinderValueId object = root->dst;
     CinderType *byte_pointer = cinder_type_pointer(context->function->types, context->function->types->char_type);
     CinderValueId bytes = convert_value(context, object, cinder_type_pointer(context->function->types, decl->type), byte_pointer, decl->loc);
     for (size_t a = 0U; a < decl->init_actions.len; ++a) {
-        CinderInitAction *action = &decl->init_actions.data[a]; CinderHIRExpr *value = cinder_hir_value(context->function->hir, action->value);
+        CinderHIRInitAction *action = &decl->init_actions.data[a]; CinderHIRExpr *value = action->value;
         if (action->bit_width != 0U && (action->zero || value != NULL)) {
             CinderValueId destination = initializer_address(context, bytes, action->offset, action->type, decl->loc);
             CinderValueId source = action->zero ? emit_typed_constant(context, 0, action->type, decl->loc) : lower_expr(context, value);
@@ -735,7 +737,7 @@ static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int 
     }
 }
 
-static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
+static void lower_stmt(LowerContext *context, CinderHIRStmt *stmt) {
     if (stmt == NULL) return;
     if (stmt->kind != ST_LABEL && stmt->kind != ST_CASE && stmt->kind != ST_DEFAULT && block_at(context->function, context->current)->terminator.kind != TERM_UNREACHABLE) context->current = create_block(context, "dead.statement");
     size_t literal_mark = context->active_slots.len;
@@ -743,9 +745,9 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
         if (stmt->literal_objects.data[i]->literal_evaluated) begin_declarations(context, stmt->literal_objects.data[i]);
     switch (stmt->kind) {
         case ST_EMPTY: break;
-        case ST_EXPR: (void)lower_full_expression(context, cinder_hir_value(context->function->hir, stmt->as.expr), false, stmt->loc); break;
+        case ST_EXPR: (void)lower_full_expression(context, stmt->as.expr, false, stmt->loc); break;
         case ST_DECL: {
-            for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) {
+            for (CinderHIRDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) {
                 if (decl->kind != DECL_VAR || decl->name == NULL || decl->is_static || decl->is_extern) continue;
                 if (decl->lowering_slot < 0) begin_declarations(context, decl);
                 int slot = decl->lowering_slot;
@@ -753,8 +755,8 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
                 size_t expression_mark = context->expression_temporaries.len;
                 LocalSlot local = {decl->name, slot, decl->type}; cinder_vec_push((CinderVec *)&context->locals, &local);
                 if (decl->init_actions.len != 0U) lower_initializer_plan(context, decl, slot);
-                else if (decl->initializer != NULL && decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY) {
-                    char *name = literal_storage(context, decl->type, cinder_hir_value(context->function->hir, decl->initializer)); if (name == NULL) continue;
+                else if (decl->initializer != NULL && decl->initializer->kind == HIR_STRING && decl->type->kind == TYPE_ARRAY) {
+                    char *name = literal_storage(context, decl->type, decl->initializer); if (name == NULL) continue;
                     CinderIRInst *destination = add_inst_ptr(context->function, context->current, IR_LOCAL_ADDRESS, decl->loc);
                     destination->dst = new_value(context->function); destination->slot = slot; destination->type = cinder_type_pointer(context->function->types, decl->type);
                     CinderValueId destination_value = destination->dst;
@@ -763,7 +765,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
                     CinderValueId source_value = source->dst;
                     CinderIRInst *copy = add_inst_ptr(context->function, context->current, IR_OBJECT_INIT, decl->loc);
                     copy->type = decl->type; copy->left = destination_value; copy->right = source_value;
-                } else if (decl->initializer != NULL) { CinderValueId value = lower_expr(context, cinder_hir_value(context->function->hir, decl->initializer)); CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_INIT, decl->loc); store->left = value; store->slot = slot; store->type = decl->type; }
+                } else if (decl->initializer != NULL) { CinderValueId value = lower_expr(context, decl->initializer); CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_INIT, decl->loc); store->left = value; store->slot = slot; store->type = decl->type; }
                 end_expression(context, expression_mark, decl->loc);
             }
             break;
@@ -772,11 +774,11 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             CinderValueId value = CINDER_INVALID_VALUE;
             if (aggregate_value(context->function->type->return_type) && stmt->as.ret.value != NULL) {
                 size_t mark = context->expression_temporaries.len;
-                CinderValueId source = lower_aggregate(context, cinder_hir_value(context->function->hir, stmt->as.ret.value));
+                CinderValueId source = lower_aggregate(context, stmt->as.ret.value);
                 CinderIRInst *copy = add_inst_ptr(context->function, context->current, IR_AGG_RETURN, stmt->loc);
                 copy->left = source; copy->type = context->function->type->return_type;
                 end_expression(context, mark, stmt->loc);
-            } else if (stmt->as.ret.value != NULL) value = lower_full_expression(context, cinder_hir_value(context->function->hir, stmt->as.ret.value), false, stmt->loc);
+            } else if (stmt->as.ret.value != NULL) value = lower_full_expression(context, stmt->as.ret.value, false, stmt->loc);
             end_scope(context, 0U, stmt->loc);
             CinderIRBlock *block = block_at(context->function, context->current);
             block->terminator.kind = TERM_RETURN; block->terminator.value = value; block->terminator.loc = stmt->loc; break;
@@ -792,7 +794,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             break;
         }
         case ST_IF: {
-            CinderValueId condition = lower_full_expression(context, cinder_hir_value(context->function->hir, stmt->as.if_stmt.condition), true, stmt->loc);
+            CinderValueId condition = lower_full_expression(context, stmt->as.if_stmt.condition, true, stmt->loc);
             CinderBlockId then_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock then_block = make_block(context->function, "then"); cinder_vec_push((CinderVec *)&context->function->blocks, &then_block);
             CinderBlockId else_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock else_block = make_block(context->function, "else"); cinder_vec_push((CinderVec *)&context->function->blocks, &else_block);
             CinderBlockId merge_id = (CinderBlockId)context->function->blocks.len; CinderIRBlock merge_block = make_block(context->function, "merge"); cinder_vec_push((CinderVec *)&context->function->blocks, &merge_block);
@@ -809,8 +811,8 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             size_t scope_mark = context->locals.len, lifetime_mark = context->active_slots.len;
             if (for_loop && stmt->as.for_stmt.init != NULL && stmt->as.for_stmt.init->kind == ST_DECL) begin_declarations(context, stmt->as.for_stmt.init->as.decl);
             if (for_loop) lower_stmt(context, stmt->as.for_stmt.init);
-            CinderHIRExpr *condition = cinder_hir_value(context->function->hir, for_loop ? stmt->as.for_stmt.condition : stmt->as.loop.condition);
-            CinderStmt *body = for_loop ? stmt->as.for_stmt.body : stmt->as.loop.body;
+            CinderHIRExpr *condition = for_loop ? stmt->as.for_stmt.condition : stmt->as.loop.condition;
+            CinderHIRStmt *body = for_loop ? stmt->as.for_stmt.body : stmt->as.loop.body;
             CinderBlockId cond_id = create_block(context, "loop.cond");
             CinderBlockId body_id = create_block(context, "loop.body");
             CinderBlockId step_id = for_loop ? create_block(context, "loop.step") : cond_id;
@@ -827,7 +829,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             ensure_block_jump(context, step_id, stmt->loc);
             if (for_loop) {
                 context->current = step_id;
-                (void)lower_full_expression(context, cinder_hir_value(context->function->hir, stmt->as.for_stmt.step), false, stmt->loc);
+                (void)lower_full_expression(context, stmt->as.for_stmt.step, false, stmt->loc);
                 ensure_block_jump(context, cond_id, stmt->loc);
             }
             --context->break_blocks.len; --context->break_scopes.len;
@@ -838,11 +840,11 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             break;
         }
         case ST_SWITCH: {
-            CinderValueId control = lower_full_expression(context, cinder_hir_value(context->function->hir, stmt->as.selection.control), false, stmt->loc);
+            CinderValueId control = lower_full_expression(context, stmt->as.selection.control, false, stmt->loc);
             CinderType *type = stmt->as.selection.control->type;
             CinderBlockId after_id = create_block(context, "switch.after");
             for (size_t i = 0U; i < stmt->as.selection.cases.len; ++i) {
-                CinderStmt *label = stmt->as.selection.cases.data[i];
+                CinderHIRStmt *label = stmt->as.selection.cases.data[i];
                 CinderIRInst *constant = add_inst_ptr(context->function, context->current, IR_CONST, label->loc);
                 constant->type = type; constant->integer = label->as.case_label.value; constant->dst = new_value(context->function); CinderValueId value = constant->dst;
                 CinderIRInst *equal = add_inst_ptr(context->function, context->current, IR_CMP_EQ, label->loc);
@@ -852,7 +854,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
                 context->current = entering; transition_scopes(context, stmt->control_scope, label->control_scope, label->loc); ensure_block_jump(context, label->as.case_label.block, label->loc);
                 context->current = next;
             }
-            CinderStmt *fallback = stmt->as.selection.default_label;
+            CinderHIRStmt *fallback = stmt->as.selection.default_label;
             if (fallback != NULL) transition_scopes(context, stmt->control_scope, fallback->control_scope, fallback->loc);
             ensure_block_jump(context, fallback == NULL ? after_id : fallback->as.case_label.block, stmt->loc);
             size_t break_scope = context->active_slots.len;
@@ -1068,21 +1070,48 @@ static bool function_can_return(const CinderIRFunction *function) {
     free(seen); free(work); return can_return;
 }
 
-int cinder_lower_hir_ir(CinderIRModule *module, CinderAst *ast, CinderHIR *hir, CinderDiagnostics *diags) {
-    if (cinder_verify_hir(hir, diags) != 0) return 1;
+int cinder_prepare_static_objects(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
+    unsigned before = diags->errors;
     for (size_t i = 0U; i < ast->static_literals.len; ++i) (void)cinder_lower_static_object(module, ast, ast->static_literals.data[i], diags);
     for (size_t i = 0U; i < ast->stored_objects.len; ++i) (void)cinder_lower_static_object(module, ast, ast->stored_objects.data[i], diags);
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
-        CinderDecl *decl = ast->declarations.data[i];
-        if (decl->kind == DECL_VAR) { if (decl->canonical == decl) lower_global_decl(module, ast, decl, diags); continue; }
+        CinderDecl *decl = ast->declarations.data[i]; if (decl->kind == DECL_VAR && decl->canonical == decl) lower_global_decl(module, ast, decl, diags);
+    }
+    return diags->errors == before ? 0 : 1;
+}
+
+static void copy_static_objects(CinderIRModule *module, const CinderIRModule *source) {
+    for (size_t g = 0U; g < source->globals.len; ++g) {
+        const CinderIRGlobal *old = &source->globals.data[g]; CinderIRGlobal global = *old;
+        global.name = cinder_strndup(old->name, strlen(old->name)); global.addresses.data = NULL; global.addresses.len = global.addresses.cap = 0U;
+        if (old->bytes != NULL) { global.bytes = cinder_arena_alloc(&module->arena, old->byte_count, 1U); memcpy(global.bytes, old->bytes, old->byte_count); }
+        for (size_t a = 0U; a < old->addresses.len; ++a) {
+            CinderIRAddress address = old->addresses.data[a]; address.symbol = cinder_strndup(address.symbol, strlen(address.symbol)); address.origin_path.data = NULL; address.origin_path.len = address.origin_path.cap = 0U;
+            for (size_t p = 0U; p < old->addresses.data[a].origin_path.len; ++p) cinder_vec_push((CinderVec *)&address.origin_path, &old->addresses.data[a].origin_path.data[p]);
+            cinder_vec_push((CinderVec *)&global.addresses, &address);
+        }
+        cinder_vec_push((CinderVec *)&module->globals, &global);
+    }
+}
+
+int cinder_lower_hir_ir(CinderIRModule *module, CinderHIR *hir, CinderDiagnostics *diags) {
+    if (cinder_verify_hir(hir, diags) != 0) return 1;
+    copy_static_objects(module, hir->static_objects);
+    for (size_t i = 0U; i < hir->declarations.len; ++i) hir->declarations.data[i]->lowering_slot = -1;
+    for (size_t i = 0U; i < hir->roots.len; ++i) {
+        CinderHIRDecl *decl = hir->roots.data[i];
         if (decl->kind != DECL_FUNCTION || !decl->is_definition) continue;
-        CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.ast = ast; function.hir = hir; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static; function.is_noreturn = decl->canonical != NULL ? decl->canonical->is_noreturn : decl->is_noreturn;
-        for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; cinder_vec_push((CinderVec *)&function.params, &param); }
+        CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.hir = hir; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static; function.is_noreturn = decl->canonical != NULL ? decl->canonical->is_noreturn : decl->is_noreturn;
+        for (size_t p = 0U; p < decl->params.len; ++p) {
+            CinderHIRDecl *source = decl->params.data[p]; CinderIRParameter *param = cinder_arena_alloc(&module->arena, sizeof(*param), _Alignof(CinderIRParameter));
+            param->name = source->name == NULL ? NULL : cinder_arena_strndup(&module->arena, source->name, strlen(source->name)); param->type = source->type; param->loc = source->loc;
+            cinder_vec_push((CinderVec *)&function.params, &param);
+        }
         CinderIRBlock entry = make_block(&function, "entry"); cinder_vec_push((CinderVec *)&function.blocks, &entry);
         LowerContext context; memset(&context, 0, sizeof(context)); context.function = &function; context.module = module; context.diags = diags; context.current = 0U; context.locals.data = NULL; context.locals.len = 0U; context.locals.cap = 0U; context.break_blocks.data = NULL; context.break_blocks.len = 0U; context.break_blocks.cap = 0U; context.continue_blocks.data = NULL; context.continue_blocks.len = 0U; context.continue_blocks.cap = 0U;
         size_t integer_param_count = 0U;
-        for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; param->lowering_slot = local.slot; cinder_vec_push((CinderVec *)&context.locals, &local); if (aggregate_value(param->type)) { CinderIRInst *copy = add_inst_ptr(&function, 0U, IR_AGG_ARG, param->loc); copy->slot = local.slot; copy->operator_code = (int)p; copy->type = param->type; ++integer_param_count; continue; } bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
-        prepare_control(&context, decl->body);
+        for (size_t p = 0U; p < decl->params.len; ++p) { CinderHIRDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; param->lowering_slot = local.slot; cinder_vec_push((CinderVec *)&context.locals, &local); if (aggregate_value(param->type)) { CinderIRInst *copy = add_inst_ptr(&function, 0U, IR_AGG_ARG, param->loc); copy->slot = local.slot; copy->operator_code = (int)p; copy->type = param->type; ++integer_param_count; continue; } bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
+        prepare_control(&context, decl);
         lower_stmt(&context, decl->body);
         if (block_at(&function, context.current)->terminator.kind == TERM_UNREACHABLE) {
             CinderValueId returned = CINDER_INVALID_VALUE;
@@ -1099,7 +1128,7 @@ int cinder_lower_hir_ir(CinderIRModule *module, CinderAst *ast, CinderHIR *hir, 
             CinderIRBlock *block = block_at(&function, context.current); block->terminator.kind = TERM_RETURN; block->terminator.value = returned;
         }
         if (function.is_noreturn && function_can_return(&function)) cinder_diag(diags, CINDER_WARNING, decl->loc, "function '%s' declared _Noreturn appears capable of returning", decl->name);
-        free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.break_scopes.data); free(context.expression_temporaries.data); cinder_control_destroy(&context.control);
+        free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.break_scopes.data); free(context.expression_temporaries.data);
         cinder_vec_push((CinderVec *)&module->functions, &function);
     }
     return diags->errors == 0U ? 0 : 1;
@@ -1121,7 +1150,7 @@ void cinder_dump_ir(const CinderIRModule *module, FILE *out) {
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
     CinderHIR hir; cinder_hir_init(&hir, module->types);
     int failed = cinder_build_hir(&hir, ast, diags);
-    if (!failed) failed = cinder_lower_hir_ir(module, ast, &hir, diags);
+    if (!failed) failed = cinder_lower_hir_ir(module, &hir, diags);
     for (size_t i = 0U; i < module->functions.len; ++i) module->functions.data[i].hir = NULL;
     cinder_hir_destroy(&hir); return failed;
 }

@@ -31,6 +31,7 @@ set(CINDER_SOURCES
   source/sema.c
   source/control.c
   source/hir.c
+  source/hir_control.c
   source/ir.c
   source/ir_ops.c
   source/ir_verify.c

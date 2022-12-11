@@ -459,8 +459,8 @@ static void read_functions(Reader *reader) {
             cinder_vec_push((CinderVec *)&published->local_alignments, &alignment);
         }
         for (size_t p = 0U; p < params && !reader->failed; ++p) {
-            expect(reader, "param"); CinderDecl *param = cinder_arena_alloc(&reader->module->arena, sizeof(*param), _Alignof(CinderDecl));
-            memset(param, 0, sizeof(*param)); param->kind = DECL_VAR; param->name = string(reader, false, false); param->type = type_ref(reader);
+            expect(reader, "param"); CinderIRParameter *param = cinder_arena_alloc(&reader->module->arena, sizeof(*param), _Alignof(CinderIRParameter));
+            memset(param, 0, sizeof(*param)); param->name = string(reader, false, false); param->type = type_ref(reader);
             if (param->type == NULL) parse_error(reader, "parameter has no type");
             cinder_vec_push((CinderVec *)&published->params, &param);
         }

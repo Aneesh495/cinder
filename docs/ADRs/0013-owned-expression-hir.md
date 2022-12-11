@@ -1,19 +1,24 @@
-# Own expression HIR before moving control and storage plans
+# Own high-level lowering plans
 
-The prior CFG lowerer consumed semantic AST expressions directly. Introducing
-an inspection-only copy would not create an actual representation boundary.
-The expression consumer now reads a distinct owned graph with explicit place
-loads, addresses, conversions, selected generic associations and variadic
-operations. The retained ownership probe distinguishes AST mutation from HIR
-mutation through actual interpreted CFG behavior.
+The CFG lowerer previously consumed semantic AST expressions and control
+plans directly. HIR now owns a distinct expression graph, declarations,
+structured statements, typed initializer actions and scope/label/case plans.
+The retained lifetime probes destroy AST and semantic state before lowering,
+then destroy HIR while continuing to execute an already built IR module.
 
-Semantic target types and binding metadata stay borrowed while declaration,
-scope-lifetime, label/switch and static-address plans are transferred separately.
-Structured control and object initialization remain visible dependencies, not
-an advertised complete HIR stage. The driver destroys HIR before its semantic
-unit and target-type arena. Independent IR readers need neither HIR nor AST.
+Target types remain in the type-context arena. Names attached to those types
+are sealed into that arena before AST retirement. Static object preparation
+uses the existing checked constant/address rules during HIR construction;
+CFG lowering clones the resulting typed bytes and relocation plan. IR module
+parameter records and static data have independent ownership.
 
-Stable IDs follow construction order. The AST-to-HIR lookup uses address-keyed
-storage internally but never prints those addresses or uses hash traversal to
-order output. Owned strings/operand arrays prevent expression storage from
-aliasing the parser arena. Full graph verification precedes CFG lowering.
+The existing semantic control algorithm produces the scope plan once for
+transfer; its algorithm is not duplicated in the lowerer. Canonical declaration
+references and goto targets can form legitimate reference cycles. Expression
+and hierarchical statement dependencies, and declaration lists, must be
+acyclic. The verifier distinguishes these relationships explicitly.
+
+Stable IDs are assigned at registration, after a binding copy can insert more
+nodes. Address-keyed memo storage is private; neither hash traversal nor
+pointer addresses determine output order. Canceled semantic initializer
+scratch entries are removed rather than weakening checks on active actions.

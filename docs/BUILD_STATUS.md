@@ -2,6 +2,41 @@
 
 Updated: 2026-10-11
 
+## Owned control and object HIR
+
+HIR now owns declarations, structured statements, active initializer actions,
+scopes, labels/cases, bindings and static object/relocation plans. CFG lowering
+has no AST argument. IR parameter records and cloned static data belong to the
+IR module. Type-context names are sealed before AST retirement. Inspection
+reports these actual records with stable IDs and source-linked expressions.
+
+Strict GCC and ASan/UBSan builds passed seven authored fixtures with O0/O2
+reference/interpreter/object checks and sixteen malformed-graph rejections.
+The lifetime probe destroys AST/sema before lowering; another changes HIR
+static data then destroys HIR while the previous IR module preserves its result.
+This covers global addresses, local static data, loops, switch and goto.
+
+Self-compilation first exposed expression IDs assigned before binding copies
+inserted initializer nodes. Registration now assigns the final ID, retaining
+strict verification; every implementation module compiled afterward. A later
+bitfield/source regression exposed canceled semantic initializer scratch
+entries copied as active actions. Construction now filters canceled entries,
+preserving active order. The previous broad attempts failed on overwritten
+initializers and remain excluded. Fresh separate binaries passed all 52
+bitfield cases at both levels and 40 malformed bitfield contracts. Replacement full source/CIR regressions passed: 1,238 source cases and
+2,476 round trips/backend comparisons with 36 malformed-CIR rejections.
+The final Linux VM ran 42 original/assembled/parsed objects and 28 references,
+plus the Cinder-built lifetime probe linked with original core objects. Exact
+source/object/ELF/executable bindings passed independent audit. This is
+emulated functional evidence, not native performance proof.
+
+Evidence: `.agent-local/hir/`, `.agent-local/selfhost-object-audit/`,
+`.agent-local/hir-override-regression/` and
+`.agent-local/linux-vm/share/hir-complete-final/`. The prior
+`hir-owned-final` tree remains a retained pre-filter functional snapshot. See [HIR.md](HIR.md). Remaining required work includes machine
+pointer/control/frame selection, useful debug information, explorer,
+applications and full campaign readers.
+
 ## Independent HIR inspection units
 
 The multi-unit driver now treats `--dump-hir` as stage inspection, matching
