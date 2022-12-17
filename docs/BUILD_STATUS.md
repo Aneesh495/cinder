@@ -2,6 +2,32 @@
 
 Updated: 2026-10-11
 
+## Interpreted call suspension and bounded recursion
+
+Native validation of the owned-HIR increment reached the generated IR campaign
+and failed at case 65,537. The recursion generator still supplied an AST
+declaration where the IR API required an owned parameter record. The generator
+now uses that record without changing the cases or oracle.
+
+The repaired campaign exposed a sanitizer stack overflow before the declared
+256-call interpreter limit on the macOS host. Instruction dispatch now returns
+before a nested interpreted call. A small bounded wrapper owns suspended frame
+state and resumes its instruction index after receiving the result. This
+preserves call, object and variadic semantics while keeping the large dispatch
+stack frame out of host recursion.
+
+Strict GCC and ASan/UBSan builds each passed all 100,000 generated execution,
+round-trip and optimizer comparisons: 97,501 defined outcomes and 2,499
+classified outcomes. New source checks verify the exact call-depth boundary
+and call resumption through a loop at O0/O2. Cinder compiled the revised
+interpreter implementation into an original ELF object. Raw failed CI and
+sanitizer attempts remain retained separately.
+
+Evidence: `.agent-local/ci-03aead7-failure/` and
+`.agent-local/ir-campaign/`. See [IR.md](IR.md) and
+[the suspension flow](diagrams/interpreter-calls.mmd). Useful DWARF output and
+the debugging campaign remain open.
+
 ## Owned control and object HIR
 
 HIR now owns declarations, structured statements, active initializer actions,

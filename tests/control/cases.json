@@ -4950,5 +4950,9 @@
   {
     "source": "../hir/global-control.c",
     "exit": 26
+  },
+  {
+    "source": "call_resume.c",
+    "exit": 56
   }
 ]

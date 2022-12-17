@@ -1,0 +1,10 @@
+flowchart TD
+    W[interpret_function: bounded call wrapper] --> F[Owned InterpFrame: values, locals, phi snapshot and program counter]
+    F --> D[advance_function: execute instructions]
+    D -->|IR_CALL| Q[Resolve target, copy arguments and return call request]
+    Q --> C[Dispatch frame has returned]
+    C --> N[Invoke callee through bounded wrapper]
+    N --> R[Store result and resume saved instruction index]
+    R --> D
+    D -->|return or error| X[Finish variadic lifetime and retire local objects]
+    X --> Z[Free frame and decrement active call depth]

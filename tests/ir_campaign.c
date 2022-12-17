@@ -119,8 +119,9 @@ static Expected recursion(CinderIRModule *module, unsigned index) {
     CinderType *type = module->types->int_type;
     CinderIRFunction helper = function(module, "sum", type);
     CinderParam param = {"n", type, 0U}; cinder_vec_push((CinderVec *)&helper.type->params, &param);
-    CinderDecl *decl = cinder_arena_alloc(&module->arena, sizeof(*decl), _Alignof(CinderDecl)); memset(decl, 0, sizeof(*decl)); decl->type = type; decl->name = "n";
-    cinder_vec_push((CinderVec *)&helper.params, &decl);
+    CinderIRParameter *parameter = cinder_arena_alloc(&module->arena, sizeof(*parameter), _Alignof(CinderIRParameter));
+    *parameter = (CinderIRParameter){"n", type, {0}};
+    cinder_vec_push((CinderVec *)&helper.params, &parameter);
     for (unsigned b = 0U; b < 3U; ++b) block(&helper);
     CinderIRInst argument = instruction(IR_ARG, 0U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); argument.slot = 0; argument.operator_code = 0; add(&helper, 0U, argument);
     constant(&helper, 0U, 1U, type, 0, 0.0); add(&helper, 0U, instruction(IR_CMP_LE_S, 2U, 0U, 1U, type)); branch(&helper, 0U, 2U, 1U, 2U); returned(&helper, 1U, 1U);

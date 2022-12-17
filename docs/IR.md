@@ -60,7 +60,15 @@ globals, and bounded recursive calls. It snapshots every phi input before writin
 any destination. Execution classifications distinguish signed overflow, division
 by zero, invalid shifts, uninitialized state, conversion range errors, unsupported
 operations, malformed IR, and resource limits. Steps count instructions and
-terminators; call depth is separately bounded. Object-based pointer memory is
+terminators; call depth permits at most 256 active interpreted functions,
+including the entry function. Dispatch returns a call request before entering
+a callee, then resumes the saved instruction index after the call. This keeps
+the large sanitizer-instrumented dispatch frame off the recursive host stack.
+Each invocation owns its value arrays, phi snapshot, local identities and
+variadic lifetime. Cleanup runs on both a normal return and a classified error.
+`make test-interpreter-calls` checks the exact boundary at both optimization
+levels and resumption through a loop. See [the call flow](diagrams/interpreter-calls.mmd).
+Object-based pointer memory is
 implemented in `source/interp_memory.c` using owned byte objects and object IDs.
 Pointer values preserve provenance, offsets, and subobject bounds through
 parameters, returns, phis, and pointer storage. Byte initialization, const

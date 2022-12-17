@@ -183,35 +183,59 @@ static bool phi_inputs(InterpContext *context, const CinderIRBlock *block, Cinde
     return true;
 }
 
-static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const InterpValue *args, size_t arg_count, InterpValue *returned, const InterpValue *aggregate_return, const CinderType *actual_signature) {
-    if (context->depth >= 256U) { cinder_interp_fail(context, INTERP_RESOURCE_LIMIT, (CinderLoc){0}, "call-depth limit exceeded"); return false; }
-    ++context->depth;
-    uint64_t frame = ++context->frames;
-    size_t value_count = function->value_count == 0U ? 1U : function->value_count;
-    size_t local_count = function->local_count == 0U ? 1U : function->local_count;
-    InterpValue *values = cinder_alloc(value_count * sizeof(*values));
-    InterpValue *snapshot = cinder_alloc(value_count * sizeof(*snapshot));
-    uint32_t *locals = cinder_alloc(local_count * sizeof(*locals));
-    memset(values, 0, value_count * sizeof(*values)); memset(locals, 0, local_count * sizeof(*locals));
-    CinderBlockId block_id = 0U, previous = CINDER_INVALID_BLOCK;
-    bool success = false;
-    for (size_t slot = 0U; slot < function->local_count; ++slot) {
-        locals[slot] = cinder_interp_object(context, function->local_types.data[slot], false, false, (CinderLoc){0});
-        if (locals[slot] == 0U) goto done;
-    }
+typedef enum { INTERP_STEP_DONE, INTERP_STEP_CALL, INTERP_STEP_FAILED } InterpStep;
+typedef struct {
+    const CinderIRFunction *function;
+    const InterpValue *arguments;
+    size_t argument_count;
+    const InterpValue *aggregate_return;
+    const CinderType *signature;
+    InterpValue *values;
+    InterpValue *snapshot;
+    uint32_t *locals;
+    uint64_t identity;
+    CinderBlockId block_id;
+    CinderBlockId previous;
+    size_t instruction;
+    bool entered;
+    InterpValue returned;
+} InterpFrame;
+typedef struct {
+    const CinderIRFunction *callee;
+    InterpValue *arguments;
+    size_t count;
+    InterpValue destination;
+    bool aggregate;
+    const CinderIRInst *instruction;
+} InterpCall;
+
+/* Dispatch returns before a nested invocation. Its sanitizer stack frame must
+ * not accumulate once per interpreted call. The small call wrapper retains
+ * the suspended program counter and owns all execution arrays. */
+static InterpStep advance_function(InterpContext *context, InterpFrame *frame, InterpCall *call) {
+    const CinderIRFunction *function = frame->function;
+    InterpValue *values = frame->values;
+    uint32_t *locals = frame->locals;
+    const InterpValue *args = frame->arguments;
+    size_t arg_count = frame->argument_count;
+    const InterpValue *aggregate_return = frame->aggregate_return;
     while (true) {
-        const CinderIRBlock *block = &function->blocks.data[block_id];
-        if (!phi_inputs(context, block, previous, values, snapshot)) goto done;
-        for (size_t i = 0U; i < block->instructions.len; ++i) {
+        const CinderIRBlock *block = &function->blocks.data[frame->block_id];
+        if (!frame->entered) {
+            if (!phi_inputs(context, block, frame->previous, values, frame->snapshot)) goto failed;
+            frame->entered = true;
+        }
+        for (size_t i = frame->instruction; i < block->instructions.len; ++i) {
+            frame->instruction = i + 1U;
             const CinderIRInst *inst = &block->instructions.data[i];
-            if (!tick(context, inst->loc)) goto done;
+            if (!tick(context, inst->loc)) goto failed;
             if (inst->op == IR_NOP || inst->op == IR_PHI) continue;
-            if (inst->left != CINDER_INVALID_VALUE && !require_defined(context, values, inst->left, inst->loc)) goto done;
-            if (inst->right != CINDER_INVALID_VALUE && !require_defined(context, values, inst->right, inst->loc)) goto done;
+            if (inst->left != CINDER_INVALID_VALUE && !require_defined(context, values, inst->left, inst->loc)) goto failed;
+            if (inst->right != CINDER_INVALID_VALUE && !require_defined(context, values, inst->right, inst->loc)) goto failed;
             InterpValue result = {.fp = cinder_ir_floating(inst->type), .defined = true};
             if ((inst->op == IR_VA_START || inst->op == IR_VA_COPY || inst->op == IR_VA_END || inst->op == IR_VA_ARG) &&
                 (!values[inst->left].pointer || (inst->op == IR_VA_COPY && !values[inst->right].pointer))) {
-                cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "va_list lacks object provenance"); goto done;
+                cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "va_list lacks object provenance"); goto failed;
             }
             switch (inst->op) {
                 case IR_UNDEF: result.defined = false; break;
@@ -220,54 +244,54 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                 case IR_FCONST: result.floating = inst->floating; break;
                 case IR_ARG: case IR_FARG:
                     if (inst->slot < 0 || (size_t)inst->slot >= arg_count) {
-                        cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "function argument is unavailable"); goto done;
+                        cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "function argument is unavailable"); goto failed;
                     }
                     result = args[inst->slot]; break;
                 case IR_VA_START:
-                    if (!cinder_interp_va_start(context, values[inst->left].address, args, arg_count, actual_signature, function->params.len, frame, inst->loc)) goto done;
+                    if (!cinder_interp_va_start(context, values[inst->left].address, args, arg_count, frame->signature, function->params.len, frame->identity, inst->loc)) goto failed;
                     break;
                 case IR_VA_COPY:
-                    if (!cinder_interp_va_copy(context, values[inst->left].address, values[inst->right].address, frame, inst->loc)) goto done;
+                    if (!cinder_interp_va_copy(context, values[inst->left].address, values[inst->right].address, frame->identity, inst->loc)) goto failed;
                     break;
                 case IR_VA_END:
-                    if (!cinder_interp_va_end(context, values[inst->left].address, frame, inst->loc)) goto done;
+                    if (!cinder_interp_va_end(context, values[inst->left].address, frame->identity, inst->loc)) goto failed;
                     break;
                 case IR_VA_ARG:
-                    if (!cinder_interp_va_arg(context, values[inst->left].address, inst->source_type, &result, inst->loc)) goto done;
+                    if (!cinder_interp_va_arg(context, values[inst->left].address, inst->source_type, &result, inst->loc)) goto failed;
                     if (inst->slot >= 0) {
                         InterpValue destination = cinder_interp_address(context, locals[inst->slot]);
-                        if (!result.pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate variadic argument lacks object provenance"); goto done; }
-                        if (!cinder_interp_object_copy(context, destination.address, result.address, inst->source_type, true, inst->loc)) goto done;
+                        if (!result.pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate variadic argument lacks object provenance"); goto failed; }
+                        if (!cinder_interp_object_copy(context, destination.address, result.address, inst->source_type, true, inst->loc)) goto failed;
                         result = destination;
                     }
                     break;
                 case IR_AGG_ARG: {
                     size_t parameter = (size_t)inst->operator_code;
-                    if (parameter >= arg_count || !args[parameter].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate argument is unavailable"); goto done; }
+                    if (parameter >= arg_count || !args[parameter].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "aggregate argument is unavailable"); goto failed; }
                     InterpValue destination = cinder_interp_address(context, locals[inst->slot]);
-                    if (!cinder_interp_object_copy(context, destination.address, args[parameter].address, inst->type, true, inst->loc)) goto done;
+                    if (!cinder_interp_object_copy(context, destination.address, args[parameter].address, inst->type, true, inst->loc)) goto failed;
                     break;
                 }
                 case IR_AGG_RETURN:
-                    if (aggregate_return == NULL || !aggregate_return->pointer || !values[inst->left].pointer) { cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "aggregate return storage is unavailable"); goto done; }
-                    if (!cinder_interp_object_copy(context, aggregate_return->address, values[inst->left].address, inst->type, true, inst->loc)) goto done;
+                    if (aggregate_return == NULL || !aggregate_return->pointer || !values[inst->left].pointer) { cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "aggregate return storage is unavailable"); goto failed; }
+                    if (!cinder_interp_object_copy(context, aggregate_return->address, values[inst->left].address, inst->type, true, inst->loc)) goto failed;
                     break;
                 case IR_GLOBAL_LOAD: case IR_GLOBAL_STORE: case IR_GLOBAL_ADDRESS: {
                     size_t index = global_index(context->module, inst->callee);
                     if (index == SIZE_MAX || context->module->globals.data[index].is_extern) {
-                        cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "external global storage is unavailable"); goto done;
+                        cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "external global storage is unavailable"); goto failed;
                     }
                     InterpValue address = cinder_interp_address(context, context->globals[index]);
                     if (inst->op == IR_GLOBAL_ADDRESS) result = address;
-                    else if (inst->op == IR_GLOBAL_LOAD) { if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto done; }
-                    else if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], false, inst->loc)) goto done;
+                    else if (inst->op == IR_GLOBAL_LOAD) { if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto failed; }
+                    else if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], false, inst->loc)) goto failed;
                     break;
                 }
                 case IR_FUNCTION_ADDRESS: {
                     uint32_t identity = 0U;
                     for (size_t object = 0U; object < context->objects.len; ++object) if (context->objects.data[object].function_name != NULL && strcmp(context->objects.data[object].function_name, inst->callee) == 0) { identity = (uint32_t)object + 1U; break; }
                     if (identity == 0U) {
-                        identity = cinder_interp_object(context, inst->type->base, true, true, inst->loc); if (identity == 0U) goto done;
+                        identity = cinder_interp_object(context, inst->type->base, true, true, inst->loc); if (identity == 0U) goto failed;
                         context->objects.data[identity - 1U].function_name = inst->callee;
                     }
                     result = cinder_interp_address(context, identity); break;
@@ -275,56 +299,56 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                 case IR_LOCAL_BEGIN:
                     cinder_interp_retire(context, locals[inst->slot]);
                     locals[inst->slot] = cinder_interp_object(context, function->local_types.data[inst->slot], false, false, inst->loc);
-                    if (locals[inst->slot] == 0U) goto done;
+                    if (locals[inst->slot] == 0U) goto failed;
                     break;
                 case IR_LOCAL_END: cinder_interp_retire(context, locals[inst->slot]); break;
                 case IR_LOCAL_RESET: {
-                    if (locals[inst->slot] == 0U || !context->objects.data[locals[inst->slot] - 1U].alive) { cinder_interp_fail(context, INTERP_OBJECT_LIFETIME, inst->loc, "declaration resets an object outside its lifetime"); goto done; }
+                    if (locals[inst->slot] == 0U || !context->objects.data[locals[inst->slot] - 1U].alive) { cinder_interp_fail(context, INTERP_OBJECT_LIFETIME, inst->loc, "declaration resets an object outside its lifetime"); goto failed; }
                     InterpObject *object = &context->objects.data[locals[inst->slot] - 1U];
                     memset(object->initialized, 0, object->size); object->pointers.len = 0U; object->readonly = false; break;
                 }
                 case IR_LOCAL_FREEZE: context->objects.data[locals[inst->slot] - 1U].readonly = true; break;
                 case IR_LOCAL_ADDRESS: result = cinder_interp_address(context, locals[inst->slot]); break;
                 case IR_OBJECT_COPY: case IR_OBJECT_INIT:
-                    if (!values[inst->left].pointer || !values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "object transfer lacks pointer provenance"); goto done; }
-                    if (!cinder_interp_object_copy(context, values[inst->left].address, values[inst->right].address, inst->type, inst->op == IR_OBJECT_INIT, inst->loc)) goto done;
+                    if (!values[inst->left].pointer || !values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "object transfer lacks pointer provenance"); goto failed; }
+                    if (!cinder_interp_object_copy(context, values[inst->left].address, values[inst->right].address, inst->type, inst->op == IR_OBJECT_INIT, inst->loc)) goto failed;
                     break;
                 case IR_LOCAL_LOAD: {
                     InterpValue address = cinder_interp_address(context, locals[inst->slot]);
-                    if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto done;
+                    if (!cinder_interp_load(context, address.address, inst->type, &result, inst->loc)) goto failed;
                     break;
                 }
                 case IR_LOCAL_STORE: case IR_LOCAL_INIT: {
                     InterpValue address = cinder_interp_address(context, locals[inst->slot]);
-                    if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], inst->op == IR_LOCAL_INIT, inst->loc)) goto done;
+                    if (!cinder_interp_store(context, address.address, inst->type, &values[inst->left], inst->op == IR_LOCAL_INIT, inst->loc)) goto failed;
                     break;
                 }
                 case IR_ZERO_INIT:
-                    if (!values[inst->left].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "zero initializer has no pointer provenance"); goto done; }
-                    if (!cinder_interp_zero(context, values[inst->left].address, (size_t)inst->integer, inst->loc)) goto done;
+                    if (!values[inst->left].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "zero initializer has no pointer provenance"); goto failed; }
+                    if (!cinder_interp_zero(context, values[inst->left].address, (size_t)inst->integer, inst->loc)) goto failed;
                     break;
                 case IR_BIT_LOAD: case IR_BIT_STORE: case IR_BIT_INIT: case IR_MEMORY_LOAD: case IR_MEMORY_STORE: case IR_MEMORY_INIT: case IR_POINTER_OFFSET: case IR_POINTER_MEMBER: case IR_POINTER_DIFF: {
                     const InterpValue *pointer = &values[inst->left];
-                    if (!pointer->pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer has no object provenance"); goto done; }
-                    if (inst->op == IR_BIT_LOAD) { if (!cinder_interp_bit_load(context, pointer->address, inst->type, (unsigned)inst->operator_code, (unsigned)inst->integer, &result, inst->loc)) goto done; }
-                    else if (inst->op == IR_BIT_STORE || inst->op == IR_BIT_INIT) { if (!cinder_interp_bit_store(context, pointer->address, inst->type, (unsigned)inst->operator_code, (unsigned)inst->integer, &values[inst->right], inst->op == IR_BIT_INIT, inst->loc)) goto done; }
-                    else if (inst->op == IR_MEMORY_LOAD) { if (!cinder_interp_load(context, pointer->address, inst->type, &result, inst->loc)) goto done; }
-                    else if ((inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT)) { if (!cinder_interp_store(context, pointer->address, inst->type, &values[inst->right], inst->op == IR_MEMORY_INIT, inst->loc)) goto done; }
+                    if (!pointer->pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer has no object provenance"); goto failed; }
+                    if (inst->op == IR_BIT_LOAD) { if (!cinder_interp_bit_load(context, pointer->address, inst->type, (unsigned)inst->operator_code, (unsigned)inst->integer, &result, inst->loc)) goto failed; }
+                    else if (inst->op == IR_BIT_STORE || inst->op == IR_BIT_INIT) { if (!cinder_interp_bit_store(context, pointer->address, inst->type, (unsigned)inst->operator_code, (unsigned)inst->integer, &values[inst->right], inst->op == IR_BIT_INIT, inst->loc)) goto failed; }
+                    else if (inst->op == IR_MEMORY_LOAD) { if (!cinder_interp_load(context, pointer->address, inst->type, &result, inst->loc)) goto failed; }
+                    else if ((inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT)) { if (!cinder_interp_store(context, pointer->address, inst->type, &values[inst->right], inst->op == IR_MEMORY_INIT, inst->loc)) goto failed; }
                     else if (inst->op == IR_POINTER_OFFSET) {
                         const CinderType *index_type = cinder_ir_value_type(function, inst->right);
-                        if (index_type->is_unsigned && values[inst->right].integer < 0) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, inst->loc, "unsigned pointer index exceeds the object domain"); goto done; }
-                        if (!cinder_interp_offset(context, pointer->address, values[inst->right].integer, inst->operator_code, (size_t)inst->integer, &result, inst->loc)) goto done;
+                        if (index_type->is_unsigned && values[inst->right].integer < 0) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, inst->loc, "unsigned pointer index exceeds the object domain"); goto failed; }
+                        if (!cinder_interp_offset(context, pointer->address, values[inst->right].integer, inst->operator_code, (size_t)inst->integer, &result, inst->loc)) goto failed;
                     }
                     else if (inst->op == IR_POINTER_MEMBER) {
                         const CinderType *member = inst->type->base;
                         bool flexible = member->kind == TYPE_ARRAY && !member->complete;
                         bool valid = flexible ? cinder_interp_flexible_member(context, pointer->address, (size_t)inst->integer, member->base, &result, inst->loc) : cinder_type_contains_flexible(member) ? cinder_interp_extended_member(context, pointer->address, (size_t)inst->integer, &result, inst->loc) : cinder_interp_member(context, pointer->address, (size_t)inst->integer, member->size, &result, inst->loc);
-                        if (!valid) goto done;
+                        if (!valid) goto failed;
                         cinder_interp_member_origin(pointer->address, (size_t)inst->slot, (size_t)inst->integer, &result);
                     }
                     else {
-                        if (!values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer subtraction has no object provenance"); goto done; }
-                        if (!cinder_interp_difference(context, pointer->address, values[inst->right].address, (size_t)inst->integer, &result.integer, inst->loc)) goto done;
+                        if (!values[inst->right].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer subtraction has no object provenance"); goto failed; }
+                        if (!cinder_interp_difference(context, pointer->address, values[inst->right].address, (size_t)inst->integer, &result.integer, inst->loc)) goto failed;
                     }
                     break;
                 }
@@ -333,18 +357,18 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     const InterpValue *source = &values[inst->left];
                     if (inst->source_type->kind == TYPE_POINTER && inst->type->kind == TYPE_BOOL) {
                         InterpValue null = {.defined = true, .pointer = true};
-                        if (!cinder_interp_compare(context, IR_CMP_NE, source, &null, &result.integer, inst->loc)) goto done;
+                        if (!cinder_interp_compare(context, IR_CMP_NE, source, &null, &result.integer, inst->loc)) goto failed;
                         break;
                     }
                     if (inst->type->kind == TYPE_POINTER) {
                         if (inst->source_type->kind != TYPE_POINTER && source->integer != 0 && source->word_uncertain) {
-                            cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "integer address combines different object domains"); goto done;
+                            cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "integer address combines different object domains"); goto failed;
                         }
                         result = *source; result.fp = false; result.pointer = source->pointer;
                         if (!result.pointer && source->integer == 0) result = cinder_interp_pointer_value((InterpPointer){0});
                         else if (!result.pointer) (void)cinder_interp_word_pointer(source, &result);
                         if (inst->source_type->kind == TYPE_POINTER && inst->source_type->base->kind == TYPE_ARRAY && inst->source_type->base->complete && result.pointer && result.address.object != 0U) {
-                            if (!cinder_interp_member(context, result.address, 0U, inst->source_type->base->size, &result, inst->loc)) goto done;
+                            if (!cinder_interp_member(context, result.address, 0U, inst->source_type->base->size, &result, inst->loc)) goto failed;
                         }
                         break;
                     }
@@ -354,13 +378,13 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         result.integer = cinder_interp_integer((uint64_t)source->integer, inst->type); break;
                     }
                     if (!scalar_convert(inst, source->integer, source->floating, source->fp, &result.integer, &result.floating, &result.fp)) {
-                        cinder_interp_fail(context, INTERP_CONVERSION_RANGE, inst->loc, "undefined out-of-range scalar conversion"); goto done;
+                        cinder_interp_fail(context, INTERP_CONVERSION_RANGE, inst->loc, "undefined out-of-range scalar conversion"); goto failed;
                     }
                     break;
                 }
                 case IR_NEG:
                     if (!inst->type->is_unsigned && (values[inst->left].integer == INT64_MIN || (inst->type->size < 8U && values[inst->left].integer == -(INT64_C(1) << (inst->type->size * 8U - 1U))))) {
-                        cinder_interp_fail(context, INTERP_SIGNED_OVERFLOW, inst->loc, "undefined signed negation overflow"); goto done;
+                        cinder_interp_fail(context, INTERP_SIGNED_OVERFLOW, inst->loc, "undefined signed negation overflow"); goto failed;
                     }
                     result.integer = cinder_interp_integer(UINT64_C(0) - (uint64_t)values[inst->left].integer, inst->type);
                     integer_word(inst->type, &values[inst->left], NULL, &result); break;
@@ -371,20 +395,20 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                 case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
                 case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE:
                     if (!eval_float(inst, values[inst->left].floating, values[inst->right].floating, &result.floating, &result.integer)) {
-                        cinder_interp_fail(context, INTERP_MALFORMED, inst->loc, "invalid floating operation"); goto done;
+                        cinder_interp_fail(context, INTERP_MALFORMED, inst->loc, "invalid floating operation"); goto failed;
                     }
                     break;
                 case IR_CALL: {
                     const char *name = inst->callee;
                     if (name == NULL) {
                         const InterpValue *address = &values[inst->left];
-                        if (!address->pointer || address->address.object == 0U || (size_t)address->address.object > context->objects.len || address->address.offset != 0) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "invalid indirect function pointer"); goto done; }
+                        if (!address->pointer || address->address.object == 0U || (size_t)address->address.object > context->objects.len || address->address.offset != 0) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "invalid indirect function pointer"); goto failed; }
                         const InterpObject *target = &context->objects.data[address->address.object - 1U];
-                        if (!target->alive || target->function_name == NULL || !cinder_type_compatible(target->type, inst->callee_type)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "indirect call target or signature is invalid"); goto done; }
+                        if (!target->alive || target->function_name == NULL || !cinder_type_compatible(target->type, inst->callee_type)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "indirect call target or signature is invalid"); goto failed; }
                         name = target->function_name;
                     }
                     const CinderIRFunction *callee = find_function(context->module, name);
-                    if (callee == NULL) { cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "external call is unavailable"); goto done; }
+                    if (callee == NULL) { cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "external call is unavailable"); goto failed; }
                     size_t count = inst->args.len == 0U ? 1U : inst->args.len;
                     InterpValue *arguments = cinder_alloc(count * sizeof(*arguments)); bool ready = true;
                     for (size_t a = 0U; a < inst->args.len; ++a) {
@@ -394,15 +418,13 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     InterpValue destination = {.defined = true};
                     bool aggregate = callee->type->return_type->kind == TYPE_STRUCT || callee->type->return_type->kind == TYPE_UNION;
                     if (aggregate) destination = cinder_interp_address(context, locals[inst->slot]);
-                    bool called = ready && interpret_function(context, callee, arguments, inst->args.len, &result, aggregate ? &destination : NULL, inst->source_type);
-                    free(arguments);
-                    if (!called) goto done;
-                    if (inst->noreturn_call) { cinder_interp_fail(context, INTERP_NORETURN_RETURN, inst->loc, "undefined return from a function declared _Noreturn"); goto done; }
-                    break;
+                    if (!ready) { free(arguments); goto failed; }
+                    *call = (InterpCall){callee, arguments, inst->args.len, destination, aggregate, inst};
+                    return INTERP_STEP_CALL;
                 }
                 default:
                     if (inst->source_type != NULL && inst->source_type->kind == TYPE_POINTER) {
-                        if (!cinder_interp_compare(context, inst->op, &values[inst->left], &values[inst->right], &result.integer, inst->loc)) goto done;
+                        if (!cinder_interp_compare(context, inst->op, &values[inst->left], &values[inst->right], &result.integer, inst->loc)) goto failed;
                         break;
                     }
                     if (!eval_binary(inst, values[inst->left].integer, values[inst->right].integer, &result.integer)) {
@@ -410,7 +432,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         const char *reason = "undefined signed arithmetic overflow";
                         if (inst->op == IR_SHL || inst->op == IR_SHR_S || inst->op == IR_SHR_U) { classification = INTERP_INVALID_SHIFT; reason = "undefined shift operation"; }
                         if ((inst->op == IR_DIV_S || inst->op == IR_MOD_S || inst->op == IR_DIV_U || inst->op == IR_MOD_U) && values[inst->right].integer == 0) { classification = INTERP_DIVISION_ZERO; reason = "undefined division by zero"; }
-                        cinder_interp_fail(context, classification, inst->loc, reason); goto done;
+                        cinder_interp_fail(context, classification, inst->loc, reason); goto failed;
                     }
                     result.integer = cinder_interp_integer((uint64_t)result.integer, inst->type);
                     integer_word(inst->type, &values[inst->left], &values[inst->right], &result); break;
@@ -418,26 +440,63 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
             if (inst->dst != CINDER_INVALID_VALUE) values[inst->dst] = result;
         }
         const CinderTerminator *term = &block->terminator;
-        if (!tick(context, term->loc)) goto done;
+        if (!tick(context, term->loc)) goto failed;
         if (term->kind == TERM_RETURN) {
-            if (function->is_noreturn) { cinder_interp_fail(context, INTERP_NORETURN_RETURN, term->loc, "undefined return from a function declared _Noreturn"); goto done; }
+            if (function->is_noreturn) { cinder_interp_fail(context, INTERP_NORETURN_RETURN, term->loc, "undefined return from a function declared _Noreturn"); goto failed; }
             if (term->value != CINDER_INVALID_VALUE) {
-                if (!require_defined(context, values, term->value, term->loc)) goto done;
-                *returned = values[term->value];
-            } else *returned = aggregate_return != NULL ? *aggregate_return : (InterpValue){.defined = true};
-            success = true; break;
+                if (!require_defined(context, values, term->value, term->loc)) goto failed;
+                frame->returned = values[term->value];
+            } else frame->returned = aggregate_return != NULL ? *aggregate_return : (InterpValue){.defined = true};
+            return INTERP_STEP_DONE;
         }
-        previous = block_id;
-        if (term->kind == TERM_JUMP) block_id = term->target;
+        frame->previous = frame->block_id;
+        if (term->kind == TERM_JUMP) frame->block_id = term->target;
         else if (term->kind == TERM_BRANCH) {
-            if (!require_defined(context, values, term->condition, term->loc)) goto done;
-            block_id = values[term->condition].integer != 0 ? term->yes : term->no;
-        } else { cinder_interp_fail(context, INTERP_MALFORMED, term->loc, "reached an unterminated block"); goto done; }
+            if (!require_defined(context, values, term->condition, term->loc)) goto failed;
+            frame->block_id = values[term->condition].integer != 0 ? term->yes : term->no;
+        } else { cinder_interp_fail(context, INTERP_MALFORMED, term->loc, "reached an unterminated block"); goto failed; }
+        frame->entered = false; frame->instruction = 0U;
+    }
+failed:
+    return INTERP_STEP_FAILED;
+}
+
+static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const InterpValue *args, size_t arg_count, InterpValue *returned, const InterpValue *aggregate_return, const CinderType *actual_signature) {
+    if (context->depth >= 256U) { cinder_interp_fail(context, INTERP_RESOURCE_LIMIT, (CinderLoc){0}, "call-depth limit exceeded"); return false; }
+    ++context->depth;
+    InterpFrame *frame = cinder_alloc(sizeof(*frame)); memset(frame, 0, sizeof(*frame));
+    frame->function = function; frame->arguments = args; frame->argument_count = arg_count;
+    frame->aggregate_return = aggregate_return; frame->signature = actual_signature;
+    frame->identity = ++context->frames; frame->previous = CINDER_INVALID_BLOCK;
+    size_t value_count = function->value_count == 0U ? 1U : function->value_count;
+    size_t local_count = function->local_count == 0U ? 1U : function->local_count;
+    frame->values = cinder_alloc(value_count * sizeof(*frame->values));
+    frame->snapshot = cinder_alloc(value_count * sizeof(*frame->snapshot));
+    frame->locals = cinder_alloc(local_count * sizeof(*frame->locals));
+    memset(frame->values, 0, value_count * sizeof(*frame->values));
+    memset(frame->locals, 0, local_count * sizeof(*frame->locals));
+    bool success = false;
+    for (size_t slot = 0U; slot < function->local_count; ++slot) {
+        frame->locals[slot] = cinder_interp_object(context, function->local_types.data[slot], false, false, (CinderLoc){0});
+        if (frame->locals[slot] == 0U) goto done;
+    }
+    while (true) {
+        InterpCall call;
+        InterpStep step = advance_function(context, frame, &call);
+        if (step == INTERP_STEP_FAILED) break;
+        if (step == INTERP_STEP_DONE) { *returned = frame->returned; success = true; break; }
+        InterpValue result = {.defined = true};
+        bool called = interpret_function(context, call.callee, call.arguments, call.count, &result,
+                                         call.aggregate ? &call.destination : NULL, call.instruction->source_type);
+        free(call.arguments);
+        if (!called) break;
+        if (call.instruction->noreturn_call) { cinder_interp_fail(context, INTERP_NORETURN_RETURN, call.instruction->loc, "undefined return from a function declared _Noreturn"); break; }
+        if (call.instruction->dst != CINDER_INVALID_VALUE) frame->values[call.instruction->dst] = result;
     }
 done:
-    success = cinder_interp_va_finish(context, frame, success, (CinderLoc){0});
-    for (size_t slot = 0U; slot < function->local_count; ++slot) cinder_interp_retire(context, locals[slot]);
-    free(locals); free(snapshot); free(values); --context->depth;
+    success = cinder_interp_va_finish(context, frame->identity, success, (CinderLoc){0});
+    for (size_t slot = 0U; slot < function->local_count; ++slot) cinder_interp_retire(context, frame->locals[slot]);
+    free(frame->locals); free(frame->snapshot); free(frame->values); free(frame); --context->depth;
     return success;
 }
 
