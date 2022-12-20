@@ -1,0 +1,14 @@
+flowchart LR
+    RA[Verified allocation and actual frame slots] --> E[x86_64.c emits original bytes]
+    E --> P[After push and frame-base move: CFA rules]
+    E --> S[After each callee-saved store or restore: register rule]
+    E --> R[Each leave and return: epilogue state]
+    P --> F[debug_frame.c: DWARF v4 CIE and function FDE]
+    S --> F
+    R --> F
+    F --> O[Owned debug section bytes and address/section fixups]
+    O --> ELF[elf64.c: original ELF sections and relocations]
+    O --> ASM[assembly.c: same bytes and relocations]
+    ELF --> LINK[System linker combines translation units]
+    LINK --> G[GDB DWARF unwinder and backtrace]
+    ASM --> CHECK[LLVM assembler and independent byte/relocation comparison]

@@ -107,6 +107,10 @@ static uint16_t section_for_data(unsigned kind) {
 }
 
 int cinder_write_elf64(const CinderMachineObject *object, const char *path, CinderDiagnostics *diags) {
+    enum { DEBUG_LIMIT = 16U, SECTION_LIMIT = 12U + 2U * DEBUG_LIMIT, RELOCATION_LIMIT = 3U + DEBUG_LIMIT };
+    if (!cinder_debug_sections_valid(object, diags)) return 1;
+    for (size_t i = 0U; i < object->fixups.len; ++i) if (object->fixups.data[i].symbol == NULL) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "relocation has no symbol"); return 1; }
+    size_t section_count = 12U + 2U * object->debug_sections.len;
     CinderBytes strtab = {NULL, 0U, 0U};
     CinderBytes shstrtab = {NULL, 0U, 0U};
     cinder_bytes_put8(&strtab, 0U);
@@ -114,6 +118,16 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     const char *section_names[] = {"", ".text", ".data", ".rodata", ".bss", ".rela.text", ".rela.data", ".rela.rodata", ".note.GNU-stack", ".symtab", ".strtab", ".shstrtab"};
     uint32_t section_name_offsets[CINDER_ARRAY_LEN(section_names)];
     for (size_t i = 0U; i < CINDER_ARRAY_LEN(section_names); ++i) section_name_offsets[i] = string_add(&shstrtab, section_names[i]);
+    uint32_t debug_name_offsets[DEBUG_LIMIT], debug_rela_offsets[DEBUG_LIMIT];
+    char *debug_rela_names[DEBUG_LIMIT] = {NULL};
+    for (size_t i = 0U; i < object->debug_sections.len; ++i) {
+        const char *name = object->debug_sections.data[i].name;
+        debug_name_offsets[i] = string_add(&shstrtab, name);
+        size_t length = strlen(name);
+        debug_rela_names[i] = cinder_alloc(length + 6U);
+        memcpy(debug_rela_names[i], ".rela", 5U); memcpy(debug_rela_names[i] + 5U, name, length + 1U);
+        debug_rela_offsets[i] = string_add(&shstrtab, debug_rela_names[i]);
+    }
 
     CinderBytes symbytes = {NULL, 0U, 0U};
     Symbol null_symbol;
@@ -125,6 +139,13 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     uint32_t zero_index = 0U;
     for (size_t i = 0U; i < object->defined_symbols.len; ++i) cinder_vec_push((CinderVec *)&function_indices, &zero_index);
     for (size_t i = 0U; i < object->data_symbols.len; ++i) cinder_vec_push((CinderVec *)&data_indices, &zero_index);
+    uint32_t debug_indices[DEBUG_LIMIT];
+    for (size_t i = 0U; i < object->debug_sections.len; ++i) {
+        Symbol symbol; memset(&symbol, 0, sizeof(symbol));
+        symbol.st_info = 3U; symbol.st_shndx = (uint16_t)(12U + i * 2U);
+        debug_indices[i] = (uint32_t)(symbytes.len / ELF_SYMBOL_SIZE);
+        append_symbol(&symbytes, &symbol);
+    }
     uint32_t first_global = 1U;
     for (unsigned binding = 0U; binding < 2U; ++binding) {
         if (binding == 1U) first_global = (uint32_t)(symbytes.len / ELF_SYMBOL_SIZE);
@@ -158,6 +179,7 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         bool defined = false;
         for (size_t d = 0U; d < object->defined_symbols.len; ++d) if (strcmp(object->defined_symbols.data[d], object->fixups.data[i].symbol) == 0) defined = true;
         for (size_t d = 0U; d < object->data_symbols.len; ++d) if (strcmp(object->data_symbols.data[d].name, object->fixups.data[i].symbol) == 0) defined = true;
+        for (size_t d = 0U; d < object->debug_sections.len; ++d) if (strcmp(object->debug_sections.data[d].name, object->fixups.data[i].symbol) == 0) defined = true;
         for (size_t u = 0U; u < undefined.len; ++u) if (strcmp(undefined.data[u], object->fixups.data[i].symbol) == 0) already = true;
         if (!defined && !already) { char *name = cinder_strndup(object->fixups.data[i].symbol, strlen(object->fixups.data[i].symbol)); cinder_vec_push((CinderVec *)&undefined, &name); }
     }
@@ -172,12 +194,13 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         cinder_vec_push((CinderVec *)&undefined_indices, &index);
     }
 
-    CinderBytes relabytes[3] = {{NULL, 0U, 0U}, {NULL, 0U, 0U}, {NULL, 0U, 0U}};
+    CinderBytes relabytes[RELOCATION_LIMIT] = {{NULL, 0U, 0U}};
     CinderBytes file = {NULL, 0U, 0U};
     for (size_t i = 0U; i < object->fixups.len; ++i) {
         size_t symbol_index = SIZE_MAX;
         for (size_t d = 0U; d < object->defined_symbols.len; ++d) if (strcmp(object->defined_symbols.data[d], object->fixups.data[i].symbol) == 0) symbol_index = function_indices.data[d];
         for (size_t d = 0U; d < object->data_symbols.len; ++d) if (strcmp(object->data_symbols.data[d].name, object->fixups.data[i].symbol) == 0) symbol_index = data_indices.data[d];
+        for (size_t d = 0U; d < object->debug_sections.len; ++d) if (strcmp(object->debug_sections.data[d].name, object->fixups.data[i].symbol) == 0) symbol_index = debug_indices[d];
         for (size_t u = 0U; u < undefined.len; ++u) if (strcmp(undefined.data[u], object->fixups.data[i].symbol) == 0) symbol_index = undefined_indices.data[u];
         if (symbol_index == SIZE_MAX) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "internal relocation symbol lookup failure for '%s'", object->fixups.data[i].symbol); continue; }
         Rela rela;
@@ -185,14 +208,31 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         rela.r_info = ((uint64_t)symbol_index << 32U) | (uint32_t)object->fixups.data[i].type;
         rela.r_addend = object->fixups.data[i].addend;
         unsigned section = object->fixups.data[i].section_kind;
-        size_t extent = section == 0U ? object->text.len : section == DATA_SECTION ? object->data.len : object->rodata.len;
-        size_t width = section == 0U ? 4U : 8U;
-        if (section > RODATA_SECTION || object->fixups.data[i].offset > extent || width > extent - object->fixups.data[i].offset || (section == 0U ? object->fixups.data[i].type != 2 && object->fixups.data[i].type != 4 : object->fixups.data[i].type != 1)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "relocation is outside its section or has an invalid width/type"); continue; }
-        append_relocation(&relabytes[section], &rela);
+        size_t extent = 0U, width = section == 0U || object->fixups.data[i].type == 10 ? 4U : 8U;
+        bool valid_type = false;
+        if (section == 0U) { extent = object->text.len; valid_type = object->fixups.data[i].type == 2 || object->fixups.data[i].type == 4; }
+        else if (section <= RODATA_SECTION) { extent = section == DATA_SECTION ? object->data.len : object->rodata.len; valid_type = object->fixups.data[i].type == 1; }
+        else if (section >= 4U && (size_t)section - 4U < object->debug_sections.len) {
+            extent = object->debug_sections.data[section - 4U].bytes.len;
+            valid_type = object->fixups.data[i].type == 1 || object->fixups.data[i].type == 10;
+        }
+        if (!valid_type || object->fixups.data[i].offset > extent || width > extent - object->fixups.data[i].offset) {
+            cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "relocation is outside its section or has an invalid width/type"); continue;
+        }
+        for (size_t j = 0U; j < i; ++j) {
+            const CinderFixup *previous = &object->fixups.data[j];
+            if (previous->section_kind != section) continue;
+            size_t previous_width = section == 0U || previous->type == 10 ? 4U : 8U;
+            if (previous->offset <= extent && previous_width <= extent - previous->offset &&
+                previous->offset < object->fixups.data[i].offset + width && object->fixups.data[i].offset < previous->offset + previous_width) {
+                cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "object relocations overlap"); break;
+            }
+        }
+        append_relocation(&relabytes[section >= 4U ? section - 1U : section], &rela);
     }
     if (diags->errors != 0U) goto failure;
 
-    Section sections[12];
+    Section sections[SECTION_LIMIT];
     memset(sections, 0, sizeof(sections));
     sections[0] = (Section){"", 0U, 0U, 0U, NULL, 0U, 0U, 0U, 0U, section_name_offsets[0], 0U};
     sections[1] = (Section){".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR, 16U, object->text.data, object->text.len, 0U, 0U, 0U, section_name_offsets[1], 0U};
@@ -206,9 +246,16 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     sections[9] = (Section){".symtab", SHT_SYMTAB, 0U, 8U, symbytes.data, symbytes.len, 10U, first_global, ELF_SYMBOL_SIZE, section_name_offsets[9], 0U};
     sections[10] = (Section){".strtab", SHT_STRTAB, 0U, 1U, strtab.data, strtab.len, 0U, 0U, 0U, section_name_offsets[10], 0U};
     sections[11] = (Section){".shstrtab", SHT_STRTAB, 0U, 1U, shstrtab.data, shstrtab.len, 0U, 0U, 0U, section_name_offsets[11], 0U};
+    for (size_t i = 0U; i < object->debug_sections.len; ++i) {
+        const CinderDebugSection *debug = &object->debug_sections.data[i];
+        size_t at = 12U + 2U * i;
+        sections[at] = (Section){debug->name, SHT_PROGBITS, 0U, debug->alignment, debug->bytes.data, debug->bytes.len, 0U, 0U, 0U, debug_name_offsets[i], 0U};
+        sections[at + 1U] = (Section){debug_rela_names[i], SHT_RELA, 0U, 8U, relabytes[3U + i].data, relabytes[3U + i].len, 9U, (uint32_t)at, ELF_RELA_SIZE, debug_rela_offsets[i], 0U};
+    }
+
 
     size_t cursor = ELF_HEADER_SIZE;
-    for (size_t i = 1U; i < CINDER_ARRAY_LEN(sections); ++i) {
+    for (size_t i = 1U; i < section_count; ++i) {
         cursor = align_up(cursor, (size_t)sections[i].align);
         sections[i].file_offset = cursor;
         if (sections[i].size > SIZE_MAX - cursor) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "ELF section size overflow"); goto failure; }
@@ -217,11 +264,12 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     }
     cursor = align_up(cursor, 8U);
     size_t section_table_offset = cursor;
-    size_t section_table_size = ELF_SECTION_SIZE * CINDER_ARRAY_LEN(sections);
+    size_t section_table_size = ELF_SECTION_SIZE * section_count;
+    if (cursor == SIZE_MAX || section_table_size > SIZE_MAX - cursor) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "ELF section table size overflow"); goto failure; }
     write_at(&file, section_table_offset, NULL, section_table_size);
-    SectionHeader headers[12];
+    SectionHeader headers[SECTION_LIMIT];
     memset(headers, 0, sizeof(headers));
-    for (size_t i = 1U; i < CINDER_ARRAY_LEN(sections); ++i) {
+    for (size_t i = 1U; i < section_count; ++i) {
         headers[i].sh_name = sections[i].name_offset;
         headers[i].sh_type = sections[i].type;
         headers[i].sh_flags = sections[i].flags;
@@ -233,13 +281,13 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         headers[i].sh_entsize = sections[i].entsize;
     }
     CinderBytes serialized = {NULL, 0U, 0U};
-    for (size_t i = 0U; i < CINDER_ARRAY_LEN(sections); ++i) append_section(&serialized, &headers[i]);
+    for (size_t i = 0U; i < section_count; ++i) append_section(&serialized, &headers[i]);
     write_at(&file, section_table_offset, serialized.data, serialized.len);
     free(serialized.data); serialized = (CinderBytes){NULL, 0U, 0U};
     ElfHeader header;
     memset(&header, 0, sizeof(header));
     header.e_ident[0] = 0x7FU; header.e_ident[1] = 'E'; header.e_ident[2] = 'L'; header.e_ident[3] = 'F'; header.e_ident[4] = 2U; header.e_ident[5] = 1U; header.e_ident[6] = 1U;
-    header.e_type = 1U; header.e_machine = 62U; header.e_version = 1U; header.e_shoff = section_table_offset; header.e_ehsize = ELF_HEADER_SIZE; header.e_shentsize = ELF_SECTION_SIZE; header.e_shnum = CINDER_ARRAY_LEN(sections); header.e_shstrndx = 11U;
+    header.e_type = 1U; header.e_machine = 62U; header.e_version = 1U; header.e_shoff = section_table_offset; header.e_ehsize = ELF_HEADER_SIZE; header.e_shentsize = ELF_SECTION_SIZE; header.e_shnum = (uint16_t)section_count; header.e_shstrndx = 11U;
     append_header(&serialized, &header);
     write_at(&file, 0U, serialized.data, serialized.len);
     free(serialized.data);
@@ -254,10 +302,10 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         goto failure;
     }
     if (cinder_output_commit(&output, diags) != 0) goto failure;
-    free(file.data); free(symbytes.data); free(strtab.data); free(shstrtab.data); for (size_t r = 0U; r < 3U; ++r) free(relabytes[r].data); free(function_indices.data); free(data_indices.data); free(undefined_indices.data); for (size_t i = 0U; i < undefined.len; ++i) free(undefined.data[i]); free(undefined.data);
+    free(file.data); free(symbytes.data); free(strtab.data); free(shstrtab.data); for (size_t r = 0U; r < RELOCATION_LIMIT; ++r) free(relabytes[r].data); for (size_t r = 0U; r < object->debug_sections.len; ++r) free(debug_rela_names[r]); free(function_indices.data); free(data_indices.data); free(undefined_indices.data); for (size_t i = 0U; i < undefined.len; ++i) free(undefined.data[i]); free(undefined.data);
     return diags->errors == 0U ? 0 : 1;
 
 failure:
-    free(file.data); free(symbytes.data); free(strtab.data); free(shstrtab.data); for (size_t r = 0U; r < 3U; ++r) free(relabytes[r].data); free(function_indices.data); free(data_indices.data); free(undefined_indices.data); for (size_t i = 0U; i < undefined.len; ++i) free(undefined.data[i]); free(undefined.data);
+    free(file.data); free(symbytes.data); free(strtab.data); free(shstrtab.data); for (size_t r = 0U; r < RELOCATION_LIMIT; ++r) free(relabytes[r].data); for (size_t r = 0U; r < object->debug_sections.len; ++r) free(debug_rela_names[r]); free(function_indices.data); free(data_indices.data); free(undefined_indices.data); for (size_t i = 0U; i < undefined.len; ++i) free(undefined.data[i]); free(undefined.data);
     return 1;
 }

@@ -1156,6 +1156,12 @@ typedef struct {
 } CinderDataSymbol;
 
 typedef struct {
+    char *name;
+    CinderBytes bytes;
+    size_t alignment;
+} CinderDebugSection;
+
+typedef struct {
     CinderBytes text;
     CinderBytes data;
     CinderBytes rodata;
@@ -1166,9 +1172,30 @@ typedef struct {
     CINDER_VEC_TYPE(size_t) symbol_sizes;
     CINDER_VEC_TYPE(bool) symbol_globals;
     CINDER_VEC_TYPE(CinderDataSymbol) data_symbols;
+    CINDER_VEC_TYPE(CinderDebugSection) debug_sections;
+    bool debug_enabled;
     unsigned literal_counter;
     size_t frame_size;
 } CinderMachineObject;
+
+typedef struct {
+    size_t section;
+    size_t record;
+    size_t function_start;
+    size_t position;
+    bool enabled;
+} CinderUnwind;
+
+size_t cinder_debug_section(CinderMachineObject *object, const char *name, size_t alignment);
+bool cinder_debug_sections_valid(const CinderMachineObject *object, CinderDiagnostics *diags);
+void cinder_unwind_begin(CinderUnwind *unwind, CinderMachineObject *object, const char *symbol, size_t start);
+void cinder_unwind_prologue(CinderUnwind *unwind, CinderMachineObject *object);
+void cinder_unwind_saved(CinderUnwind *unwind, CinderMachineObject *object, unsigned reg, int offset);
+void cinder_unwind_epilogue_begin(CinderUnwind *unwind, CinderMachineObject *object);
+void cinder_unwind_restored(CinderUnwind *unwind, CinderMachineObject *object, unsigned reg);
+void cinder_unwind_leave(CinderUnwind *unwind, CinderMachineObject *object);
+void cinder_unwind_epilogue_end(CinderUnwind *unwind, CinderMachineObject *object);
+int cinder_unwind_finish(CinderUnwind *unwind, CinderMachineObject *object, CinderDiagnostics *diags);
 
 void cinder_bytes_reserve(CinderBytes *bytes, size_t extra);
 void cinder_bytes_put8(CinderBytes *bytes, uint8_t value);

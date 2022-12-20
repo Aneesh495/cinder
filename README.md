@@ -55,6 +55,10 @@ Dependency rules, C17 profile flags and versioned JSON diagnostics are described
 in [`docs/DRIVER_DIAGNOSTICS.md`](docs/DRIVER_DIAGNOSTICS.md). Source-name mapping
 and deterministic date policy are in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 
+`-g` emits encoder-derived DWARF v4 stack-unwind records. The current scope and
+independent instruction/assembly/debugger checks are in
+[`docs/DEBUG.md`](docs/DEBUG.md). Source lines and variable locations remain open.
+
 ## Language and target contract
 
 The supported profile is documented in [`docs/LANGUAGE.md`](docs/LANGUAGE.md). It covers the scalar integer subset, pointers, arrays, functions, control flow, macros, constant expressions, and a growing aggregate model. Unsupported constructs are diagnosed rather than silently discarded. The initial contract excludes long double, complex, atomics, thread-local execution, VLAs, GNU inline assembly/vector extensions, C++, and unimplemented ABI classes.

@@ -29,7 +29,10 @@ static void emit_mov_rax_from_reg(CinderMachineObject *object, unsigned reg) {
     else { emit8(object, 0x4CU); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | ((reg - 8U) << 3U))); }
 }
 static void emit_prologue(CinderMachineObject *object, size_t frame) { emit8(object, 0x55U); emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0xE5U); if (frame != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xECU); emit32(object, (uint32_t)frame); } }
-static void emit_epilogue(CinderMachineObject *object) { emit8(object, 0xC9U); emit8(object, 0xC3U); }
+static void emit_epilogue(CinderMachineObject *object, CinderUnwind *unwind) {
+    emit8(object, 0xC9U); cinder_unwind_leave(unwind, object);
+    emit8(object, 0xC3U); cinder_unwind_epilogue_end(unwind, object);
+}
 static int value_offset(const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) { (void)function; return -(int)(allocation->local_bytes + ((size_t)value + 1U) * 8U); }
 static int local_offset(const CinderAllocation *allocation, int slot) { return allocation->local_offsets.data[slot]; }
 static unsigned register_code(CinderRegister reg) {
@@ -605,9 +608,9 @@ static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunctio
     return diags->errors == 0U ? 0 : 1;
 }
 
-void cinder_machine_init(CinderMachineObject *object) { object->text.data = NULL; object->text.len = 0U; object->text.cap = 0U; object->data.data = NULL; object->data.len = 0U; object->data.cap = 0U; object->rodata.data = NULL; object->rodata.len = 0U; object->rodata.cap = 0U; object->bss_size = 0U; object->fixups.data = NULL; object->fixups.len = 0U; object->fixups.cap = 0U; object->defined_symbols.data = NULL; object->defined_symbols.len = 0U; object->defined_symbols.cap = 0U; object->symbol_offsets.data = NULL; object->symbol_offsets.len = 0U; object->symbol_offsets.cap = 0U; object->symbol_sizes.data = NULL; object->symbol_sizes.len = 0U; object->symbol_sizes.cap = 0U; object->symbol_globals.data = NULL; object->symbol_globals.len = 0U; object->symbol_globals.cap = 0U; object->data_symbols.data = NULL; object->data_symbols.len = 0U; object->data_symbols.cap = 0U; object->literal_counter = 0U; object->frame_size = 0U; }
+void cinder_machine_init(CinderMachineObject *object) { memset(object, 0, sizeof(*object)); }
 
-void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); }
+void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); for (size_t i = 0U; i < object->debug_sections.len; ++i) { free(object->debug_sections.data[i].name); free(object->debug_sections.data[i].bytes.data); } free(object->debug_sections.data); }
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)assembly; (void)asm_out;
@@ -624,12 +627,15 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     cinder_vec_push((CinderVec *)&object->defined_symbols, &name);
     cinder_vec_push((CinderVec *)&object->symbol_offsets, &start);
     cinder_vec_push((CinderVec *)&object->symbol_globals, &function->global);
+    CinderUnwind unwind; cinder_unwind_begin(&unwind, object, function->name, start);
     emit_prologue(object, frame);
+    cinder_unwind_prologue(&unwind, object);
     unsigned saved = 0U;
     for (unsigned bit = 0U; bit < 4U; ++bit) {
         if ((allocation->saved_gpr_mask & (1U << bit)) == 0U) continue;
         emit_mov_rax_from_reg(object, bit + 12U);
         emit_mov_mem_rax(object, -(int)((allocation->local_bytes / 8U + allocation->spill_slots + ++saved) * 8U));
+        cinder_unwind_saved(&unwind, object, bit + 12U, -(int)((allocation->local_bytes / 8U + allocation->spill_slots + saved) * 8U));
     }
     size_t incoming_base = allocation->local_bytes / 8U + allocation->spill_slots + saved;
     for (unsigned a = 0U; a < 6U; ++a) {
@@ -786,13 +792,15 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 if (function->is_noreturn) { emit8(object, 0x0FU); emit8(object, 0x0BU); break; }
                 if (block->terminator.value != CINDER_INVALID_VALUE) { if (function->type->return_type->kind == TYPE_FLOAT || function->type->return_type->kind == TYPE_DOUBLE) load_float_value(object, function, allocation, block->terminator.value, 0U); else load_value_alloc(object, function, allocation, block->terminator.value); }
                 if (function->type->return_type->kind == TYPE_FLOAT) { emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
+                cinder_unwind_epilogue_begin(&unwind, object);
                 saved = 0U;
                 for (unsigned bit = 0U; bit < 4U; ++bit) {
                     if ((allocation->saved_gpr_mask & (1U << bit)) == 0U) continue;
                     emit_mov_r10_mem(object, -(int)((allocation->local_bytes / 8U + allocation->spill_slots + ++saved) * 8U));
                     emit_mov_reg_reg(object, bit + 12U, 10U);
+                    cinder_unwind_restored(&unwind, object, bit + 12U);
                 }
-                emit_epilogue(object); break;
+                emit_epilogue(object, &unwind); break;
             case TERM_JUMP:
                 if (emit_phi_transfers(object, function, allocation, (CinderBlockId)b, block->terminator.target, diags) != 0) { free(labels); free(branches.data); return 1; }
                 emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
@@ -805,7 +813,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     free(labels); free(branches.data);
     size_t function_size = object->text.len - start;
     cinder_vec_push((CinderVec *)&object->symbol_sizes, &function_size);
-    return 0;
+    return cinder_unwind_finish(&unwind, object, diags);
 }
 
 

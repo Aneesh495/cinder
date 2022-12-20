@@ -8,6 +8,7 @@ These references establish external contracts only. They are not imported implem
 - [System V x86-64 ABI project](https://gitlab.com/x86-psABIs/x86-64-ABI): calling convention and data classification.
 - [ELF generic ABI](https://gabi.xinuos.com/elf/00-header.html): object format relationships.
 - [ELF relocation reference](https://refspecs.linuxfoundation.org/elf/gabi4%2B/ch4.reloc.html): relocation semantics.
+- [DWARF version 4, June 10, 2010](https://dwarfstd.org/doc/DWARF4.pdf): debugger frame records, CIE/FDE layout and call-frame instructions; sections 6.4 and 7.23.
 - [LLVM libFuzzer documentation](https://llvm.org/docs/LibFuzzer.html): comparative fuzzing workflow, not a Cinder dependency.
 - [LLVM undefined behavior background](https://llvm.org/docs/UndefinedBehavior.html): comparative optimizer discussion, not Cinder's language definition.
 

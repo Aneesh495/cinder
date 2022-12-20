@@ -2,6 +2,40 @@
 
 Updated: 2026-10-11
 
+## Encoder-derived DWARF frames
+
+`-g` now emits original DWARF v4 `.debug_frame` records. Encoder events record
+the exact CFA transition after the frame push/base move, each R12-R15 store
+and restore, and every leave/return path. FDEs cover actual function sizes and
+relocate their function addresses and CIE section offsets. ELF and assembly
+consume the same owned debug bytes and fixups. Source lines, types and variable
+locations remain open; the complete debugging gate is not satisfied.
+
+Strict GCC and ASan/UBSan builds passed O0/O2 checks on three source units,
+six original/assembled frame tables and twelve malformed section/relocation
+rejections. Independent LLVM disassembly and a separate row reader checked
+actual save/load bytes, all returns and epilogue state. LLVM assembly preserved
+text/frame bytes and relocation meaning. Debug-disabled objects matched the
+previous compiler byte for byte. Both reference compilers executed the single
+and two-unit fixtures at both levels. The object regression passed 1,000
+two-unit O0/O2 probes with the assembly oracle on the cross-target host.
+
+Cinder compiled every implementation module into original objects. The owned
+Linux VM linked those objects into a compiler and ran the full unwind test,
+including its Cinder-built output-rejection probe and four actual GDB sessions.
+GDB selected the DWARF unwinder and recovered the caller chains in both single
+and multi-unit binaries. The report explicitly records `emulated`, so this
+functional run does not substitute for native debugger acceptance.
+
+Evidence: `.agent-local/unwind/`, `.agent-local/selfhost-object-audit/`,
+`.agent-local/linux-vm/share/debug-selfhost/` and
+`.agent-local/linux-vm/share/debug-unwind/`. Final tool/input/object bindings
+passed independent audit in `.agent-local/linux-vm/share/debug-unwind-tool-bound/`.
+See [DEBUG.md](DEBUG.md),
+[the encoder mapping](diagrams/debug-frame.mmd) and
+[ADR 0014](ADRs/0014-encoder-derived-debug-frames.md). Next implement source
+line/type/value metadata and the full native debugger campaign.
+
 ## Interpreted call suspension and bounded recursion
 
 Native validation of the owned-HIR increment reached the generated IR campaign
@@ -22,6 +56,9 @@ classified outcomes. New source checks verify the exact call-depth boundary
 and call resumption through a loop at O0/O2. Cinder compiled the revised
 interpreter implementation into an original ELF object. Raw failed CI and
 sanitizer attempts remain retained separately.
+The full source regression also passed 1,239 reference/interpreter/object
+cases; sanitizer checks passed 136 memory classifications, 57 malformed memory
+contracts and nineteen variadic object/assembly pairs.
 
 Evidence: `.agent-local/ci-03aead7-failure/` and
 `.agent-local/ir-campaign/`. See [IR.md](IR.md) and

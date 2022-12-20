@@ -97,13 +97,47 @@ static void data_section(const CinderMachineObject *object, FILE *out, unsigned 
     data_labels(object, out, section, size);
 }
 
+static void debug_symbol(const CinderMachineObject *object, const char *symbol, FILE *out) {
+    for (size_t i = 0U; i < object->debug_sections.len; ++i) {
+        if (strcmp(object->debug_sections.data[i].name, symbol) == 0) {
+            fprintf(out, ".Lcinder_debug_%zu", i); return;
+        }
+    }
+    fputs(symbol, out);
+}
+
+static void debug_sections(const CinderMachineObject *object, FILE *out) {
+    for (size_t i = 0U; i < object->debug_sections.len; ++i) {
+        const CinderDebugSection *section = &object->debug_sections.data[i];
+        unsigned kind = (unsigned)(4U + i);
+        fprintf(out, ".section %s,\"\",@progbits\n.balign %zu\n.Lcinder_debug_%zu:\n", section->name, section->alignment, i);
+        size_t offset = 0U, relocation = section_relocation(object, 0U, kind);
+        while (offset < section->bytes.len) {
+            if (relocation < object->fixups.len && object->fixups.data[relocation].offset == offset) {
+                const CinderFixup *fix = &object->fixups.data[relocation];
+                fprintf(out, "  .reloc ., %s, ", fix->type == 1 ? "R_X86_64_64" : "R_X86_64_32");
+                debug_symbol(object, fix->symbol, out);
+                fprintf(out, " %c %" PRIu64 "\n  .zero %u\n", fix->addend < 0 ? '-' : '+', fix->addend < 0 ? UINT64_C(0) - (uint64_t)fix->addend : (uint64_t)fix->addend, fix->type == 1 ? 8U : 4U);
+                offset += fix->type == 1 ? 8U : 4U;
+                relocation = section_relocation(object, relocation + 1U, kind);
+            } else {
+                size_t end = section->bytes.len;
+                if (relocation < object->fixups.len && object->fixups.data[relocation].offset < end) end = object->fixups.data[relocation].offset;
+                bytes(out, section->bytes.data, offset, end); offset = end;
+            }
+        }
+    }
+}
+
 static int write_ordered_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags) {
-    size_t last[3] = {0U, 0U, 0U};
+    size_t last[20] = {0U};
+    if (!cinder_debug_sections_valid(object, diags)) return 1;
     for (size_t i = 0U; i < object->fixups.len; ++i) {
         const CinderFixup *fix = &object->fixups.data[i]; unsigned section = fix->section_kind;
-        size_t width = section == 0U ? 4U : 8U;
-        size_t extent = section == 0U ? object->text.len : section == 1U ? object->data.len : object->rodata.len;
-        if (section > 2U || fix->symbol == NULL || fix->offset > extent || width > extent - fix->offset || (section == 0U ? fix->type != 2 && fix->type != 4 : fix->type != 1) || fix->offset < last[section]) {
+        size_t width = section == 0U || fix->type == 10 ? 4U : 8U;
+        size_t extent = section == 0U ? object->text.len : section == 1U ? object->data.len : section == 2U ? object->rodata.len : section >= 4U && (size_t)section - 4U < object->debug_sections.len ? object->debug_sections.data[section - 4U].bytes.len : 0U;
+        bool valid_type = section == 0U ? fix->type == 2 || fix->type == 4 : section <= 2U ? fix->type == 1 : fix->type == 1 || fix->type == 10;
+        if (section == 3U || (size_t)section >= 4U + object->debug_sections.len || fix->symbol == NULL || fix->offset > extent || width > extent - fix->offset || !valid_type || fix->offset < last[section]) {
             cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "assembly writer found an invalid or overlapping relocation"); return 1;
         }
         last[section] = fix->offset + width;
@@ -112,6 +146,7 @@ static int write_ordered_assembly(const CinderMachineObject *object, FILE *out, 
     data_section(object, out, 1U, ".data", object->data.data, object->data.len);
     data_section(object, out, 2U, ".rodata", object->rodata.data, object->rodata.len);
     data_section(object, out, 3U, ".bss", NULL, object->bss_size);
+    debug_sections(object, out);
     fputs(".section .note.GNU-stack,\"\",@progbits\n", out);
     if (ferror(out)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "assembly output write failed"); return 1; }
     return 0;

@@ -20,6 +20,14 @@ validation path using Clang's assembler.
 The independent reader checks bounds, alignment, symbol ordering/sizes, local
 binding, relocation indices/types/addends, and target identity. The campaign
 runs 1,000 two-unit probes at O0 and O2. On Linux x86-64 it links and executes
-both direct and assembled objects. Debug sections, data-address relocations,
-complete aggregate initializers, and complete tentative-definition semantics
-remain separate work.
+both direct and assembled objects. Static data addresses use absolute 64-bit
+relocations to functions or objects. Aggregate initializer actions and
+tentative-definition storage follow the typed static-object plan.
+
+With `-g`, the writer appends optional owned debug sections and corresponding
+RELA sections. Debug section symbols are local and precede global symbols.
+Eight-byte address fields use `R_X86_64_64`; four-byte section offsets use
+`R_X86_64_32`. The original twelve section indices stay fixed, including the
+symbol and string tables. At most sixteen debug sections are accepted. Names,
+alignments, field bounds, relocation widths/types and overlap are checked
+before publication. See [DEBUG.md](DEBUG.md) for frame rules and current scope.
