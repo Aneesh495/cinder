@@ -1,14 +1,26 @@
-#include "cinder.h"
+#include "debug_private.h"
 
 #include <string.h>
 
 /* DWARF v4, little-endian DWARF32, x86-64 address size. Section-relative
  * offsets remain original bytes; target addresses use original ELF fixups. */
-static void uleb(CinderBytes *bytes, uint64_t value) {
+void cinder_dwarf_uleb(CinderBytes *bytes, uint64_t value) {
     do {
         uint8_t byte = (uint8_t)(value & 127U); value >>= 7U;
         cinder_bytes_put8(bytes, (uint8_t)(byte | (value != 0U ? 128U : 0U)));
     } while (value != 0U);
+}
+
+void cinder_dwarf_sleb(CinderBytes *bytes, int64_t value) {
+    while (true) {
+        uint8_t byte = (uint8_t)((uint64_t)value & 127U);
+        int64_t next = value / 128;
+        if (value < 0 && value % 128 != 0) --next;
+        bool done = (next == 0 && (byte & 64U) == 0U) || (next == -1 && (byte & 64U) != 0U);
+        cinder_bytes_put8(bytes, (uint8_t)(byte | (done ? 0U : 128U)));
+        if (done) return;
+        value = next;
+    }
 }
 
 size_t cinder_debug_section(CinderMachineObject *object, const char *name, size_t alignment) {
@@ -58,7 +70,7 @@ static void advance(CinderUnwind *unwind, CinderMachineObject *object, size_t po
 }
 
 static void same_value(CinderBytes *bytes, unsigned reg) {
-    cinder_bytes_put8(bytes, 8U); uleb(bytes, reg);
+    cinder_bytes_put8(bytes, 8U); cinder_dwarf_uleb(bytes, reg);
 }
 
 static void finish_record(CinderBytes *bytes, size_t record) {
@@ -76,9 +88,9 @@ void cinder_unwind_begin(CinderUnwind *unwind, CinderMachineObject *object, cons
         cinder_bytes_put32(bytes, 0U); cinder_bytes_put32(bytes, UINT32_MAX);
         cinder_bytes_put8(bytes, 4U); cinder_bytes_put8(bytes, 0U); /* version, augmentation */
         cinder_bytes_put8(bytes, 8U); cinder_bytes_put8(bytes, 0U); /* address and segment sizes */
-        uleb(bytes, 1U); cinder_bytes_put8(bytes, 0x78U); uleb(bytes, 16U); /* alignments 1/-8, RIP */
-        cinder_bytes_put8(bytes, 0x0CU); uleb(bytes, 7U); uleb(bytes, 8U); /* CFA = RSP + 8 */
-        cinder_bytes_put8(bytes, 0x90U); uleb(bytes, 1U); /* RIP at CFA - 8 */
+        cinder_dwarf_uleb(bytes, 1U); cinder_bytes_put8(bytes, 0x78U); cinder_dwarf_uleb(bytes, 16U); /* alignments 1/-8, RIP */
+        cinder_bytes_put8(bytes, 0x0CU); cinder_dwarf_uleb(bytes, 7U); cinder_dwarf_uleb(bytes, 8U); /* CFA = RSP + 8 */
+        cinder_bytes_put8(bytes, 0x90U); cinder_dwarf_uleb(bytes, 1U); /* RIP at CFA - 8 */
         same_value(bytes, 6U);
         for (unsigned reg = 12U; reg <= 15U; ++reg) same_value(bytes, reg);
         finish_record(bytes, 0U);
@@ -97,10 +109,10 @@ void cinder_unwind_prologue(CinderUnwind *unwind, CinderMachineObject *object) {
     if (!unwind->enabled) return;
     CinderBytes *bytes = frame_bytes(unwind, object);
     advance(unwind, object, unwind->function_start + 1U); /* after push RBP */
-    cinder_bytes_put8(bytes, 0x0EU); uleb(bytes, 16U);
-    cinder_bytes_put8(bytes, 0x86U); uleb(bytes, 2U);
+    cinder_bytes_put8(bytes, 0x0EU); cinder_dwarf_uleb(bytes, 16U);
+    cinder_bytes_put8(bytes, 0x86U); cinder_dwarf_uleb(bytes, 2U);
     advance(unwind, object, unwind->function_start + 4U); /* after mov RBP,RSP */
-    cinder_bytes_put8(bytes, 0x0DU); uleb(bytes, 6U);
+    cinder_bytes_put8(bytes, 0x0DU); cinder_dwarf_uleb(bytes, 6U);
 }
 
 void cinder_unwind_saved(CinderUnwind *unwind, CinderMachineObject *object, unsigned reg, int offset) {
@@ -108,7 +120,7 @@ void cinder_unwind_saved(CinderUnwind *unwind, CinderMachineObject *object, unsi
     advance(unwind, object, object->text.len);
     CinderBytes *bytes = frame_bytes(unwind, object);
     cinder_bytes_put8(bytes, (uint8_t)(0x80U | reg));
-    uleb(bytes, (uint64_t)(16 - (int64_t)offset) / 8U);
+    cinder_dwarf_uleb(bytes, (uint64_t)(16 - (int64_t)offset) / 8U);
 }
 
 void cinder_unwind_epilogue_begin(CinderUnwind *unwind, CinderMachineObject *object) {
@@ -127,7 +139,7 @@ void cinder_unwind_leave(CinderUnwind *unwind, CinderMachineObject *object) {
     if (!unwind->enabled) return;
     advance(unwind, object, object->text.len);
     CinderBytes *bytes = frame_bytes(unwind, object);
-    cinder_bytes_put8(bytes, 0x0CU); uleb(bytes, 7U); uleb(bytes, 8U);
+    cinder_bytes_put8(bytes, 0x0CU); cinder_dwarf_uleb(bytes, 7U); cinder_dwarf_uleb(bytes, 8U);
     same_value(bytes, 6U);
 }
 

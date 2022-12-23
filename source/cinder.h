@@ -114,6 +114,7 @@ CinderLoc cinder_loc(CinderFileId file, size_t offset, size_t length);
 void cinder_loc_linecol(CinderSourceManager *sources, CinderLoc *loc);
 void cinder_loc_physical_linecol(CinderSourceManager *sources, CinderLoc *loc);
 const char *cinder_loc_name(CinderSourceManager *sources, CinderLoc loc);
+const char *cinder_source_display_path(CinderSourceManager *sources, const char *physical);
 const char *cinder_macro_loc_name(CinderSourceManager *sources, CinderLoc loc);
 const char *cinder_unmapped_loc_name(CinderSourceManager *sources, CinderLoc loc);
 int cinder_source_prefix_map(CinderSourceManager *sources, const char *specification, bool macro_only, CinderDiagnostics *diags);
@@ -869,6 +870,7 @@ typedef struct { char *name; CinderType *type; CinderLoc loc; } CinderIRParamete
 typedef struct {
     char *name;
     CinderType *type;
+    CinderLoc loc;
     CINDER_VEC_TYPE(CinderIRParameter *) params;
     CINDER_VEC_TYPE(CinderIRBlock) blocks;
     size_t value_count;
@@ -1161,6 +1163,15 @@ typedef struct {
     size_t alignment;
 } CinderDebugSection;
 
+typedef struct { size_t offset; CinderLoc loc; } CinderDebugRow;
+typedef struct {
+    size_t symbol;
+    CinderLoc loc;
+    size_t prologue_end;
+    size_t first_row;
+    size_t end_row;
+} CinderDebugFunction;
+
 typedef struct {
     CinderBytes text;
     CinderBytes data;
@@ -1173,6 +1184,8 @@ typedef struct {
     CINDER_VEC_TYPE(bool) symbol_globals;
     CINDER_VEC_TYPE(CinderDataSymbol) data_symbols;
     CINDER_VEC_TYPE(CinderDebugSection) debug_sections;
+    CINDER_VEC_TYPE(CinderDebugRow) debug_rows;
+    CINDER_VEC_TYPE(CinderDebugFunction) debug_functions;
     bool debug_enabled;
     unsigned literal_counter;
     size_t frame_size;
@@ -1188,6 +1201,8 @@ typedef struct {
 
 size_t cinder_debug_section(CinderMachineObject *object, const char *name, size_t alignment);
 bool cinder_debug_sections_valid(const CinderMachineObject *object, CinderDiagnostics *diags);
+void cinder_debug_row(CinderMachineObject *object, CinderLoc loc);
+int cinder_debug_finish(CinderMachineObject *object, CinderSourceManager *sources, CinderDiagnostics *diags);
 void cinder_unwind_begin(CinderUnwind *unwind, CinderMachineObject *object, const char *symbol, size_t start);
 void cinder_unwind_prologue(CinderUnwind *unwind, CinderMachineObject *object);
 void cinder_unwind_saved(CinderUnwind *unwind, CinderMachineObject *object, unsigned reg, int offset);
@@ -1199,6 +1214,7 @@ int cinder_unwind_finish(CinderUnwind *unwind, CinderMachineObject *object, Cind
 
 void cinder_bytes_reserve(CinderBytes *bytes, size_t extra);
 void cinder_bytes_put8(CinderBytes *bytes, uint8_t value);
+void cinder_bytes_put16(CinderBytes *bytes, uint16_t value);
 void cinder_bytes_put32(CinderBytes *bytes, uint32_t value);
 void cinder_bytes_put64(CinderBytes *bytes, uint64_t value);
 void cinder_bytes_patch32(CinderBytes *bytes, size_t offset, uint32_t value);

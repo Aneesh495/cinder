@@ -17,7 +17,7 @@ flowchart LR
   selected --> alloc[regalloc.c intervals and clobber restrictions]
   alloc --> x86[x86_64.c selected bytes and target pseudos]
   x86 --> elf[elf64.c ELF64 relocatable]
-  x86 --> debug[debug_frame.c encoder-derived DWARF frames]
+  x86 --> debug[debug_frame.c and debug_line.c: DWARF frames, source rows and function entries]
   debug --> elf
   ir --> interp[ir_interp.c independent evaluator]
   lex --> inspect[inspect.c local report]

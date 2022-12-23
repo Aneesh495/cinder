@@ -7,8 +7,14 @@ flowchart LR
     S --> F
     R --> F
     F --> O[Owned debug section bytes and address/section fixups]
+    H[Owned IR function locations and source-manager expansion identities] --> ROW[Actual instruction offsets and prologue boundary]
+    E --> ROW
+    ROW --> LINE[debug_line.c: logical file, line and column sequences]
+    H --> DIE[CU and subprogram declaration, range and frame-base entries]
+    LINE --> O
+    DIE --> O
     O --> ELF[elf64.c: original ELF sections and relocations]
     O --> ASM[assembly.c: same bytes and relocations]
     ELF --> LINK[System linker combines translation units]
-    LINK --> G[GDB DWARF unwinder and backtrace]
+    LINK --> G[GDB source breakpoint, stepping and DWARF backtrace]
     ASM --> CHECK[LLVM assembler and independent byte/relocation comparison]

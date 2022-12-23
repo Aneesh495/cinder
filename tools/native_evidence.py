@@ -147,6 +147,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
     if (source_root/'tests/test_hir.py').is_file(): authored_commands = authored_commands | {'tests/test_hir.py'}
     if (source_root/'tests/test_interpreter_calls.py').is_file(): authored_commands = authored_commands | {'tests/test_interpreter_calls.py'}
     if (source_root/'tests/test_unwind.py').is_file(): authored_commands = authored_commands | {'tests/test_unwind.py'}
+    if (source_root/'tests/test_debug_lines.py').is_file(): authored_commands = authored_commands | {'tests/test_debug_lines.py'}
     manifest=read(base,'manifest.json')
     require(manifest.get('schema')==2 and manifest.get('status')=='pass' and 'active_command' not in manifest, 'incomplete bootstrap')
     profile(manifest,'execution_profile')

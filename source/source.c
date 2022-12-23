@@ -213,6 +213,10 @@ static const char *display_name(CinderSourceManager *sources, const char *physic
 }
 
 const char *cinder_loc_name(CinderSourceManager *sources, CinderLoc loc) { return display_name(sources, physical_loc_name(sources, loc), false); }
+const char *cinder_source_display_path(CinderSourceManager *sources, const char *physical) {
+    const char *owned = cinder_arena_strndup(&sources->arena, physical, strlen(physical));
+    return display_name(sources, owned, false);
+}
 const char *cinder_macro_loc_name(CinderSourceManager *sources, CinderLoc loc) { return display_name(sources, physical_loc_name(sources, loc), true); }
 const char *cinder_unmapped_loc_name(CinderSourceManager *sources, CinderLoc loc) { return physical_loc_name(sources, loc); }
 

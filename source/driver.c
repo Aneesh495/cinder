@@ -185,6 +185,7 @@ int cinder_driver_run(const CinderOptions *options) {
         if (cinder_lower_x86(&module.functions.data[f], &allocation, &machine, options->emit_assembly, assembly, &diags) != 0) { cinder_alloc_destroy(&allocation); goto done_assembly; }
         cinder_alloc_destroy(&allocation);
     }
+    if (cinder_debug_finish(&machine, &sources, &diags) != 0) goto done_assembly;
     if (options->explorer != NULL) {
         if (cinder_write_explorer(options->explorer, &tokens, &ast, &module, &machine, &diags) != 0) goto done_machine;
     }

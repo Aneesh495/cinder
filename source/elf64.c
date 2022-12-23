@@ -27,14 +27,10 @@ typedef struct { uint64_t r_offset; uint64_t r_info; int64_t r_addend; } Rela;
 
 enum { ELF_HEADER_SIZE = 64U, ELF_SECTION_SIZE = 64U, ELF_SYMBOL_SIZE = 24U, ELF_RELA_SIZE = 24U };
 
-static void put16(CinderBytes *bytes, uint16_t value) {
-    cinder_bytes_put8(bytes, (uint8_t)value); cinder_bytes_put8(bytes, (uint8_t)(value >> 8U));
-}
-
 static void append_symbol(CinderBytes *bytes, const Symbol *symbol) {
     cinder_bytes_put32(bytes, symbol->st_name);
     cinder_bytes_put8(bytes, symbol->st_info); cinder_bytes_put8(bytes, symbol->st_other);
-    put16(bytes, symbol->st_shndx);
+    cinder_bytes_put16(bytes, symbol->st_shndx);
     cinder_bytes_put64(bytes, symbol->st_value); cinder_bytes_put64(bytes, symbol->st_size);
 }
 
@@ -53,12 +49,12 @@ static void append_section(CinderBytes *bytes, const SectionHeader *section) {
 
 static void append_header(CinderBytes *bytes, const ElfHeader *header) {
     cinder_bytes_append(bytes, header->e_ident, 16U);
-    put16(bytes, header->e_type); put16(bytes, header->e_machine);
+    cinder_bytes_put16(bytes, header->e_type); cinder_bytes_put16(bytes, header->e_machine);
     cinder_bytes_put32(bytes, header->e_version);
     cinder_bytes_put64(bytes, header->e_entry); cinder_bytes_put64(bytes, header->e_phoff); cinder_bytes_put64(bytes, header->e_shoff);
     cinder_bytes_put32(bytes, header->e_flags);
-    put16(bytes, header->e_ehsize); put16(bytes, header->e_phentsize); put16(bytes, header->e_phnum);
-    put16(bytes, header->e_shentsize); put16(bytes, header->e_shnum); put16(bytes, header->e_shstrndx);
+    cinder_bytes_put16(bytes, header->e_ehsize); cinder_bytes_put16(bytes, header->e_phentsize); cinder_bytes_put16(bytes, header->e_phnum);
+    cinder_bytes_put16(bytes, header->e_shentsize); cinder_bytes_put16(bytes, header->e_shnum); cinder_bytes_put16(bytes, header->e_shstrndx);
 }
 
 typedef struct {

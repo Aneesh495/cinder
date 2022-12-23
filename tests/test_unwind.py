@@ -225,11 +225,15 @@ def main():
             assert 'Version:               4' in frame_dump and 'DW_CFA_def_cfa_register: RBP' in frame_dump
             run([tools['llvm-dwarfdump'], '--verify', obj], stem + '-verify')
             original, _, relas = elf(obj); reference, _, other_relas = elf(assembled)
-            assert original['.debug_frame'] == reference['.debug_frame'] and original['.text'] == reference['.text']
-            assert normalized(relas['.debug_frame']) == normalized(other_relas['.debug_frame'])
+            debug_sections = {name for name in original if name.startswith('.debug_')}
+            assert debug_sections == {name for name in reference if name.startswith('.debug_')}
+            assert original['.text'] == reference['.text']
+            for name in debug_sections:
+                assert original[name] == reference[name], name
+                assert normalized(relas.get(name, [])) == normalized(other_relas.get(name, [])), name
             run([compiler, level, '-c', source, '-o', plain], stem + '-plain')
             no_debug, _, _ = elf(plain)
-            assert '.debug_frame' not in no_debug and no_debug['.text'] == original['.text']
+            assert not any(name.startswith('.debug_') for name in no_debug) and no_debug['.text'] == original['.text']
             if args.baseline:
                 baseline = root / (stem + '.baseline.o')
                 run([args.baseline.resolve(), level, '-c', source, '-o', baseline], stem + '-baseline')

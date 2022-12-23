@@ -55,9 +55,9 @@ Dependency rules, C17 profile flags and versioned JSON diagnostics are described
 in [`docs/DRIVER_DIAGNOSTICS.md`](docs/DRIVER_DIAGNOSTICS.md). Source-name mapping
 and deterministic date policy are in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 
-`-g` emits encoder-derived DWARF v4 stack-unwind records. The current scope and
+`-g` emits encoder-derived DWARF v4 frames, source lines and function entries. The current scope and
 independent instruction/assembly/debugger checks are in
-[`docs/DEBUG.md`](docs/DEBUG.md). Source lines and variable locations remain open.
+[`docs/DEBUG.md`](docs/DEBUG.md). Type entries and variable locations remain open.
 
 ## Language and target contract
 

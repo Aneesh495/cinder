@@ -253,7 +253,7 @@ test-unwind: build
 	@python3 tests/test_unwind.py $(BUILD_DIR)/cindercc
 
 test-debug: build
-	@$(CMAKE) --build $(BUILD_DIR) --target cinder_unwind_probe --parallel
+	@$(CMAKE) --build $(BUILD_DIR) --target cinder_unwind_probe cinder_debug_line_probe --parallel
 	@tests/run_debug.sh $(BUILD_DIR)/cindercc
 
 fuzz: build

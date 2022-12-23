@@ -59,6 +59,7 @@ set(CINDER_SOURCES
   source/x86_64.c
   source/abi.c
   source/debug_frame.c
+  source/debug_line.c
   source/elf64.c
   source/assembly.c
   source/driver.c
@@ -122,3 +123,7 @@ target_link_libraries(cinder_hir_probe PRIVATE cinder_core)
 add_executable(cinder_unwind_probe EXCLUDE_FROM_ALL tests/unwind_probe.c)
 cinder_target_profile(cinder_unwind_probe)
 target_link_libraries(cinder_unwind_probe PRIVATE cinder_core)
+
+add_executable(cinder_debug_line_probe EXCLUDE_FROM_ALL tests/debug_line_probe.c)
+cinder_target_profile(cinder_debug_line_probe)
+target_link_libraries(cinder_debug_line_probe PRIVATE cinder_core)

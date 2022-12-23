@@ -39,6 +39,12 @@ void cinder_bytes_put32(CinderBytes *bytes, uint32_t value) {
     }
 }
 
+void cinder_bytes_put16(CinderBytes *bytes, uint16_t value) {
+    cinder_bytes_reserve(bytes, 2U);
+    bytes->data[bytes->len++] = (unsigned char)value;
+    bytes->data[bytes->len++] = (unsigned char)(value >> 8U);
+}
+
 void cinder_bytes_put64(CinderBytes *bytes, uint64_t value) {
     cinder_bytes_reserve(bytes, 8U);
     for (unsigned i = 0U; i < 8U; ++i) {

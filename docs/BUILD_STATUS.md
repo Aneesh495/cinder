@@ -1,6 +1,41 @@
 # Build status
 
-Updated: 2026-10-11
+Updated: 2026-10-14
+
+## Encoder source lines and function entries
+
+`-g` now emits original DWARF4 line programs, compilation units and subprogram
+entries alongside the existing frame tables. Actual encoder offsets determine
+row addresses and function extents. Logical include and macro expansion
+coordinates, backward `#line` values, file-prefix maps and the mapped
+compilation directory feed these records. Type entries and variable locations
+remain open, so the full debugging gate is incomplete.
+
+Strict GCC and ASan/UBSan builds each passed nineteen independently decoded
+source-table cases, including relocated checkout identity and empty/noreturn
+units. Original ELF and LLVM-assembled output matched for every debug section
+and relocation. The API probe rejected fifteen malformed source maps and
+repeated finalization before adding sections or fixups. Both builds also
+passed the six-table frame regression and twelve malformed output records;
+debug-disabled objects matched the previous compiler byte for byte.
+
+CIR validation passed 2,478 source round trips/backend comparisons and 36
+rejection mutations. Sanitizer checks passed 41 driver commands, 33 prefix-map
+commands and the repeated-include/source-instance regression. Cinder compiled
+all 58 actual implementation modules with `-g`; LLVM verified every original
+object. The owned Linux VM linked the complete original-object compiler and
+passed its frame suite. Its first source-stepping attempt exposed an incorrect
+test expectation after a return with no following statement. The fixture now
+contains a distinct following statement; the failed evidence remains retained.
+The replacement emulated stepping run and native CI are pending.
+
+Evidence: `.agent-local/debug-lines/`, `.agent-local/unwind/` and
+`.agent-local/linux-vm/share/debug-lines-20261014/`. The replacement VM tree is
+`.agent-local/linux-vm/share/debug-lines-20261014b/`. See [DEBUG.md](DEBUG.md),
+[ADR 0015](ADRs/0015-encoder-source-lines.md) and
+[the source-to-encoder mapping](diagrams/debug-frame.mmd). Next complete the
+debugger runs, then implement owned type/value metadata and accurate value
+availability.
 
 ## Encoder-derived DWARF frames
 
@@ -8,8 +43,8 @@ Updated: 2026-10-11
 the exact CFA transition after the frame push/base move, each R12-R15 store
 and restore, and every leave/return path. FDEs cover actual function sizes and
 relocate their function addresses and CIE section offsets. ELF and assembly
-consume the same owned debug bytes and fixups. Source lines, types and variable
-locations remain open; the complete debugging gate is not satisfied.
+consume the same owned debug bytes and fixups. This frame increment preceded
+the source-line work above; the complete debugging gate is not satisfied.
 
 Strict GCC and ASan/UBSan builds passed O0/O2 checks on three source units,
 six original/assembled frame tables and twelve malformed section/relocation

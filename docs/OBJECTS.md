@@ -30,4 +30,6 @@ Eight-byte address fields use `R_X86_64_64`; four-byte section offsets use
 `R_X86_64_32`. The original twelve section indices stay fixed, including the
 symbol and string tables. At most sixteen debug sections are accepted. Names,
 alignments, field bounds, relocation widths/types and overlap are checked
-before publication. See [DEBUG.md](DEBUG.md) for frame rules and current scope.
+before publication. The source profile uses `.debug_line`, `.debug_abbrev`
+and `.debug_info` alongside `.debug_frame`; original assembly preserves their
+bytes and relocation meaning. See [DEBUG.md](DEBUG.md) for current scope.
