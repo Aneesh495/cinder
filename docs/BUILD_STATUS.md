@@ -27,15 +27,24 @@ object. The owned Linux VM linked the complete original-object compiler and
 passed its frame suite. Its first source-stepping attempt exposed an incorrect
 test expectation after a return with no following statement. The fixture now
 contains a distinct following statement; the failed evidence remains retained.
-The replacement emulated stepping run and native CI are pending.
+The replacement emulated run passed all six source-stepping sessions and four
+frame sessions. An independent audit checked the source, object, compiler and
+artifact hashes, all 58 original implementation objects, and both probes'
+links with all 56 original core objects. The reports explicitly identify
+emulation; these sessions do not satisfy the native debugging gate.
+
+Native CI then failed the strict glibc build because the new module requested
+POSIX declarations without enabling the XSI `realpath` declaration. The module
+now uses `_XOPEN_SOURCE=700`, matching preprocessing and dependency handling.
+The failed native run is retained; native replacement validation is pending.
 
 Evidence: `.agent-local/debug-lines/`, `.agent-local/unwind/` and
 `.agent-local/linux-vm/share/debug-lines-20261014/`. The replacement VM tree is
 `.agent-local/linux-vm/share/debug-lines-20261014b/`. See [DEBUG.md](DEBUG.md),
 [ADR 0015](ADRs/0015-encoder-source-lines.md) and
 [the source-to-encoder mapping](diagrams/debug-frame.mmd). Next complete the
-debugger runs, then implement owned type/value metadata and accurate value
-availability.
+native replacement runs, then implement owned type/value metadata and accurate
+value availability.
 
 ## Encoder-derived DWARF frames
 
