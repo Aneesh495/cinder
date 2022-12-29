@@ -152,7 +152,7 @@ int main(int argc, char **argv) {
     CinderType array = integer; array.kind = TYPE_ARRAY; array.size = 37U; array.align = 1U;
     CinderType aggregate = integer; aggregate.kind = TYPE_STRUCT; aggregate.size = 48U; aggregate.align = 16U;
     CinderType signature; memset(&signature, 0, sizeof(signature)); signature.kind = TYPE_FUNCTION; signature.return_type = &integer; signature.align = 1U; signature.complete = true;
-    CinderParam integer_parameter = {"value", &integer, 0U}, floating_parameter = {"value", &floating, 0U};
+    CinderParam integer_parameter = {"value", &integer, 0U, {0}}, floating_parameter = {"value", &floating, 0U, {0}};
     CinderType integer_call = signature, floating_call = signature;
     integer_call.params = (CinderParamVec){&integer_parameter, 1U, 1U}; floating_call.params = (CinderParamVec){&floating_parameter, 1U, 1U};
     unsigned mutations = 0U;

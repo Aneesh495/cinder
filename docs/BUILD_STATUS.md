@@ -2,14 +2,66 @@
 
 Updated: 2026-10-14
 
+## Owned types and unchanged scalar parameter values
+
+Debug construction now emits the actual function signature type graph:
+target scalars, qualifiers, pointers, fixed/flexible arrays, complete/incomplete
+records, unions, bitfields, enums and variadic function pointers. Forward
+references support recursive records. Enumerator names/values belong to the
+type context; parameters retain their declarator token coordinates through
+HIR/IR. Unchanged scalar parameters have register and CFA-home location lists
+derived from actual incoming ABI staging. Assigned or escaped parameters omit
+their locations. They cannot display a stale original ABI value.
+
+Strict GCC and ASan/UBSan builds passed O0/O2 independent layout/type checks,
+original/assembled debug identity and all six deliberate metadata corruptions.
+Both passed nineteen source-table checks, twenty-two malformed source/ABI map
+rejections, repeated-finalization rejection and the ownership probe, which
+destroys AST/HIR before construction and IR/types/sources before ELF output.
+GCC/Clang references returned the expected result at both levels. The strict
+frame regression also passed with unchanged non-debug object bytes. The
+independent location reader checks base selections, address ranges, register
+numbers and actual staging store bytes. An exploratory GDB check read the enum,
+SSE and pointer values and a record field while leaving the assigned parameter
+unavailable.
+The sanitizer IR campaign passed all 100,000 execution/round-trip/optimizer
+comparisons: 97,501 defined outcomes and 2,499 classified outcomes.
+
+Cinder compiled every actual implementation module with `-g`; LLVM verified
+all 59 original objects with no warnings. The final owned VM frame, source and
+type debugger checks are pending. Native ordinary validation and deterministic
+bootstrap passed for the preceding source-line portability fix. Source/CIR
+broad regressions are running against separate frozen compilers for this
+increment. The complete debugging gate still requires automatic variable
+locations, parameter write tracking and its native campaign.
+
+Failed attempts remain retained: a missing location-list base rejected by
+LLVM, an unavailable flexible-record pointer that GDB tried to read, and a
+source regression interrupted by host disk exhaustion. Another source attempt
+was invalidated when its compiler was rebuilt during execution; the replacement
+uses a separate frozen binary. Historical IR evidence was compressed and
+verified byte for byte to recover working space. None of these attempts counts
+as passed acceptance.
+
+Evidence: `.agent-local/debug-types/`, `.agent-local/debug-lines/`,
+`.agent-local/ir-campaign/` and
+`.agent-local/linux-vm/share/debug-types-20261014/`. The final VM snapshot is
+`.agent-local/linux-vm/share/debug-parameters-20261014/`; frozen host binaries
+are under `.agent-local/frozen-debug-parameters/`. Historical raw IR archives
+and per-file hashes are under `.agent-local/archives/ir-campaign/`.
+See [DEBUG.md](DEBUG.md),
+[ADR 0016](ADRs/0016-owned-debug-type-graph.md) and
+[the debug mapping](diagrams/debug-frame.mmd). Next finish current validation,
+then implement owned local declarations, lexical ranges and value availability.
+
 ## Encoder source lines and function entries
 
 `-g` now emits original DWARF4 line programs, compilation units and subprogram
 entries alongside the existing frame tables. Actual encoder offsets determine
 row addresses and function extents. Logical include and macro expansion
 coordinates, backward `#line` values, file-prefix maps and the mapped
-compilation directory feed these records. Type entries and variable locations
-remain open, so the full debugging gate is incomplete.
+compilation directory feed these records. This source-line increment preceded
+the signature type graph above; the full debugging gate is incomplete.
 
 Strict GCC and ASan/UBSan builds each passed nineteen independently decoded
 source-table cases, including relocated checkout identity and empty/noreturn

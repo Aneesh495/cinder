@@ -198,6 +198,8 @@ static CinderType *parse_enum_specifier(CinderAst *ast) {
             CinderConstantExpr constant = {expr, ast->current_function, next}; cinder_vec_push((CinderVec *)&ast->constant_exprs, &constant);
         } else if (next > INT32_MAX) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "enumerator value is outside int range");
         bind_name(ast, name, ast->types->int_type, PARSE_ENUMERATOR, next, token->loc);
+        CinderEnumerator enumerator = {cinder_arena_strndup(&ast->types->arena, token->text, token->length), next};
+        cinder_vec_push((CinderVec *)&type->enumerators, &enumerator);
         ++next;
         if (!take(ast, ',')) break;
     }
@@ -428,7 +430,7 @@ static DeclaratorNode *parse_declarator_node(CinderAst *ast, char **name, Cinder
                 if (type->kind == TYPE_ARRAY) type = cinder_type_pointer(ast->types, type->base);
                 else if (type->kind == TYPE_FUNCTION) type = cinder_type_pointer(ast->types, type);
                 if (type->kind == TYPE_VOID) cinder_diag(ast->diags, CINDER_ERROR, loc, "void parameter must be the sole unnamed parameter");
-                ParameterNode *param = node_alloc(ast, sizeof(*param)); param->param = (CinderParam){param_name, type, flags}; param->next = NULL;
+                ParameterNode *param = node_alloc(ast, sizeof(*param)); param->param = (CinderParam){param_name, type, flags, loc}; param->next = NULL;
                 if (tail == NULL) fn->params = param; else tail->next = param;
                 tail = param;
                 CinderDecl *parameter_binding = new_decl(ast, DECL_VAR, loc); parameter_binding->name = param_name; parameter_binding->type = type;
@@ -994,7 +996,7 @@ int cinder_parse(CinderAst *ast) {
             if (binding != NULL) binding->decl = decl;
             if (decl->kind == DECL_FUNCTION) {
                 for (size_t i = 0U; i < type->params.len; ++i) {
-                    CinderDecl *param = new_decl(ast, DECL_VAR, name_loc); param->name = type->params.data[i].name; param->type = type->params.data[i].type;
+                    CinderDecl *param = new_decl(ast, DECL_VAR, type->params.data[i].loc); param->name = type->params.data[i].name; param->type = type->params.data[i].type;
                     param->is_register = (type->params.data[i].declaration_flags & CINDER_PARAM_REGISTER) != 0U; param->parameter_adjusted = (type->params.data[i].declaration_flags & CINDER_PARAM_ADJUSTED) != 0U;
                     cinder_vec_push((CinderVec *)&decl->params, &param);
                 }

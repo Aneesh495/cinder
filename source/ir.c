@@ -135,7 +135,7 @@ static CinderValueId lower_call(LowerContext *context, CinderHIRExpr *expr) {
         CinderValueId arg = lower_expr(context, expr->as.call.args.data[i]);
         CinderType *type = expr->as.call.args.data[i]->type;
         if (aggregate_value(type)) arg = aggregate_snapshot(context, arg, type, expr->as.call.args.data[i]->loc);
-        CinderParam parameter = {NULL, type, 0U}; cinder_vec_push((CinderVec *)&actual, &parameter);
+        CinderParam parameter = {NULL, type, 0U, {0}}; cinder_vec_push((CinderVec *)&actual, &parameter);
         bool is_float = expr->as.call.args.data[i]->type != NULL && (expr->as.call.args.data[i]->type->kind == TYPE_FLOAT || expr->as.call.args.data[i]->type->kind == TYPE_DOUBLE);
         cinder_vec_push((CinderVec *)&lowered, &arg); cinder_vec_push((CinderVec *)&lowered_floats, &is_float);
     }
@@ -1105,6 +1105,7 @@ int cinder_lower_hir_ir(CinderIRModule *module, CinderHIR *hir, CinderDiagnostic
         for (size_t p = 0U; p < decl->params.len; ++p) {
             CinderHIRDecl *source = decl->params.data[p]; CinderIRParameter *param = cinder_arena_alloc(&module->arena, sizeof(*param), _Alignof(CinderIRParameter));
             param->name = source->name == NULL ? NULL : cinder_arena_strndup(&module->arena, source->name, strlen(source->name)); param->type = source->type; param->loc = source->loc;
+            param->unchanged = true;
             cinder_vec_push((CinderVec *)&function.params, &param);
         }
         CinderIRBlock entry = make_block(&function, "entry"); cinder_vec_push((CinderVec *)&function.blocks, &entry);
@@ -1113,6 +1114,12 @@ int cinder_lower_hir_ir(CinderIRModule *module, CinderHIR *hir, CinderDiagnostic
         for (size_t p = 0U; p < decl->params.len; ++p) { CinderHIRDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; param->lowering_slot = local.slot; cinder_vec_push((CinderVec *)&context.locals, &local); if (aggregate_value(param->type)) { CinderIRInst *copy = add_inst_ptr(&function, 0U, IR_AGG_ARG, param->loc); copy->slot = local.slot; copy->operator_code = (int)p; copy->type = param->type; ++integer_param_count; continue; } bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
         prepare_control(&context, decl);
         lower_stmt(&context, decl->body);
+        for (size_t b = 0U; b < function.blocks.len; ++b)
+            for (size_t n = 0U; n < function.blocks.data[b].instructions.len; ++n) {
+                const CinderIRInst *inst = &function.blocks.data[b].instructions.data[n];
+                if ((inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_ADDRESS) && inst->slot >= 0 && (size_t)inst->slot < function.params.len)
+                    function.params.data[inst->slot]->unchanged = false;
+            }
         if (block_at(&function, context.current)->terminator.kind == TERM_UNREACHABLE) {
             CinderValueId returned = CINDER_INVALID_VALUE;
             if (!function.is_noreturn && aggregate_value(function.type->return_type)) {

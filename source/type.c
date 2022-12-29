@@ -48,6 +48,7 @@ void cinder_types_destroy(CinderTypeContext *types) {
     for (size_t i = 0U; i < types->all_types.len; ++i) {
         free(types->all_types.data[i]->params.data);
         free(types->all_types.data[i]->fields.data);
+        free(types->all_types.data[i]->enumerators.data);
     }
     free(types->all_types.data);
     cinder_arena_destroy(&types->arena);
@@ -82,8 +83,10 @@ CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, un
     *result = *base; result->qualifiers |= qualifiers;
     result->params.data = NULL; result->params.len = 0U; result->params.cap = 0U;
     result->fields.data = NULL; result->fields.len = 0U; result->fields.cap = 0U;
+    result->enumerators.data = NULL; result->enumerators.len = 0U; result->enumerators.cap = 0U;
     for (size_t i = 0U; i < base->params.len; ++i) cinder_vec_push((CinderVec *)&result->params, &base->params.data[i]);
     for (size_t i = 0U; i < base->fields.len; ++i) cinder_vec_push((CinderVec *)&result->fields, &base->fields.data[i]);
+    for (size_t i = 0U; i < base->enumerators.len; ++i) cinder_vec_push((CinderVec *)&result->enumerators, &base->enumerators.data[i]);
     return result;
 }
 

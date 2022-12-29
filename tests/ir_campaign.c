@@ -118,9 +118,9 @@ static Expected memory_join(CinderIRModule *module, unsigned index) {
 static Expected recursion(CinderIRModule *module, unsigned index) {
     CinderType *type = module->types->int_type;
     CinderIRFunction helper = function(module, "sum", type);
-    CinderParam param = {"n", type, 0U}; cinder_vec_push((CinderVec *)&helper.type->params, &param);
+    CinderParam param = {"n", type, 0U, {0}}; cinder_vec_push((CinderVec *)&helper.type->params, &param);
     CinderIRParameter *parameter = cinder_arena_alloc(&module->arena, sizeof(*parameter), _Alignof(CinderIRParameter));
-    *parameter = (CinderIRParameter){"n", type, {0}};
+    *parameter = (CinderIRParameter){"n", type, {0}, false};
     cinder_vec_push((CinderVec *)&helper.params, &parameter);
     for (unsigned b = 0U; b < 3U; ++b) block(&helper);
     CinderIRInst argument = instruction(IR_ARG, 0U, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, type); argument.slot = 0; argument.operator_code = 0; add(&helper, 0U, argument);

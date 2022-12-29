@@ -1,9 +1,10 @@
 # Debug information profile
 
 `-g` emits original DWARF version 4 frame records, line tables, compilation
-units and subprogram entries. The profile supports source breakpoints,
-stepping and backtraces across translation units. Type entries and variable
-locations remain open. The complete debugging acceptance campaign also
+units, subprogram entries and their referenced types. The profile supports source breakpoints,
+stepping, type inspection, unchanged scalar parameters and backtraces across
+translation units. Automatic/global variable locations and parameter writes
+remain open. The complete debugging acceptance campaign also
 requires accurate supported value locations in native debugger sessions.
 
 The profile uses DWARF32 lengths, eight-byte target addresses, little-endian
@@ -56,7 +57,7 @@ instructions to a macro definition in a header.
 
 `.debug_info` contains a DWARF4 compilation unit and a child subprogram entry
 for each emitted function. Entries record declaration coordinates, external
-visibility, relocated start address, exact byte extent and a frame-base
+visibility, relocated start address, exact byte extent, return type and a frame-base
 expression using `DW_OP_call_frame_cfa`. Section offsets relocate to
 `.debug_abbrev` and `.debug_line`, allowing the linker to concatenate units.
 The CU language is DWARF4's C99 profile identifier. This does not change the
@@ -74,9 +75,64 @@ identities, unordered or out-of-function rows, absent prologue rows and
 repeated finalization before adding source sections. The object owns all
 serialized bytes and fixup names after source construction returns.
 
+## Types and parameter declarations
+
+`debug_type.c` emits basic target types, const/volatile/restrict qualification,
+pointers, arrays, structures, unions, bitfields, enumerations and function
+pointer signatures. Complete records use the semantic layout's byte size,
+member offsets and DWARF4 data-bit offsets. Incomplete records use declaration
+entries; flexible arrays have an open subrange. Enum names and signed values
+belong to the type context, so they survive AST retirement. Named parameters
+carry the actual declarator token coordinates through HIR and IR.
+
+Type references are CU-relative four-byte offsets. A queue registers types
+before emitting their referenced children, then patches forward references.
+This handles recursive records without recursive serialization. Qualified
+variants are keyed by their actual type record and remaining qualifiers,
+including separately allocated qualified copies with the same semantic tag
+identity. Empty function signatures use a childless abbreviation.
+
+Function and parameter types are retained even when optimization removes their
+uses. Parameters assigned in the body or used through their object address
+have no location attribute and remain unavailable. Local/global variable
+entries, parameter write tracking, lexical value ranges and retained typedef
+aliases remain open. The current type graph starts
+from emitted function signatures, rather than advertising every source typedef
+as a separately retained debug declaration.
+
+Debug construction borrows the IR module, source manager and type context only
+while serializing. The type ownership probe destroys AST/sema before HIR
+lowering and HIR before machine/debug construction. It then destroys IR, types
+and source storage before publishing ELF from the owned bytes and fixups.
+Canonical CIR remains schema 6; source-only declaration coordinates and enum
+debug names are not serialized, and `cinderir` does not accept `-g`.
+
+## Unchanged scalar parameter locations
+
+Before optimization, IR construction marks a parameter unavailable if its slot
+is assigned or its address is formed. The backend records locations only for
+the remaining scalar parameters. This is a conservative analysis of the
+parameter object; it does not assume that a pointer's pointee stays unchanged.
+Aggregate parameter locations remain open.
+
+Each location list begins with an explicit base-selection entry relocated to
+the function. Address pairs are offsets relative to that base. Register
+arguments use their real System V GPR/SSE register until incoming staging has
+completed, then a `DW_OP_fbreg` location in the actual private ABI save area.
+Stack arguments use their incoming CFA-relative address throughout. The
+canonical frame address is the same caller stack address before and after
+frame setup and `leave`, so the saved home remains addressable at the return
+instruction. Function-symbol extents bound every list.
+
+The private incoming save slots are distinct from local objects, spills and
+outgoing call storage. They preserve an unchanged parameter even when its IR
+loads are promoted or removed. An assigned or escaped parameter cannot use
+that original home as its current value. No stale original value is supplied
+for those parameters.
+
 ## Verification and use
 
-`make test-debug` runs both frame and source-table checks. It requires LLVM's `llvm-dwarfdump`, `llvm-objdump` and
+`make test-debug` runs frame, source-table and type checks. It requires LLVM's `llvm-dwarfdump`, `llvm-objdump` and
 `llvm-mc`, plus GCC and Clang reference drivers. On Linux x86-64 it also
 requires GDB. The test checks O0/O2 frame tables against independently decoded
 instruction boundaries, actual saved-register store/load bytes, all return
@@ -98,8 +154,17 @@ The object writer preserves a complete previous artifact; the assembly writer
 emits no bytes for the rejected records. Debug-disabled objects preserve the
 normal section layout and text bytes. Raw commands, object hashes, tool hashes,
 recordings and reports live under `.agent-local/unwind/` and
-`.agent-local/debug-lines/`. A second API probe rejects fifteen malformed
-source maps and repeated finalization without adding sections or fixups.
+`.agent-local/debug-lines/`. A second API probe rejects twenty-two malformed
+source/ABI maps and repeated finalization without adding sections or fixups.
+Type reports under `.agent-local/debug-types/` check independently specified
+record sizes, field/bit positions, array bounds, signed enum values, recursive
+references, qualifier chains and callback signatures. Location-list decoding
+checks function bases/ranges, ABI register numbers and CFA homes against actual
+staging store bytes. Six corruptions must
+fail the independent layout assertions. GCC and Clang execute the fixture at
+both levels. The native path checks GDB type inspection, integer/enum/SSE and
+pointer values, fields reached through a record pointer, and an explicitly
+unavailable assigned parameter, alongside the separate lifetime probe.
 Explicit `--execution-profile emulated` runs preserve that classification;
 they do not count as native debugger acceptance.
 
@@ -111,6 +176,6 @@ build/cindercc -O0 -g tests/debug/unwind.c -o unwind-example
 gdb -ex 'break unwind.c:3' -ex run -ex bt -ex next ./unwind-example
 ```
 
-The full debug gate still requires type entries and accurate supported
+The full debug gate still requires accurate supported
 variable locations across its native debugger sessions. These source and
 frame tests do not replace that gate.

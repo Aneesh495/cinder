@@ -23,8 +23,21 @@ int main(int argc, char **argv) {
     CinderFileId file = cinder_source_load(&sources, argv[1], stderr);
     if (file == CINDER_NO_FILE) return 2;
     CinderLoc loc = cinder_loc(file, 0U, 1U);
-    for (unsigned mutation = 0U; mutation < 15U; ++mutation) {
+    CinderTypeContext types; cinder_types_init(&types);
+    CinderIRModule module; cinder_ir_init(&module, &types);
+    CinderIRFunction ir = {0}; ir.name = cinder_strndup("probe", 5U);
+    CinderParamVec parameters = {NULL, 0U, 0U}; ir.type = cinder_type_function(&types, types.int_type, &parameters);
+    CinderParam type_parameter = {"value", types.int_type, 0U, loc};
+    cinder_vec_push((CinderVec *)&ir.type->params, &type_parameter);
+    CinderIRParameter *parameter = cinder_arena_alloc(&module.arena, sizeof(*parameter), _Alignof(CinderIRParameter));
+    *parameter = (CinderIRParameter){"value", types.int_type, loc, true};
+    cinder_vec_push((CinderVec *)&ir.params, &parameter);
+    cinder_vec_push((CinderVec *)&module.functions, &ir);
+    for (unsigned mutation = 0U; mutation < 22U; ++mutation) {
         CinderMachineObject machine; object(&machine, loc);
+        if (mutation >= 15U) {
+            CinderDebugParameter entry = {0U, 0U, 5, -24}; cinder_vec_push((CinderVec *)&machine.debug_parameters, &entry);
+        }
         CinderDebugFunction *function = &machine.debug_functions.data[0];
         CinderDebugRow *row = &machine.debug_rows.data[1];
         switch (mutation) {
@@ -43,19 +56,30 @@ int main(int argc, char **argv) {
             case 12U: machine.symbol_offsets.len = 0U; break;
             case 13U: machine.symbol_sizes.data[0] = 0U; break;
             case 14U: machine.symbol_globals.len = 0U; break;
+            case 15U: machine.debug_parameters.data[0].symbol = 1U; break;
+            case 16U: machine.debug_parameters.data[0].parameter = 1U; break;
+            case 17U: parameter->unchanged = false; break;
+            case 18U: machine.debug_parameters.data[0].reg = 3; break;
+            case 19U: machine.debug_parameters.data[0].cfa_offset = -25; break;
+            case 20U: machine.debug_parameters.data[0].cfa_offset = 0; break;
+            case 21U: {
+                CinderDebugParameter copy = machine.debug_parameters.data[0]; cinder_vec_push((CinderVec *)&machine.debug_parameters, &copy); break;
+            }
             default: return 2;
         }
         CinderDiagnostics diags; cinder_diags_init(&diags);
-        if (cinder_debug_finish(&machine, &sources, &diags) == 0 || diags.errors == 0U || machine.debug_sections.len != 0U || machine.fixups.len != 0U) return 1;
+        if (cinder_debug_finish(&machine, &module, &sources, &diags) == 0 || diags.errors == 0U || machine.debug_sections.len != 0U || machine.fixups.len != 0U) return 1;
         cinder_diags_destroy(&diags); cinder_machine_destroy(&machine);
+        parameter->unchanged = true;
     }
     CinderMachineObject machine; object(&machine, loc);
     CinderDiagnostics diags; cinder_diags_init(&diags);
-    if (cinder_debug_finish(&machine, &sources, &diags) != 0 || diags.errors != 0U) return 1;
+    if (cinder_debug_finish(&machine, &module, &sources, &diags) != 0 || diags.errors != 0U) return 1;
     size_t sections = machine.debug_sections.len, fixups = machine.fixups.len;
-    if (cinder_debug_finish(&machine, &sources, &diags) == 0 || diags.errors == 0U ||
+    if (cinder_debug_finish(&machine, &module, &sources, &diags) == 0 || diags.errors == 0U ||
         sections != machine.debug_sections.len || fixups != machine.fixups.len) return 1;
     cinder_diags_destroy(&diags); cinder_machine_destroy(&machine); cinder_sources_destroy(&sources);
-    puts("Source debug: fifteen malformed maps and repeated finalization rejected before mutation");
+    cinder_ir_destroy(&module); cinder_types_destroy(&types);
+    puts("Source debug: twenty-two malformed maps and repeated finalization rejected before mutation");
     return 0;
 }

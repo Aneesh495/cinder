@@ -280,6 +280,7 @@ typedef enum {
 typedef struct CinderType CinderType;
 typedef struct CinderField CinderField;
 typedef struct CinderParam CinderParam;
+typedef struct { char *name; int64_t value; } CinderEnumerator;
 struct CinderField {
     char *name;
     CinderType *type;
@@ -293,6 +294,7 @@ struct CinderParam {
     char *name;
     CinderType *type;
     unsigned declaration_flags;
+    CinderLoc loc;
 };
 enum { CINDER_PARAM_REGISTER = 1U, CINDER_PARAM_ADJUSTED = 2U };
 typedef struct {
@@ -316,6 +318,7 @@ struct CinderType {
     CinderType *return_type;
     bool variadic;
     CINDER_VEC_TYPE(CinderField) fields;
+    CINDER_VEC_TYPE(CinderEnumerator) enumerators;
     char *tag;
 };
 
@@ -866,7 +869,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderBlockId) successors;
 } CinderIRBlock;
 
-typedef struct { char *name; CinderType *type; CinderLoc loc; } CinderIRParameter;
+typedef struct { char *name; CinderType *type; CinderLoc loc; bool unchanged; } CinderIRParameter;
 typedef struct {
     char *name;
     CinderType *type;
@@ -1164,6 +1167,7 @@ typedef struct {
 } CinderDebugSection;
 
 typedef struct { size_t offset; CinderLoc loc; } CinderDebugRow;
+typedef struct { size_t symbol, parameter; int reg, cfa_offset; } CinderDebugParameter;
 typedef struct {
     size_t symbol;
     CinderLoc loc;
@@ -1186,6 +1190,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderDebugSection) debug_sections;
     CINDER_VEC_TYPE(CinderDebugRow) debug_rows;
     CINDER_VEC_TYPE(CinderDebugFunction) debug_functions;
+    CINDER_VEC_TYPE(CinderDebugParameter) debug_parameters;
     bool debug_enabled;
     unsigned literal_counter;
     size_t frame_size;
@@ -1202,7 +1207,7 @@ typedef struct {
 size_t cinder_debug_section(CinderMachineObject *object, const char *name, size_t alignment);
 bool cinder_debug_sections_valid(const CinderMachineObject *object, CinderDiagnostics *diags);
 void cinder_debug_row(CinderMachineObject *object, CinderLoc loc);
-int cinder_debug_finish(CinderMachineObject *object, CinderSourceManager *sources, CinderDiagnostics *diags);
+int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *module, CinderSourceManager *sources, CinderDiagnostics *diags);
 void cinder_unwind_begin(CinderUnwind *unwind, CinderMachineObject *object, const char *symbol, size_t start);
 void cinder_unwind_prologue(CinderUnwind *unwind, CinderMachineObject *object);
 void cinder_unwind_saved(CinderUnwind *unwind, CinderMachineObject *object, unsigned reg, int offset);

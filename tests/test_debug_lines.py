@@ -99,6 +99,7 @@ def information(data, abbreviations, relocations, files, sequences):
     assert at == len(abbreviations)
     fixups = {r['offset']: r for r in relocations}; used = {6}
     assert fixups[6]['kind'] == 10 and fixups[6]['symbol']['section'] == '.debug_abbrev' and fixups[6]['addend'] == 0
+    references = []
     def entry(at):
         code, at = leb(data, at)
         tag, children, attributes = definitions[code]; values = {}
@@ -108,7 +109,11 @@ def information(data, abbreviations, relocations, files, sequences):
             elif form == 15: value, at = leb(data, at)
             elif form in (1, 7): value = struct.unpack_from('<Q', data, at)[0]; at += 8
             elif form == 5: value = struct.unpack_from('<H', data, at)[0]; at += 2
+            elif form == 11: value = data[at]; at += 1
             elif form == 12: value = data[at]; at += 1
+            elif form == 13: value, at = leb(data, at, True)
+            elif form == 19:
+                value = struct.unpack_from('<I', data, at)[0]; at += 4; references.append(value)
             elif form == 23: value = struct.unpack_from('<I', data, at)[0]; at += 4
             elif form == 24:
                 extent, at = leb(data, at); value = data[at:at + extent]; at += extent
@@ -119,30 +124,57 @@ def information(data, abbreviations, relocations, files, sequences):
                 if name == 0x10: assert form == 23 and fix['kind'] == 10 and fix['symbol']['section'] == '.debug_line'
                 else: assert form == 1 and fix['kind'] == 1 and fix['symbol']['kind'] == 2
                 value = fix['symbol']
+            elif name == 2 and form == 23:
+                fix = fixups[offset]; used.add(offset)
+                assert value == 0 and fix['kind'] == 10 and fix['symbol']['section'] == '.debug_loc' and fix['addend'] >= 0
+                value = dict(section='.debug_loc', offset=fix['addend'])
             values[name] = value
         return at, tag, children, values
     at, tag, children, unit = entry(11)
     assert tag == 0x11 and children == 1 and unit[0x25].startswith('Cinder ') and unit[0x13] == 12
     assert unit[3] == files[0] and pathlib.PurePosixPath(unit[0x1b]).is_absolute()
+    nodes = {}
+    def children_at(at, depth=0):
+        assert depth < 1024
+        children = []
+        while data[at]:
+            offset = at; at, tag, has_children, values = entry(at)
+            child_nodes = []
+            if has_children: at, child_nodes = children_at(at, depth + 1)
+            node = dict(offset=offset, tag=tag, attributes=values, children=child_nodes)
+            assert offset not in nodes
+            nodes[offset] = node; children.append(node)
+        return at + 1, children
+    at, entries = children_at(at)
+    assert at == len(data) and all(reference in nodes for reference in references)
     functions = []
-    while data[at]:
-        at, tag, children, function = entry(at)
-        assert tag == 0x2e and children == 0 and function[0x40] == b'\x9c'
+    for node in entries:
+        if node['tag'] != 0x2e: continue
+        function = node['attributes']
+        assert function[0x40] == b'\x9c' and function[0x27] == 1
         assert function[0x3f] in (0, 1) and 1 <= function[0x3a] <= len(files)
         assert function[0x3b] > 0 and function[0x39] > 0
         symbol = function[0x11]
         assert function[3] == symbol['name'] and function[0x12] == symbol['size']
+        parameters = []
+        for child in node['children']:
+            assert child['tag'] in (5, 0x18)
+            if child['tag'] == 5:
+                parameter = child['attributes']
+                assert 2 not in parameter or parameter[2]['section'] == '.debug_loc'
+                assert 1 <= parameter[0x3a] <= len(files) and parameter[0x3b] > 0 and parameter[0x39] > 0
+                parameters.append(dict(name=parameter[3], type=parameter[0x49], location=parameter.get(2)))
         functions.append(dict(name=function[3], file=files[function[0x3a] - 1], line=function[0x3b],
-                              column=function[0x39], external=bool(function[0x3f])))
-    assert at + 1 == len(data) and used == set(fixups)
+                              column=function[0x39], external=bool(function[0x3f]), parameters=parameters))
+    assert used == set(fixups)
     assert [f['name'] for f in functions] == [s['symbol']['name'] for s in sequences]
-    return unit, functions
+    return unit, functions, nodes
 
 
 def validate(path, disassembly):
     sections, symbols, relas = elf(path)
     files, sequences = line_table(sections['.debug_line'], relas.get('.debug_line', []))
-    unit, functions = information(sections['.debug_info'], sections['.debug_abbrev'], relas['.debug_info'], files, sequences)
+    unit, functions, _ = information(sections['.debug_info'], sections['.debug_abbrev'], relas['.debug_info'], files, sequences)
     boundaries = {int(m[1], 16) for m in re.finditer(r'^\s*([0-9a-f]+):\s+[a-z]', disassembly, re.M)}
     expected = [s for s in symbols if s['kind'] == 2 and s['section'] == '.text']
     assert [s['symbol'] for s in sequences] == expected
@@ -279,14 +311,14 @@ def main():
         assert probe.is_file(), 'build the cinder_debug_line_probe target first'
     probe_hash = digest(probe)
     recording = run([probe, sources[0]], 'probe-execute')
-    assert recording == 'Source debug: fifteen malformed maps and repeated finalization rejected before mutation\n'
+    assert recording == 'Source debug: twenty-two malformed maps and repeated finalization rejected before mutation\n'
     assert digest(probe) == probe_hash
     assert digest(compiler) == compiler_hash and inputs == {name: digest(pathlib.Path(name)) for name in inputs}
     assert all(digest(pathlib.Path(value['path'])) == value['sha256'] for value in identities.values())
     report = dict(schema=1, compiler_sha256=compiler_hash, source_sha256=source_hash, inputs=inputs, tools=identities,
                   execution_profile=profile, native=profile == 'native', target_execution=execute, source_date_epoch=0,
                   observations=observations, commands=commands, debugger_sessions=6 if execute else 0,
-                  api_probe=dict(path=str(probe), sha256=probe_hash), rejected_maps=15, rejected_repeated_finalization=True,
+                  api_probe=dict(path=str(probe), sha256=probe_hash), rejected_maps=22, rejected_repeated_finalization=True,
                   artifacts={str(path.relative_to(root)): digest(path) for path in sorted(artifacts)})
     (root / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f'Source debug: {len(observations)} tables; debugger sessions={report["debugger_sessions"]}; native={report["native"]}; evidence={root}')
