@@ -132,7 +132,7 @@ for those parameters.
 
 ## Verification and use
 
-`make test-debug` runs frame, source-table and type checks. It requires LLVM's `llvm-dwarfdump`, `llvm-objdump` and
+`make test-debug` runs frame, source-table, type and parameter checks. It requires LLVM's `llvm-dwarfdump`, `llvm-objdump` and
 `llvm-mc`, plus GCC and Clang reference drivers. On Linux x86-64 it also
 requires GDB. The test checks O0/O2 frame tables against independently decoded
 instruction boundaries, actual saved-register store/load bytes, all return
@@ -179,3 +179,12 @@ gdb -ex 'break unwind.c:3' -ex run -ex bt -ex next ./unwind-example
 The full debug gate still requires accurate supported
 variable locations across its native debugger sessions. These source and
 frame tests do not replace that gate.
+
+The parameter suite uses a two-unit call with seventeen scalar arguments. It
+exhausts six GPR and eight SSE argument registers, independently checks the
+three incoming CFA offsets and every actual register-save instruction, and
+compares original and assembled debug sections at O0/O2. On Linux it
+cross-links GCC/Clang objects in both directions. Two GDB sessions inspect
+all parameters before and after a nested call, including the stack pointer
+argument and its pointee. Six corruptions of locations must be rejected by
+the independent reader. Reports live under `.agent-local/debug-parameters/`.

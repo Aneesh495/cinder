@@ -1,3 +1,22 @@
+## Stack parameter verification increment
+
+The debug parameter suite checks a seventeen-argument, two-translation-unit
+call at O0/O2. Independent readers check GPR/SSE register exhaustion, actual
+incoming save bytes, stack arguments at CFA offsets 0/8/16, all debug-section
+bytes and relocations against LLVM assembly, and six deliberately corrupted
+location records. Linux runs also cross-link GCC/Clang objects in both
+directions and inspect every parameter before and after a nested call in GDB.
+This extends verification of unchanged scalar parameters. Automatic local
+variables, parameter writes and the full debugging acceptance gate remain open.
+
+The preceding type/parameter source passed native Linux validation and the
+complete deterministic bootstrap, including authored suites for stages 2 and 3.
+The current macOS frozen build completed 1,239 source cases and 2,478 CIR
+round trips. An independent audit of the emulated Linux build verified all
+59 original source objects, the 57-object core used by API probes, and twelve
+GDB sessions across frame, line and type suites. Emulation remains separate
+from native acceptance and performance evidence.
+
 # Build status
 
 Updated: 2026-10-14

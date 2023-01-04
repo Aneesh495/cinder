@@ -18,6 +18,8 @@ flowchart LR
     TYPES --> DIE
     ABI[Selected incoming ABI and actual staging stores] --> LOC[Unchanged scalar parameter register and CFA location lists]
     LOC --> O
+    LOC --> PARAM[Independent register-exhaustion and incoming stack-home checks]
+    PARAM --> CALL[GDB values before and after a nested call]
     O --> ELF[elf64.c: original ELF sections and relocations]
     O --> ASM[assembly.c: same bytes and relocations]
     ELF --> LINK[System linker combines translation units]

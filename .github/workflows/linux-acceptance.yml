@@ -30,7 +30,7 @@ jobs:
         run: make build
       - name: Frontend and object checks
         run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-constraints test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-compound-literals test-numeric test-storage test-census test-allocation test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object test-output
-      - name: Original DWARF frames, source lines and debugger stepping
+      - name: Original DWARF frames, source lines, types and parameter values
         run: make test-debug
       - name: Native Linux execution
         run: tests/run_native_linux.sh build/cindercc
