@@ -74,8 +74,8 @@ static bool total(const CinderIRInst *inst, const bool *constant, const int64_t 
 
 static void transfer(CinderIRInst *inst, CinderIRBlock *preheader) {
     cinder_vec_push((CinderVec *)&preheader->instructions, inst);
-    CinderLoc loc = inst->loc; CinderType *type = inst->type;
-    memset(inst, 0, sizeof(*inst)); inst->op = IR_NOP; inst->type = type; inst->loc = loc;
+    int scope = inst->debug_scope; CinderLoc loc = inst->loc; CinderType *type = inst->type;
+    memset(inst, 0, sizeof(*inst)); inst->op = IR_NOP; inst->type = type; inst->loc = loc; inst->debug_scope = scope;
     inst->dst = CINDER_INVALID_VALUE; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; inst->slot = -1;
 }
 

@@ -61,6 +61,7 @@ set(CINDER_SOURCES
   source/debug_frame.c
   source/debug_line.c
   source/debug_type.c
+  source/debug_scope.c
   source/elf64.c
   source/assembly.c
   source/driver.c

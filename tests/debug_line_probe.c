@@ -13,8 +13,10 @@ static void object(CinderMachineObject *machine, CinderLoc loc) {
     CinderDebugRow first = {0U, loc}, second = {4U, loc};
     cinder_vec_push((CinderVec *)&machine->debug_rows, &first);
     cinder_vec_push((CinderVec *)&machine->debug_rows, &second);
-    CinderDebugFunction function = {0U, loc, 4U, 0U, 2U};
+    CinderDebugFunction function = {0U, loc, 4U, 0U, 2U, 0U, 1U};
     cinder_vec_push((CinderVec *)&machine->debug_functions, &function);
+    CinderDebugPoint point = {0U, 0U, SIZE_MAX, 4U, 16U, 0};
+    cinder_vec_push((CinderVec *)&machine->debug_points, &point);
 }
 
 int main(int argc, char **argv) {
@@ -32,8 +34,13 @@ int main(int argc, char **argv) {
     CinderIRParameter *parameter = cinder_arena_alloc(&module.arena, sizeof(*parameter), _Alignof(CinderIRParameter));
     *parameter = (CinderIRParameter){"value", types.int_type, loc, true};
     cinder_vec_push((CinderVec *)&ir.params, &parameter);
+    CinderIRScope scope = {-1, loc}; cinder_vec_push((CinderVec *)&ir.debug_scopes, &scope);
+    CinderIRBlock block = {0}; block.terminator.debug_scope = 0; cinder_vec_push((CinderVec *)&ir.blocks, &block);
+    cinder_vec_push((CinderVec *)&ir.local_types, &types.int_type); cinder_vec_push((CinderVec *)&ir.local_types, &types.int_type); ir.local_count = 2U;
+    CinderIRLocal local = {"local", types.int_type, loc, 1, 0}; cinder_vec_push((CinderVec *)&ir.debug_locals, &local);
     cinder_vec_push((CinderVec *)&module.functions, &ir);
-    for (unsigned mutation = 0U; mutation < 22U; ++mutation) {
+    CinderIRFunction *owned = &module.functions.data[0];
+    for (unsigned mutation = 0U; mutation < 43U; ++mutation) {
         CinderMachineObject machine; object(&machine, loc);
         if (mutation >= 15U) {
             CinderDebugParameter entry = {0U, 0U, 5, -24}; cinder_vec_push((CinderVec *)&machine.debug_parameters, &entry);
@@ -65,12 +72,36 @@ int main(int argc, char **argv) {
             case 21U: {
                 CinderDebugParameter copy = machine.debug_parameters.data[0]; cinder_vec_push((CinderVec *)&machine.debug_parameters, &copy); break;
             }
+            case 22U: owned->debug_scopes.data[0].parent = 0; break;
+            case 23U: owned->debug_scopes.data[0].parent = -2; break;
+            case 24U: owned->debug_scopes.data[0].loc.file = CINDER_NO_FILE; break;
+            case 25U: owned->debug_locals.data[0].name = NULL; break;
+            case 26U: owned->debug_locals.data[0].type = NULL; break;
+            case 27U: owned->debug_locals.data[0].slot = -1; break;
+            case 28U: owned->debug_locals.data[0].slot = 2; break;
+            case 29U: owned->debug_locals.data[0].type = types.long_type; break;
+            case 30U: owned->debug_locals.data[0].scope = 1; break;
+            case 31U: owned->debug_locals.data[0].loc.file = CINDER_NO_FILE; break;
+            case 32U: cinder_vec_push((CinderVec *)&owned->debug_locals, &local); break;
+            case 33U: function->first_point = 1U; break;
+            case 34U: function->end_point = 2U; break;
+            case 35U: machine.debug_points.data[0].block = 1U; break;
+            case 36U: machine.debug_points.data[0].instruction = 0U; break;
+            case 37U: machine.debug_points.data[0].symbol = 1U; break;
+            case 38U: machine.debug_points.data[0].scope = 1; break;
+            case 39U: machine.debug_points.data[0].begin = 5U; break;
+            case 40U: machine.debug_points.data[0].end = 17U; break;
+            case 41U: machine.debug_points.len = 0U; break;
+            case 42U: {
+                CinderDebugPoint point = machine.debug_points.data[0]; cinder_vec_push((CinderVec *)&machine.debug_points, &point); break;
+            }
             default: return 2;
         }
         CinderDiagnostics diags; cinder_diags_init(&diags);
         if (cinder_debug_finish(&machine, &module, &sources, &diags) == 0 || diags.errors == 0U || machine.debug_sections.len != 0U || machine.fixups.len != 0U) return 1;
         cinder_diags_destroy(&diags); cinder_machine_destroy(&machine);
         parameter->unchanged = true;
+        owned->debug_scopes.data[0] = scope; owned->debug_locals.data[0] = local; owned->debug_locals.len = 1U;
     }
     CinderMachineObject machine; object(&machine, loc);
     CinderDiagnostics diags; cinder_diags_init(&diags);
@@ -80,6 +111,6 @@ int main(int argc, char **argv) {
         sections != machine.debug_sections.len || fixups != machine.fixups.len) return 1;
     cinder_diags_destroy(&diags); cinder_machine_destroy(&machine); cinder_sources_destroy(&sources);
     cinder_ir_destroy(&module); cinder_types_destroy(&types);
-    puts("Source debug: twenty-two malformed maps and repeated finalization rejected before mutation");
+    puts("Source debug: forty-three malformed maps and repeated finalization rejected before mutation");
     return 0;
 }

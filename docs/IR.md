@@ -6,6 +6,15 @@ frontend conversions rather than asking the encoder to infer source semantics.
 Global loads/stores remain explicit effects keyed by symbol name. Volatile
 locals remain ordered memory operations.
 
+IR also owns automatic-object names, types, declaration locations, slot IDs
+and lexical scope parents. A declaration starts a nested suffix of its C
+scope, so later shadowing cannot hide an outer declaration before the inner
+declarator. Instructions and terminators retain their actual scope through
+rewrites and critical-edge splitting. The encoder records byte boundaries
+for every selected operation, including zero-byte lifetime operations, and
+builds DWARF scope ranges from those boundaries. This metadata survives HIR
+retirement and does not enter canonical CIR or executable semantics.
+
 `source/analysis.c` computes reachable reverse postorder without recursive CFG
 traversal, immediate dominators, dominator-tree children, dominance frontiers,
 and backedges. Irreducible regions still have dominators; only edges whose

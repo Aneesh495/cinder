@@ -20,7 +20,7 @@ variadics are implemented under the declared profile. Their contracts and
 cross-toolchain tests accompany the language documentation.
 Pointer/control/frame target pseudos still require full MIR selection. PIC and
 automatic/global variable and parameter-write debug locations remain open.
-`-g` emits original DWARF v4 frames, source lines, signature types and unchanged
-scalar parameter locations; see [DEBUG.md](DEBUG.md).
+`-g` emits original DWARF v4 frames, source lines, types, lexical scopes and
+unchanged scalar parameter locations; see [DEBUG.md](DEBUG.md).
 
 On macOS arm64, Cinder can build the frontend and emit an x86-64 ELF file for inspection. It cannot link or execute that file as a native macOS binary. Linux x86-64 execution and mixed-toolchain ABI checks require the declared Linux environment.

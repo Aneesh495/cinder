@@ -75,9 +75,9 @@ unsigned cinder_cleanup_copies(CinderIRFunction *function, CinderDiagnostics *di
             CinderValueId replacement = origin(aliases, count, inst->dst);
             if ((inst->op == IR_PHI || inst->op == IR_COPY) && replacement < function->value_count && replacement != inst->dst &&
                 (inst->op == IR_PHI || defined[replacement])) {
-                CinderLoc loc = inst->loc; CinderType *type = inst->type;
+                int scope = inst->debug_scope; CinderLoc loc = inst->loc; CinderType *type = inst->type;
                 free(inst->callee); free(inst->args.data); free(inst->arg_floats.data); free(inst->phi_blocks.data);
-                memset(inst, 0, sizeof(*inst)); inst->op = IR_NOP; inst->type = type; inst->loc = loc; inst->slot = -1;
+                memset(inst, 0, sizeof(*inst)); inst->op = IR_NOP; inst->type = type; inst->loc = loc; inst->debug_scope = scope; inst->slot = -1;
                 inst->dst = CINDER_INVALID_VALUE; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; ++removed;
                 continue;
             }

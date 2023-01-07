@@ -848,6 +848,7 @@ typedef struct {
     CINDER_VEC_TYPE(bool) arg_floats;
     CINDER_VEC_TYPE(CinderBlockId) phi_blocks;
     CinderLoc loc;
+    int debug_scope;
 } CinderIRInst;
 
 typedef struct {
@@ -858,6 +859,7 @@ typedef struct {
     CinderBlockId no;
     CinderValueId condition;
     CinderLoc loc;
+    int debug_scope;
 } CinderTerminator;
 
 typedef struct {
@@ -870,6 +872,8 @@ typedef struct {
 } CinderIRBlock;
 
 typedef struct { char *name; CinderType *type; CinderLoc loc; bool unchanged; } CinderIRParameter;
+typedef struct { int parent; CinderLoc loc; } CinderIRScope;
+typedef struct { char *name; CinderType *type; CinderLoc loc; int slot, scope; } CinderIRLocal;
 typedef struct {
     char *name;
     CinderType *type;
@@ -882,6 +886,9 @@ typedef struct {
     CinderTypeContext *types;
     CINDER_VEC_TYPE(CinderType *) local_types;
     CINDER_VEC_TYPE(size_t) local_alignments;
+    CINDER_VEC_TYPE(CinderIRScope) debug_scopes;
+    CINDER_VEC_TYPE(CinderIRLocal) debug_locals;
+    int debug_scope;
     bool global;
     bool is_noreturn;
     CinderHIR *hir;
@@ -1168,12 +1175,15 @@ typedef struct {
 
 typedef struct { size_t offset; CinderLoc loc; } CinderDebugRow;
 typedef struct { size_t symbol, parameter; int reg, cfa_offset; } CinderDebugParameter;
+typedef struct { size_t symbol, block, instruction, begin, end; int scope; } CinderDebugPoint;
 typedef struct {
     size_t symbol;
     CinderLoc loc;
     size_t prologue_end;
     size_t first_row;
     size_t end_row;
+    size_t first_point;
+    size_t end_point;
 } CinderDebugFunction;
 
 typedef struct {
@@ -1191,6 +1201,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderDebugRow) debug_rows;
     CINDER_VEC_TYPE(CinderDebugFunction) debug_functions;
     CINDER_VEC_TYPE(CinderDebugParameter) debug_parameters;
+    CINDER_VEC_TYPE(CinderDebugPoint) debug_points;
     bool debug_enabled;
     unsigned literal_counter;
     size_t frame_size;

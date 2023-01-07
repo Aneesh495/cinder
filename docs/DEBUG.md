@@ -3,7 +3,7 @@
 `-g` emits original DWARF version 4 frame records, line tables, compilation
 units, subprogram entries and their referenced types. The profile supports source breakpoints,
 stepping, type inspection, unchanged scalar parameters and backtraces across
-translation units. Automatic/global variable locations and parameter writes
+translation units. Automatic/global variable values and parameter writes
 remain open. The complete debugging acceptance campaign also
 requires accurate supported value locations in native debugger sessions.
 
@@ -94,9 +94,8 @@ identity. Empty function signatures use a childless abbreviation.
 
 Function and parameter types are retained even when optimization removes their
 uses. Parameters assigned in the body or used through their object address
-have no location attribute and remain unavailable. Local/global variable
-entries, parameter write tracking, lexical value ranges and retained typedef
-aliases remain open. The current type graph starts
+have no location attribute and remain unavailable. Global variable entries, automatic value tracking, parameter writes and retained
+typedef aliases remain open. The current type graph starts
 from emitted function signatures, rather than advertising every source typedef
 as a separately retained debug declaration.
 
@@ -106,6 +105,27 @@ lowering and HIR before machine/debug construction. It then destroys IR, types
 and source storage before publishing ELF from the owned bytes and fixups.
 Canonical CIR remains schema 6; source-only declaration coordinates and enum
 debug names are not serialized, and `cinderir` does not accept `-g`.
+
+## Lexical scopes and automatic declarations
+
+IR owns local names, target types, declaration coordinates and slot IDs.
+Instructions and terminators retain their scope IDs through optimization and
+critical-edge splitting. Each declaration starts a nested suffix of its C
+scope. This represents the point where an inner name starts hiding an outer
+one, including statements before the inner declarator and loop declarations.
+
+The encoder records begin/end offsets for every selected instruction and
+terminator. `debug_scope.c` unions nonempty operation ranges through their
+actual scope ancestors and merges adjacent ranges. DWARF lexical blocks use
+`.debug_ranges`, explicit function-base relocations and original section
+fixups. Empty scopes remain empty. Parents contain their child ranges.
+
+Automatic declarations currently have empty location lists. Their types and
+lexical identity are available; their values are unavailable. The producer
+never treats an allocated slot as proof that a promoted or uninitialized
+object has a current value. Debug scope nesting is bounded at 1023 levels,
+with an explicit diagnostic when exceeded. See
+[ADR 0017](ADRs/0017-owned-debug-lexical-scopes.md).
 
 ## Unchanged scalar parameter locations
 
@@ -154,8 +174,8 @@ The object writer preserves a complete previous artifact; the assembly writer
 emits no bytes for the rejected records. Debug-disabled objects preserve the
 normal section layout and text bytes. Raw commands, object hashes, tool hashes,
 recordings and reports live under `.agent-local/unwind/` and
-`.agent-local/debug-lines/`. A second API probe rejects twenty-two malformed
-source/ABI maps and repeated finalization without adding sections or fixups.
+`.agent-local/debug-lines/`. A second API probe rejects forty-three malformed
+source/ABI/scope maps and repeated finalization without adding sections or fixups.
 Type reports under `.agent-local/debug-types/` check independently specified
 record sizes, field/bit positions, array bounds, signed enum values, recursive
 references, qualifier chains and callback signatures. Location-list decoding
@@ -188,3 +208,12 @@ cross-links GCC/Clang objects in both directions. Two GDB sessions inspect
 all parameters before and after a nested call, including the stack pointer
 argument and its pointee. Six corruptions of locations must be rejected by
 the independent reader. Reports live under `.agent-local/debug-parameters/`.
+
+The scope suite independently decodes range lists and resolves six declaration
+boundaries at O0/O2: before shadowing, double and character shadows, both
+returns to outer declarations, and a loop-local name. It checks range
+containment and every range endpoint against real disassembly, compares all
+debug sections with LLVM assembly, and rejects four metadata corruptions.
+Twelve Linux GDB sessions verify source breakpoints, exact selected types,
+unavailable values and caller chains. One boundary also steps through a call.
+Reports live under `.agent-local/debug-scopes/`.

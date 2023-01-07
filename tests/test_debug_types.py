@@ -34,7 +34,7 @@ def location_lists(data, relocations):
                 assert expression[0] == 0x91
                 offset, stop = leb(expression, 1, True); assert stop == len(expression); location = dict(cfa=offset)
             entries.append(dict(begin=begin, end=end, symbol=base['symbol'], **location))
-        assert entries and data[at:at + 16] == bytes(16)
+        assert data[at:at + 16] == bytes(16)
         at += 16; lists[start] = entries
     assert at == len(data) and used == set(fixes)
     return lists
@@ -50,8 +50,10 @@ def read(path):
         sequence = next(sequence for sequence in sequences if sequence['symbol'] == symbol)
         prologue = next(row['pc'] - symbol['value'] for row in sequence['rows'] if row['prologue'])
         function['prologue'] = prologue; function['code'] = sections['.text'][symbol['value']:symbol['value'] + prologue].hex()
-        for parameter in function['children']:
-            if parameter['tag'] != 5 or 2 not in parameter['attributes']: continue
+        pending = list(function['children'])
+        while pending:
+            parameter = pending.pop(); pending.extend(parameter['children'])
+            if parameter['tag'] not in (5, 0x34) or 2 not in parameter['attributes']: continue
             offset = parameter['attributes'][2]['offset']; used.add(offset)
             parameter['locations'] = lists[offset]
             assert all(entry['symbol'] == symbol for entry in lists[offset])
@@ -66,7 +68,7 @@ def validate(nodes):
         found = named(tag, name); assert len(found) == 1, (tag, name, found)
         return found[0]
     def target(node): return nodes[attributes(node)[0x49]]
-    def members(node): return {attributes(child)[3]: child for child in node['children']}
+    def members(node): return {attributes(child)[3]: child for child in node['children'] if child['tag'] != 0x0b}
     function = one(0x2e, 'debug_types'); params = members(function)
     assert set(params) == {'node', 'state', 'callback', 'byte', 'fraction', 'tail'}
     assert attributes(target(function)) == {3: 'double', 0x0b: 8, 0x3e: 4}

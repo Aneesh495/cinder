@@ -94,8 +94,8 @@ unsigned cinder_sparse_constants(CinderIRFunction *function, CinderDiagnostics *
                 if (inst->dst == CINDER_INVALID_VALUE || inst->op == IR_CONST || facts[inst->dst].kind != FACT_CONSTANT || !integer_value(inst->type)) continue;
                 /* Calls, memory reads and float operations stay varying. */
                 free(inst->callee); free(inst->args.data); free(inst->arg_floats.data); free(inst->phi_blocks.data);
-                CinderType *type = inst->type; CinderValueId dst = inst->dst; CinderLoc loc = inst->loc;
-                memset(inst, 0, sizeof(*inst)); inst->op = IR_CONST; inst->type = type; inst->dst = dst; inst->loc = loc;
+                CinderType *type = inst->type; CinderValueId dst = inst->dst; int scope = inst->debug_scope; CinderLoc loc = inst->loc;
+                memset(inst, 0, sizeof(*inst)); inst->op = IR_CONST; inst->type = type; inst->dst = dst; inst->loc = loc; inst->debug_scope = scope;
                 inst->integer = facts[dst].value; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; inst->slot = -1; ++changes;
             }
         }

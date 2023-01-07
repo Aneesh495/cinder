@@ -30,6 +30,7 @@ int cinder_mir_boundary(CinderIRFunction *function, CinderDiagnostics *diags) {
             if (length < 0 || (size_t)length >= sizeof(name)) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "edge name exceeds storage"); return 1; }
             edge.name = cinder_strndup(name, (size_t)length);
             edge.terminator.kind = TERM_JUMP; edge.terminator.target = target;
+            edge.terminator.loc = function->blocks.data[b].terminator.loc; edge.terminator.debug_scope = function->blocks.data[b].terminator.debug_scope;
             edge.terminator.value = CINDER_INVALID_VALUE; edge.terminator.condition = CINDER_INVALID_VALUE;
             CinderBlockId source = (CinderBlockId)b;
             cinder_vec_push((CinderVec *)&edge.predecessors, &source);

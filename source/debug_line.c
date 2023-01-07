@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct { CINDER_VEC_TYPE(const char *) names; } DebugFiles;
 
 void cinder_debug_row(CinderMachineObject *object, CinderLoc loc) {
     if (!object->debug_enabled || loc.file == CINDER_NO_FILE) return;
@@ -16,18 +15,18 @@ void cinder_debug_row(CinderMachineObject *object, CinderLoc loc) {
     cinder_vec_push((CinderVec *)&object->debug_rows, &row);
 }
 
-static size_t file_number(DebugFiles *files, const char *name) {
+size_t cinder_debug_file(CinderDebugFiles *files, const char *name) {
     for (size_t i = 0U; i < files->names.len; ++i)
         if (strcmp(files->names.data[i], name) == 0) return i + 1U;
     cinder_vec_push((CinderVec *)&files->names, &name);
     return files->names.len;
 }
 
-static void string(CinderBytes *bytes, const char *value) {
+void cinder_dwarf_string(CinderBytes *bytes, const char *value) {
     cinder_bytes_append(bytes, (const unsigned char *)value, strlen(value) + 1U);
 }
 
-static void relocate_offset(CinderMachineObject *object, size_t section, const char *symbol, int kind, int64_t addend) {
+void cinder_debug_offset(CinderMachineObject *object, size_t section, const char *symbol, int kind, int64_t addend) {
     CinderBytes *bytes = &object->debug_sections.data[section].bytes;
     CinderFixup fix = {bytes->len, cinder_strndup(symbol, strlen(symbol)), kind, addend, (unsigned)(4U + section)};
     cinder_vec_push((CinderVec *)&object->fixups, &fix);
@@ -36,7 +35,7 @@ static void relocate_offset(CinderMachineObject *object, size_t section, const c
 }
 
 static void relocate(CinderMachineObject *object, size_t section, const char *symbol, int kind) {
-    relocate_offset(object, section, symbol, kind, 0);
+    cinder_debug_offset(object, section, symbol, kind, 0);
 }
 
 static void attr(CinderBytes *bytes, unsigned name, unsigned form) {
@@ -78,10 +77,15 @@ static void abbreviations(CinderBytes *bytes) {
         attr(bytes, 0U, 0U);
     }
     abbreviation(bytes, 4U, 0x18U, false); attr(bytes, 0U, 0U);
+    abbreviation(bytes, 7U, 0x0BU, true); attr(bytes, 0x55U, 0x17U); attr(bytes, 0U, 0U);
+    abbreviation(bytes, 8U, 0x34U, false);
+    attr(bytes, 3U, 8U); attr(bytes, 0x49U, 0x13U);
+    attr(bytes, 0x3AU, 0x0FU); attr(bytes, 0x3BU, 0x0FU); attr(bytes, 0x39U, 0x0FU);
+    attr(bytes, 2U, 0x17U); attr(bytes, 0U, 0U);
     cinder_debug_type_abbreviations(bytes); cinder_dwarf_uleb(bytes, 0U);
 }
 
-static void line_header(CinderBytes *bytes, const DebugFiles *files) {
+static void line_header(CinderBytes *bytes, const CinderDebugFiles *files) {
     cinder_bytes_put32(bytes, 0U); cinder_bytes_put16(bytes, 4U);
     size_t length_at = bytes->len; cinder_bytes_put32(bytes, 0U);
     size_t header_at = bytes->len;
@@ -90,14 +94,14 @@ static void line_header(CinderBytes *bytes, const DebugFiles *files) {
     cinder_bytes_append(bytes, state, CINDER_ARRAY_LEN(state));
     cinder_bytes_put8(bytes, 0U); /* no separate include-directory table */
     for (size_t i = 0U; i < files->names.len; ++i) {
-        string(bytes, files->names.data[i]);
+        cinder_dwarf_string(bytes, files->names.data[i]);
         cinder_dwarf_uleb(bytes, 0U); cinder_dwarf_uleb(bytes, 0U); cinder_dwarf_uleb(bytes, 0U);
     }
     cinder_bytes_put8(bytes, 0U);
     cinder_bytes_patch32(bytes, length_at, (uint32_t)(bytes->len - header_at));
 }
 
-static void line_program(CinderMachineObject *object, size_t section, const CinderDebugFunction *function, DebugFiles *files, CinderSourceManager *sources) {
+static void line_program(CinderMachineObject *object, size_t section, const CinderDebugFunction *function, CinderDebugFiles *files, CinderSourceManager *sources) {
     CinderBytes *bytes = &object->debug_sections.data[section].bytes;
     size_t start = object->symbol_offsets.data[function->symbol];
     size_t size = object->symbol_sizes.data[function->symbol];
@@ -111,7 +115,7 @@ static void line_program(CinderMachineObject *object, size_t section, const Cind
         const CinderDebugRow *row = &object->debug_rows.data[i];
         CinderLoc loc = row->loc; cinder_loc_linecol(sources, &loc);
         if (loc.line == 0U) continue;
-        size_t file = file_number(files, cinder_loc_name(sources, loc));
+        size_t file = cinder_debug_file(files, cinder_loc_name(sources, loc));
         if (row->offset != previous_pc) {
             cinder_bytes_put8(bytes, 2U); cinder_dwarf_uleb(bytes, row->offset - previous_pc);
         }
@@ -128,7 +132,7 @@ static void line_program(CinderMachineObject *object, size_t section, const Cind
     cinder_bytes_put8(bytes, 0U); cinder_dwarf_uleb(bytes, 1U); cinder_bytes_put8(bytes, 1U);
 }
 
-static bool location_valid(CinderSourceManager *sources, CinderLoc loc) {
+bool cinder_debug_location_valid(CinderSourceManager *sources, CinderLoc loc) {
     const CinderSourceFile *file = cinder_source_get(sources, loc.file);
     if (file == NULL || !file->valid || loc.offset > file->size || loc.frame > sources->frames.len) return false;
     return loc.frame == 0U || sources->frames.data[loc.frame - 1U].file == loc.file;
@@ -170,7 +174,7 @@ static bool source_map_valid(const CinderMachineObject *object, CinderSourceMana
         const CinderDebugFunction *function = &object->debug_functions.data[i];
         if (function->symbol != i || i >= object->symbol_offsets.len || i >= object->symbol_sizes.len ||
             function->first_row != previous_row || function->end_row <= function->first_row || function->end_row > object->debug_rows.len ||
-            !location_valid(sources, function->loc)) goto invalid;
+            !cinder_debug_location_valid(sources, function->loc)) goto invalid;
         size_t start = object->symbol_offsets.data[i], size = object->symbol_sizes.data[i];
         if (start > object->text.len || size == 0U || size > object->text.len - start ||
             function->prologue_end < start || function->prologue_end >= start + size ||
@@ -179,7 +183,7 @@ static bool source_map_valid(const CinderMachineObject *object, CinderSourceMana
         bool has_prologue = false;
         for (size_t row = function->first_row; row < function->end_row; ++row) {
             const CinderDebugRow *entry = &object->debug_rows.data[row];
-            if (!location_valid(sources, entry->loc) || (row > function->first_row && entry->offset <= previous_pc) || entry->offset >= start + size) goto invalid;
+            if (!cinder_debug_location_valid(sources, entry->loc) || (row > function->first_row && entry->offset <= previous_pc) || entry->offset >= start + size) goto invalid;
             if (entry->offset == function->prologue_end) has_prologue = true;
             previous_pc = entry->offset;
         }
@@ -208,7 +212,7 @@ int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *modul
             cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "source debug function has no matching typed IR declaration"); return 1;
         }
         for (size_t p = 0U; p < function->params.len; ++p) if (function->params.data[p] == NULL ||
-            function->params.data[p]->type == NULL || !location_valid(sources, function->params.data[p]->loc)) {
+            function->params.data[p]->type == NULL || !cinder_debug_location_valid(sources, function->params.data[p]->loc)) {
             cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "source debug parameter has no valid type or location"); return 1;
         }
     }
@@ -230,21 +234,24 @@ int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *modul
     }
     for (size_t i = 0U; i < object->debug_sections.len; ++i) {
         const char *name = object->debug_sections.data[i].name;
-        if (name == NULL || strcmp(name, ".debug_line") == 0 || strcmp(name, ".debug_info") == 0 || strcmp(name, ".debug_abbrev") == 0 || strcmp(name, ".debug_loc") == 0) {
+        if (name == NULL || strcmp(name, ".debug_line") == 0 || strcmp(name, ".debug_info") == 0 || strcmp(name, ".debug_abbrev") == 0 || strcmp(name, ".debug_loc") == 0 || strcmp(name, ".debug_ranges") == 0) {
             cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "source debug sections have already been finalized or are invalid"); return 1;
         }
     }
-    if (!source_map_valid(object, sources, diags)) return 1;
-    DebugFiles files = {{NULL, 0U, 0U}};
+    if (!source_map_valid(object, sources, diags) || cinder_debug_scopes_valid(object, module, sources, diags) != 0) return 1;
+    CinderDebugFiles files = {{NULL, 0U, 0U}};
     const char *unit_name = cinder_source_display_path(sources, cinder_source_name(sources, 1U));
-    (void)file_number(&files, unit_name);
+    (void)cinder_debug_file(&files, unit_name);
     for (size_t i = 0U; i < object->debug_functions.len; ++i)
-        (void)file_number(&files, cinder_loc_name(sources, object->debug_functions.data[i].loc));
+        (void)cinder_debug_file(&files, cinder_loc_name(sources, object->debug_functions.data[i].loc));
     for (size_t i = 0U; i < object->debug_rows.len; ++i)
-        (void)file_number(&files, cinder_loc_name(sources, object->debug_rows.data[i].loc));
+        (void)cinder_debug_file(&files, cinder_loc_name(sources, object->debug_rows.data[i].loc));
     for (size_t f = 0U; f < module->functions.len; ++f)
         for (size_t p = 0U; p < module->functions.data[f].params.len; ++p)
-            (void)file_number(&files, cinder_loc_name(sources, module->functions.data[f].params.data[p]->loc));
+            (void)cinder_debug_file(&files, cinder_loc_name(sources, module->functions.data[f].params.data[p]->loc));
+    for (size_t f = 0U; f < module->functions.len; ++f)
+        for (size_t l = 0U; l < module->functions.data[f].debug_locals.len; ++l)
+            (void)cinder_debug_file(&files, cinder_loc_name(sources, module->functions.data[f].debug_locals.data[l].loc));
     char *physical_directory = realpath(".", NULL);
     if (physical_directory == NULL) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "cannot resolve debug compilation directory"); free(files.names.data); return 1; }
     const char *directory = cinder_source_display_path(sources, physical_directory); free(physical_directory);
@@ -252,6 +259,7 @@ int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *modul
     size_t abbrev = cinder_debug_section(object, ".debug_abbrev", 1U);
     size_t info = cinder_debug_section(object, ".debug_info", 1U);
     size_t locations = cinder_debug_section(object, ".debug_loc", 1U);
+    size_t ranges = cinder_debug_section(object, ".debug_ranges", 1U);
     abbreviations(&object->debug_sections.data[abbrev].bytes);
     CinderBytes *line_bytes = &object->debug_sections.data[line].bytes;
     line_header(line_bytes, &files);
@@ -263,16 +271,16 @@ int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *modul
     types.index_type = module->types->ulong_type;
     cinder_bytes_put32(bytes, 0U); cinder_bytes_put16(bytes, 4U);
     relocate(object, info, ".debug_abbrev", 10); cinder_bytes_put8(bytes, 8U);
-    cinder_dwarf_uleb(bytes, 1U); string(bytes, "Cinder " CINDER_VERSION); string(bytes, unit_name); string(bytes, directory);
+    cinder_dwarf_uleb(bytes, 1U); cinder_dwarf_string(bytes, "Cinder " CINDER_VERSION); cinder_dwarf_string(bytes, unit_name); cinder_dwarf_string(bytes, directory);
     cinder_bytes_put16(bytes, 0x0CU); /* DW_LANG_C99: DWARF4's C language profile */
     relocate(object, info, ".debug_line", 10);
     for (size_t i = 0U; i < object->debug_functions.len; ++i) {
         const CinderDebugFunction *function = &object->debug_functions.data[i];
         CinderLoc loc = function->loc; cinder_loc_linecol(sources, &loc);
         const CinderIRFunction *ir = &module->functions.data[i];
-        bool has_parameters = ir->params.len != 0U || ir->type->variadic;
-        cinder_dwarf_uleb(bytes, has_parameters ? 2U : 5U); string(bytes, object->defined_symbols.data[function->symbol]);
-        cinder_dwarf_uleb(bytes, file_number(&files, cinder_loc_name(sources, loc)));
+        bool has_parameters = ir->params.len != 0U || ir->type->variadic || ir->debug_locals.len != 0U;
+        cinder_dwarf_uleb(bytes, has_parameters ? 2U : 5U); cinder_dwarf_string(bytes, object->defined_symbols.data[function->symbol]);
+        cinder_dwarf_uleb(bytes, cinder_debug_file(&files, cinder_loc_name(sources, loc)));
         cinder_dwarf_uleb(bytes, loc.line); cinder_dwarf_uleb(bytes, loc.column);
         relocate(object, info, object->defined_symbols.data[function->symbol], 1);
         cinder_bytes_put64(bytes, object->symbol_sizes.data[function->symbol]);
@@ -283,16 +291,17 @@ int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *modul
             const CinderIRParameter *parameter = ir->params.data[p];
             const CinderDebugParameter *location = parameter_location(object, i, p);
             CinderLoc declared = parameter->loc; cinder_loc_linecol(sources, &declared);
-            cinder_dwarf_uleb(bytes, location == NULL ? 3U : 6U); string(bytes, parameter->name == NULL ? "" : parameter->name);
+            cinder_dwarf_uleb(bytes, location == NULL ? 3U : 6U); cinder_dwarf_string(bytes, parameter->name == NULL ? "" : parameter->name);
             cinder_debug_type_reference(&types, parameter->type);
-            cinder_dwarf_uleb(bytes, file_number(&files, cinder_loc_name(sources, declared)));
+            cinder_dwarf_uleb(bytes, cinder_debug_file(&files, cinder_loc_name(sources, declared)));
             cinder_dwarf_uleb(bytes, declared.line); cinder_dwarf_uleb(bytes, declared.column);
             if (location != NULL) {
                 size_t offset = location_list(object, locations, function, location);
-                relocate_offset(object, info, ".debug_loc", 10, (int64_t)offset);
+                cinder_debug_offset(object, info, ".debug_loc", 10, (int64_t)offset);
             }
         }
         if (ir->type->variadic) cinder_dwarf_uleb(bytes, 4U);
+        cinder_debug_scope_entries(object, info, ranges, locations, function, ir, &files, sources, &types);
         if (has_parameters) cinder_dwarf_uleb(bytes, 0U);
     }
     int types_failed = cinder_debug_types_finish(&types, diags);

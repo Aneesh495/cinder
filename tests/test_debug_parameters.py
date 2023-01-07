@@ -18,7 +18,7 @@ from test_unwind import digest, elf, normalized, tool
 
 def validate(nodes):
     function = next(node for node in nodes.values() if node['tag'] == 0x2e and node['attributes'].get(3) == 'debug_stack')
-    parameters = {node['attributes'][3]: node for node in function['children']}
+    parameters = {node['attributes'][3]: node for node in function['children'] if node['tag'] == 5}
     registers = dict(zip(('a', 'b', 'c', 'd', 'e', 'f'), (5, 4, 1, 2, 8, 9)))
     registers.update({f'x{i}': 17 + i for i in range(8)})
     stack = dict(g=0, p=8, x8=16)
@@ -125,7 +125,7 @@ def main():
     for label in ('register', 'stack-offset', 'prologue', 'extent', 'home', 'symbol'):
         nodes = copy.deepcopy(read(root / 'parameters-O0.o'))
         function = next(node for node in nodes.values() if node['tag'] == 0x2e)
-        parameters = {node['attributes'][3]: node for node in function['children']}
+        parameters = {node['attributes'][3]: node for node in function['children'] if node['tag'] == 5}
         if label == 'register': parameters['a']['locations'][0]['reg'] = 4
         elif label == 'stack-offset': parameters['p']['locations'][0]['cfa'] = 0
         elif label == 'prologue': parameters['x0']['locations'][1]['begin'] += 1

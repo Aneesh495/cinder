@@ -1,3 +1,27 @@
+# Build status
+
+Updated: 2026-10-15
+
+## Owned lexical scope increment
+
+Automatic-object declarations and nested scope identities now survive AST/HIR
+retirement in IR-owned metadata. Every encoded operation has an actual byte
+range. Original DWARF4 lexical blocks and `.debug_ranges` describe declaration
+suffixes, nested shadows and loop scopes. Local values are explicitly
+unavailable pending initialized-storage tracking; no reserved slot is exposed
+as a current value.
+
+Strict GCC and ASan/UBSan builds pass the independent O0/O2 scope, type, line,
+frame and parameter readers. The scope reader checks six shadow/loop boundaries
+and rejects four semantic corruptions. The source API probe now rejects 43
+malformed maps plus repeated finalization before mutating output. All 60
+production modules compile into original debug objects through Cinder and pass
+LLVM DWARF verification without warnings. The emulated Linux compiler passes
+all five debug suites, including 26 actual GDB sessions; a second scope run
+also requires an actual step into the callee and its returned value. Full
+1,239-case source and 2,478-round-trip CIR campaigns pass on the frozen host
+compiler. A native bootstrap for this source is pending.
+
 ## Stack parameter verification increment
 
 The debug parameter suite checks a seventeen-argument, two-translation-unit
@@ -17,9 +41,6 @@ round trips. An independent audit of the emulated Linux build verified all
 GDB sessions across frame, line and type suites. Emulation remains separate
 from native acceptance and performance evidence.
 
-# Build status
-
-Updated: 2026-10-14
 
 ## Owned types and unchanged scalar parameter values
 

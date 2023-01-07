@@ -35,6 +35,14 @@ static void emit_epilogue(CinderMachineObject *object, CinderUnwind *unwind) {
 }
 static int value_offset(const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) { (void)function; return -(int)(allocation->local_bytes + ((size_t)value + 1U) * 8U); }
 static int local_offset(const CinderAllocation *allocation, int slot) { return allocation->local_offsets.data[slot]; }
+
+static void debug_point(CinderMachineObject *object, size_t symbol, size_t block, size_t instruction, int scope) {
+    if (!object->debug_enabled) return;
+    if (object->debug_points.len != 0U && object->debug_points.data[object->debug_points.len - 1U].symbol == symbol)
+        object->debug_points.data[object->debug_points.len - 1U].end = object->text.len;
+    CinderDebugPoint point = {symbol, block, instruction, object->text.len, object->text.len, scope};
+    cinder_vec_push((CinderVec *)&object->debug_points, &point);
+}
 static unsigned register_code(CinderRegister reg) {
     switch (reg) { case REG_RAX: return 0U; case REG_RCX: return 1U; case REG_RDX: return 2U; case REG_RSI: return 6U; case REG_RDI: return 7U; case REG_R8: return 8U; case REG_R9: return 9U; case REG_R10: return 10U; case REG_R11: return 11U; case REG_R12: return 12U; case REG_R13: return 13U; case REG_R14: return 14U; case REG_R15: return 15U; default: return 0U; }
 }
@@ -610,7 +618,7 @@ static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunctio
 
 void cinder_machine_init(CinderMachineObject *object) { memset(object, 0, sizeof(*object)); }
 
-void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); for (size_t i = 0U; i < object->debug_sections.len; ++i) { free(object->debug_sections.data[i].name); free(object->debug_sections.data[i].bytes.data); } free(object->debug_sections.data); free(object->debug_rows.data); free(object->debug_functions.data); free(object->debug_parameters.data); }
+void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); for (size_t i = 0U; i < object->debug_sections.len; ++i) { free(object->debug_sections.data[i].name); free(object->debug_sections.data[i].bytes.data); } free(object->debug_sections.data); free(object->debug_rows.data); free(object->debug_functions.data); free(object->debug_parameters.data); free(object->debug_points.data); }
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)assembly; (void)asm_out;
@@ -627,7 +635,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     cinder_vec_push((CinderVec *)&object->defined_symbols, &name);
     cinder_vec_push((CinderVec *)&object->symbol_offsets, &start);
     cinder_vec_push((CinderVec *)&object->symbol_globals, &function->global);
-    CinderDebugFunction debug = {object->defined_symbols.len - 1U, function->loc, start, object->debug_rows.len, object->debug_rows.len};
+    CinderDebugFunction debug = {object->defined_symbols.len - 1U, function->loc, start, object->debug_rows.len, object->debug_rows.len, object->debug_points.len, object->debug_points.len};
     if (object->debug_enabled) cinder_debug_row(object, function->loc);
     CinderUnwind unwind; cinder_unwind_begin(&unwind, object, function->name, start);
     emit_prologue(object, frame);
@@ -685,6 +693,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderMIRInst *selected = &block->instructions.data[i];
             const CinderIRInst *inst = &selected->operands;
+            debug_point(object, debug.symbol, b, i, inst->debug_scope);
             if (object->debug_enabled && inst->op != IR_NOP && inst->op != IR_PHI && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_RESET && inst->op != IR_LOCAL_FREEZE) cinder_debug_row(object, inst->loc);
             if (selected->kind == MIR_INTEGER_ALU) { emit_binary(object, function, allocation, selected); continue; }
             if (selected->kind == MIR_FLOAT_ALU) { emit_float_binary(object, function, allocation, selected); continue; }
@@ -808,6 +817,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 default: cinder_diag(diags, CINDER_FATAL, inst->loc, "unselected machine instruction"); free(labels); free(branches.data); return 1;
             }
         }
+        debug_point(object, debug.symbol, b, SIZE_MAX, block->terminator.debug_scope);
         if (object->debug_enabled) cinder_debug_row(object, block->terminator.loc);
         switch (block->terminator.kind) {
             case TERM_RETURN:
@@ -835,7 +845,11 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     free(labels); free(branches.data);
     size_t function_size = object->text.len - start;
     cinder_vec_push((CinderVec *)&object->symbol_sizes, &function_size);
-    if (object->debug_enabled) { debug.end_row = object->debug_rows.len; cinder_vec_push((CinderVec *)&object->debug_functions, &debug); }
+    if (object->debug_enabled) {
+        object->debug_points.data[object->debug_points.len - 1U].end = object->text.len;
+        debug.end_point = object->debug_points.len; debug.end_row = object->debug_rows.len;
+        cinder_vec_push((CinderVec *)&object->debug_functions, &debug);
+    }
     return cinder_unwind_finish(&unwind, object, diags);
 }
 

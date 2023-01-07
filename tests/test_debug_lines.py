@@ -124,10 +124,11 @@ def information(data, abbreviations, relocations, files, sequences):
                 if name == 0x10: assert form == 23 and fix['kind'] == 10 and fix['symbol']['section'] == '.debug_line'
                 else: assert form == 1 and fix['kind'] == 1 and fix['symbol']['kind'] == 2
                 value = fix['symbol']
-            elif name == 2 and form == 23:
+            elif (name == 2 or name == 0x55) and form == 23:
                 fix = fixups[offset]; used.add(offset)
-                assert value == 0 and fix['kind'] == 10 and fix['symbol']['section'] == '.debug_loc' and fix['addend'] >= 0
-                value = dict(section='.debug_loc', offset=fix['addend'])
+                section = '.debug_loc' if name == 2 else '.debug_ranges'
+                assert value == 0 and fix['kind'] == 10 and fix['symbol']['section'] == section and fix['addend'] >= 0
+                value = dict(section=section, offset=fix['addend'])
             values[name] = value
         return at, tag, children, values
     at, tag, children, unit = entry(11)
@@ -158,7 +159,7 @@ def information(data, abbreviations, relocations, files, sequences):
         assert function[3] == symbol['name'] and function[0x12] == symbol['size']
         parameters = []
         for child in node['children']:
-            assert child['tag'] in (5, 0x18)
+            assert child['tag'] in (5, 0x18, 0x0b)
             if child['tag'] == 5:
                 parameter = child['attributes']
                 assert 2 not in parameter or parameter[2]['section'] == '.debug_loc'
@@ -311,14 +312,14 @@ def main():
         assert probe.is_file(), 'build the cinder_debug_line_probe target first'
     probe_hash = digest(probe)
     recording = run([probe, sources[0]], 'probe-execute')
-    assert recording == 'Source debug: twenty-two malformed maps and repeated finalization rejected before mutation\n'
+    assert recording == 'Source debug: forty-three malformed maps and repeated finalization rejected before mutation\n'
     assert digest(probe) == probe_hash
     assert digest(compiler) == compiler_hash and inputs == {name: digest(pathlib.Path(name)) for name in inputs}
     assert all(digest(pathlib.Path(value['path'])) == value['sha256'] for value in identities.values())
     report = dict(schema=1, compiler_sha256=compiler_hash, source_sha256=source_hash, inputs=inputs, tools=identities,
                   execution_profile=profile, native=profile == 'native', target_execution=execute, source_date_epoch=0,
                   observations=observations, commands=commands, debugger_sessions=6 if execute else 0,
-                  api_probe=dict(path=str(probe), sha256=probe_hash), rejected_maps=22, rejected_repeated_finalization=True,
+                  api_probe=dict(path=str(probe), sha256=probe_hash), rejected_maps=43, rejected_repeated_finalization=True,
                   artifacts={str(path.relative_to(root)): digest(path) for path in sorted(artifacts)})
     (root / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f'Source debug: {len(observations)} tables; debugger sessions={report["debugger_sessions"]}; native={report["native"]}; evidence={root}')

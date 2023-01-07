@@ -11,6 +11,10 @@ flowchart LR
     E --> ROW
     ROW --> LINE[debug_line.c: logical file, line and column sequences]
     H --> DIE[CU and subprogram declaration, range and frame-base entries]
+    L[IR-owned declarations and nested C scope suffixes] --> POINT[Selected instruction and terminator byte boundaries]
+    E --> POINT
+    POINT --> SCOPE[debug_scope.c: actual lexical range lists and local type entries]
+    SCOPE --> DIE
     LINE --> O
     DIE --> O
     T[Type-context layouts and owned enum names] --> TYPES[debug_type.c: queued DIEs and forward-reference patches]

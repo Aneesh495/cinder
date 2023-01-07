@@ -29,9 +29,9 @@ static void copy_value(CinderIRInst *inst, CinderValueId value) {
 }
 
 static void remove_store(CinderIRInst *inst) {
-    CinderType *type = inst->type; CinderLoc loc = inst->loc;
+    CinderType *type = inst->type; int scope = inst->debug_scope; CinderLoc loc = inst->loc;
     free(inst->callee); free(inst->args.data); free(inst->arg_floats.data); free(inst->phi_blocks.data);
-    memset(inst, 0, sizeof(*inst)); inst->type = type; inst->loc = loc; inst->op = IR_NOP;
+    memset(inst, 0, sizeof(*inst)); inst->type = type; inst->loc = loc; inst->debug_scope = scope; inst->op = IR_NOP;
     inst->slot = -1; inst->dst = CINDER_INVALID_VALUE; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE;
 }
 
