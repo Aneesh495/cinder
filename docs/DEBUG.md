@@ -3,8 +3,8 @@
 `-g` emits original DWARF version 4 frame records, line tables, compilation
 units, subprogram entries and their referenced types. The profile supports source breakpoints,
 stepping, type inspection, unchanged scalar parameters and backtraces across
-translation units. Automatic/global variable values and parameter writes
-remain open. The complete debugging acceptance campaign also
+translation units. Supported scalar automatic values use initialized storage intervals.
+Aggregate/addressed local values, global entries and parameter writes remain open. The complete debugging acceptance campaign also
 requires accurate supported value locations in native debugger sessions.
 
 The profile uses DWARF32 lengths, eight-byte target addresses, little-endian
@@ -94,8 +94,8 @@ identity. Empty function signatures use a childless abbreviation.
 
 Function and parameter types are retained even when optimization removes their
 uses. Parameters assigned in the body or used through their object address
-have no location attribute and remain unavailable. Global variable entries, automatic value tracking, parameter writes and retained
-typedef aliases remain open. The current type graph starts
+have no location attribute and remain unavailable. Global variable entries, aggregate/addressed automatic values, parameter writes
+and retained typedef aliases remain open. The current type graph starts
 from emitted function signatures, rather than advertising every source typedef
 as a separately retained debug declaration.
 
@@ -120,12 +120,38 @@ actual scope ancestors and merges adjacent ranges. DWARF lexical blocks use
 `.debug_ranges`, explicit function-base relocations and original section
 fixups. Empty scopes remain empty. Parents contain their child ranges.
 
-Automatic declarations currently have empty location lists. Their types and
-lexical identity are available; their values are unavailable. The producer
-never treats an allocated slot as proof that a promoted or uninitialized
-object has a current value. Debug scope nesting is bounded at 1023 levels,
-with an explicit diagnostic when exceeded. See
+Automatic declaration types and lexical identities are retained even when
+values are unavailable. Debug scope nesting is bounded at 1023 levels, with
+an explicit diagnostic when exceeded. See
 [ADR 0017](ADRs/0017-owned-debug-lexical-scopes.md).
+
+## Supported automatic scalar values
+
+`-g -O0` preserves named local storage during scalar promotion. Parameters and
+unnamed temporaries retain their usual eligibility. Ordinary builds and
+`-g -O2` keep the existing promotion profile. This is an explicit debug/code
+tradeoff; O0 debug text can differ from ordinary O0 text.
+
+The supported locations are scalar local objects initialized and updated by
+retained direct stores, with no formed object address. The encoder records
+their actual allocated CFA-relative homes. A forward must-initialized analysis
+intersects reachable predecessors, starts function entry uninitialized and
+uses top initialization for loop blocks. Begin/reset/end operations clear the
+state. A retained store establishes availability after its final encoded
+instruction; undef or possibly undef phi sources do not establish a value.
+The result is intersected with the variable's actual lexical scope.
+
+Location lists describe current memory, so later direct assignments update the
+visible value. Before initialization, after lifetime end and at a partial
+initialization join, the list has no applicable entry. Loop reentry clears a
+previous iteration's value. Promoted locals without stores have empty lists.
+An allocated slot alone never establishes availability.
+
+Addressed objects, aggregates and scalar initializer-list plans currently
+remain unavailable. Their source declarations and types are still retained.
+A pointer local can have a supported location when its own object address is
+not formed; this does not promise that its pointee remains alive or unchanged.
+See [ADR 0018](ADRs/0018-initialized-scalar-debug-locations.md).
 
 ## Unchanged scalar parameter locations
 
@@ -152,7 +178,7 @@ for those parameters.
 
 ## Verification and use
 
-`make test-debug` runs frame, source-table, type and parameter checks. It requires LLVM's `llvm-dwarfdump`, `llvm-objdump` and
+`make test-debug` runs frame, source-table, type, parameter, scope and value checks. It requires LLVM's `llvm-dwarfdump`, `llvm-objdump` and
 `llvm-mc`, plus GCC and Clang reference drivers. On Linux x86-64 it also
 requires GDB. The test checks O0/O2 frame tables against independently decoded
 instruction boundaries, actual saved-register store/load bytes, all return
@@ -174,7 +200,7 @@ The object writer preserves a complete previous artifact; the assembly writer
 emits no bytes for the rejected records. Debug-disabled objects preserve the
 normal section layout and text bytes. Raw commands, object hashes, tool hashes,
 recordings and reports live under `.agent-local/unwind/` and
-`.agent-local/debug-lines/`. A second API probe rejects forty-three malformed
+`.agent-local/debug-lines/`. A second API probe rejects forty-eight malformed
 source/ABI/scope maps and repeated finalization without adding sections or fixups.
 Type reports under `.agent-local/debug-types/` check independently specified
 record sizes, field/bit positions, array bounds, signed enum values, recursive
@@ -215,5 +241,14 @@ returns to outer declarations, and a loop-local name. It checks range
 containment and every range endpoint against real disassembly, compares all
 debug sections with LLVM assembly, and rejects four metadata corruptions.
 Twelve Linux GDB sessions verify source breakpoints, exact selected types,
-unavailable values and caller chains. One boundary also steps through a call.
+O0 current scalar values, O2 unavailable values and caller chains. One boundary also steps through a call.
 Reports live under `.agent-local/debug-scopes/`.
+
+The value suite checks eight initialization/join/lifetime boundaries at O0/O2
+against original store bytes and actual source rows. It executes the same
+well-defined program through GCC, Clang and the IR interpreter. Fourteen Linux
+GDB sessions check before/after initialization, both complete-join paths,
+conservative partial joins, pointer values and loop reentry with no stale
+iteration value. Five false availability/home records must fail the reader.
+Reports live under `.agent-local/debug-values/`. Every debug suite retains a
+unique run directory and incremental raw command log.

@@ -151,6 +151,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
     if (source_root/'tests/test_debug_types.py').is_file(): authored_commands = authored_commands | {'tests/test_debug_types.py'}
     if (source_root/'tests/test_debug_parameters.py').is_file(): authored_commands = authored_commands | {'tests/test_debug_parameters.py'}
     if (source_root/'tests/test_debug_scopes.py').is_file(): authored_commands = authored_commands | {'tests/test_debug_scopes.py'}
+    if (source_root/'tests/test_debug_values.py').is_file(): authored_commands = authored_commands | {'tests/test_debug_values.py'}
     manifest=read(base,'manifest.json')
     require(manifest.get('schema')==2 and manifest.get('status')=='pass' and 'active_command' not in manifest, 'incomplete bootstrap')
     profile(manifest,'execution_profile')

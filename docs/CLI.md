@@ -14,7 +14,7 @@ for output naming and linking.
 | `-std=c17`, `-std=c17-core` | Declared C17 core profile |
 | `-fsyntax-only` | Stop after semantic analysis |
 | `-O0`, `-O1`, `-O2` | Optimization level |
-| `-g` | DWARF v4 frames, lines, types, lexical scopes and unchanged scalar parameters; [current scope](DEBUG.md) |
+| `-g` | DWARF v4 frames, lines, types, lexical scopes, unchanged scalar parameters and supported O0 scalar locals; [current scope](DEBUG.md) |
 | `-M`, `-MD`, `-MF PATH`, `-MQ TARGET` | Actual physical-file dependency rules |
 | `--diagnostics=text`, `--diagnostics=json` | Text diagnostics or versioned JSON |
 | `-ffile-prefix-map=OLD=NEW`, `-fmacro-prefix-map=OLD=NEW` | [Source-name mapping](REPRODUCIBILITY.md) |

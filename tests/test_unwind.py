@@ -10,6 +10,7 @@ import re
 import shutil
 import struct
 import subprocess
+import tempfile
 
 
 def digest(path):
@@ -57,6 +58,19 @@ def elf(path):
             entries.append(dict(offset=offset, kind=kind, symbol=symbol, addend=addend))
         relocations[target] = entries
     return contents, symbols, relocations
+
+
+def storage(path):
+    data = path.read_bytes(); header = struct.unpack_from('<16sHHIQQQIHHHHHH', data)
+    at, width, count, names = header[6], header[11], header[12], header[13]
+    sections = [struct.unpack_from('<IIQQQQIIQQ', data, at + width * i) for i in range(count)]
+    names = sections[names]; strings = data[names[4]:names[4] + names[5]]; result = {}
+    for section in sections:
+        name = strings[section[0]:strings.index(0, section[0])].decode()
+        if name not in ('.data', '.rodata', '.bss'): continue
+        result[name] = (section[1], section[2], section[5], section[8], None if section[1] == 8 else data[section[4]:section[4] + section[5]])
+    assert set(result) == {'.data', '.rodata', '.bss'}
+    return result
 
 
 def leb(data, at, signed=False):
@@ -178,14 +192,16 @@ def main():
     input_files += sources + [pathlib.Path(__file__), pathlib.Path('tests/unwind_probe.c'), pathlib.Path('CMakeLists.txt')]
     inputs = {str(p): digest(p) for p in input_files}
     source_identity = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
-    root = pathlib.Path('.agent-local/unwind') / (source_identity + '-' + identity)
-    root.mkdir(parents=True, exist_ok=True)
+    base = pathlib.Path('.agent-local/unwind') / (source_identity + '-' + identity)
+    base.mkdir(parents=True, exist_ok=True)
+    root = pathlib.Path(tempfile.mkdtemp(prefix='run-', dir=base)).resolve()
     commands = []; observations = []; artifacts = []
     def run(argv, stem, expected=0):
         result = subprocess.run([str(x) for x in argv], capture_output=True, timeout=30)
         output = root / (stem + '.stdout'); error = root / (stem + '.stderr')
         output.write_bytes(result.stdout); error.write_bytes(result.stderr); artifacts.extend((output, error))
         commands.append(dict(argv=[str(x) for x in argv], exit=result.returncode, stdout=digest(output), stderr=digest(error)))
+        (root / 'commands.json').write_text(json.dumps(commands, indent=2) + '\n')
         assert result.returncode == expected, (argv, result)
         return result.stdout.decode(errors='replace')
     linux = platform.system() == 'Linux' and platform.machine() == 'x86_64'
@@ -233,7 +249,9 @@ def main():
                 assert normalized(relas.get(name, [])) == normalized(other_relas.get(name, [])), name
             run([compiler, level, '-c', source, '-o', plain], stem + '-plain')
             no_debug, _, _ = elf(plain)
-            assert not any(name.startswith('.debug_') for name in no_debug) and no_debug['.text'] == original['.text']
+            assert not any(name.startswith('.debug_') for name in no_debug)
+            assert storage(plain) == storage(obj)
+            if level == '-O2': assert no_debug['.text'] == original['.text']
             if args.baseline:
                 baseline = root / (stem + '.baseline.o')
                 run([args.baseline.resolve(), level, '-c', source, '-o', baseline], stem + '-baseline')

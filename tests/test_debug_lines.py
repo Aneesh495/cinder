@@ -11,7 +11,7 @@ import struct
 import subprocess
 import tempfile
 
-from test_unwind import digest, elf, leb, normalized, tool
+from test_unwind import digest, elf, leb, normalized, storage, tool
 
 
 def cstring(data, at):
@@ -242,7 +242,11 @@ def main():
                 assert normalized(relas.get(name, [])) == normalized(other_relas.get(name, [])), name
             run([compiler, level, '-c', source, '-o', plain], stem + '-plain')
             without, _, _ = elf(plain)
-            assert not any(name.startswith('.debug_') for name in without) and without['.text'] == original['.text']
+            assert not any(name.startswith('.debug_') for name in without)
+            assert storage(plain) == storage(obj)
+            # O0 debugging preserves named local stores for current values.
+            # O2 retains the ordinary promotion profile and exact text identity.
+            if level == '-O2': assert without['.text'] == original['.text']
             if source.name == 'line-origins.c':
                 assert [(f['name'], f['file'], f['line']) for f in observation['functions']] == [
                     ('header_value', 'logical-header.c', 90), ('adjusted', 'logical-source.c', 70), ('main', 'other-source.c', 8)]
@@ -312,14 +316,14 @@ def main():
         assert probe.is_file(), 'build the cinder_debug_line_probe target first'
     probe_hash = digest(probe)
     recording = run([probe, sources[0]], 'probe-execute')
-    assert recording == 'Source debug: forty-three malformed maps and repeated finalization rejected before mutation\n'
+    assert recording == 'Source debug: forty-eight malformed maps and repeated finalization rejected before mutation\n'
     assert digest(probe) == probe_hash
     assert digest(compiler) == compiler_hash and inputs == {name: digest(pathlib.Path(name)) for name in inputs}
     assert all(digest(pathlib.Path(value['path'])) == value['sha256'] for value in identities.values())
     report = dict(schema=1, compiler_sha256=compiler_hash, source_sha256=source_hash, inputs=inputs, tools=identities,
                   execution_profile=profile, native=profile == 'native', target_execution=execute, source_date_epoch=0,
                   observations=observations, commands=commands, debugger_sessions=6 if execute else 0,
-                  api_probe=dict(path=str(probe), sha256=probe_hash), rejected_maps=43, rejected_repeated_finalization=True,
+                  api_probe=dict(path=str(probe), sha256=probe_hash), rejected_maps=48, rejected_repeated_finalization=True,
                   artifacts={str(path.relative_to(root)): digest(path) for path in sorted(artifacts)})
     (root / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f'Source debug: {len(observations)} tables; debugger sessions={report["debugger_sessions"]}; native={report["native"]}; evidence={root}')

@@ -47,7 +47,7 @@ def read(path):
                 locations=location_lists(sections['.debug_loc'], relas.get('.debug_loc', [])))
 
 
-def validate(record, boundaries):
+def validate(record, boundaries, values=False):
     nodes, sequences, ranges, locations = [record[name] for name in ('nodes', 'sequences', 'ranges', 'locations')]
     used_ranges = set(); used_locations = set(); parents = {}
     for node in nodes.values():
@@ -66,7 +66,12 @@ def validate(record, boundaries):
             offset = node['attributes'][2]['offset']; used_locations.add(offset)
             if node['tag'] == 0x34:
                 assert node['offset'] in parents
-                assert parents[node['offset']]['tag'] == 0x0b and locations[offset] == []
+                assert parents[node['offset']]['tag'] == 0x0b
+                own = ranges[parents[node['offset']]['attributes'][0x55]['offset']]['ranges']
+                entries = locations[offset]
+                if values: assert entries
+                else: assert entries == []
+                assert all('cfa' in entry and entry['cfa'] <= -24 and any(a <= entry['begin'] < entry['end'] <= b for a, b in own) for entry in entries)
                 assert node['attributes'][0x3b] > 0 and node['attributes'][0x39] > 0
     assert used_ranges == set(ranges) and used_locations == set(locations)
     function = next(node for node in nodes.values() if node['tag'] == 0x2e and node['attributes'].get(3) == 'scope_probe')
@@ -126,7 +131,7 @@ def main():
         disassembly = run([tools['llvm-objdump'], '--no-show-raw-insn', '-d', obj], level + '-disassemble')
         boundaries[level] = {int(m[1], 16) for m in re.finditer(r'^\s*([0-9a-f]+):\s+[a-z]', disassembly, re.M)}
         _, symbols, _ = elf(obj); boundaries[level].update(symbol['value'] + symbol['size'] for symbol in symbols if symbol['kind'] == 2)
-        observed = validate(read(obj), boundaries[level]); observations.append(dict(level=level, object_sha256=digest(obj), markers=observed))
+        observed = validate(read(obj), boundaries[level], level == '-O0'); observations.append(dict(level=level, object_sha256=digest(obj), markers=observed))
         run([compiler, level, '-g', '-S', source, '-o', asm], level + '-assembly')
         run([tools['llvm-mc'], '-triple=x86_64-linux-gnu', '-filetype=obj', asm, '-o', assembled], level + '-assemble')
         original, _, relas = elf(obj); reference, _, other = elf(assembled)
@@ -146,7 +151,11 @@ def main():
                 for expression in expressions: argv.extend(('-ex', expression))
                 recording = run([*argv, executable], level + '-' + marker['marker'] + '-gdb')
                 assert 'Breakpoint 1, scope_probe' in recording and re.search(r'#\d+.*\bmain\b', recording)
-                assert 'type = ' + marker['type'] + '\n' in recording and re.search(r'\$\d+ = <optimized out>', recording)
+                assert 'type = ' + marker['type'] + '\n' in recording
+                if level == '-O0':
+                    expected = {'before-shadow': '11', 'after-shadow': '2.5', 'inner-shadow': '3', 'after-inner': '2.5', 'after-block': '11', 'loop-value': '0'}[marker['marker']]
+                    assert re.search(r'\$\d+ = ' + re.escape(expected) + r'(?:\s|$)', recording), recording
+                else: assert re.search(r'\$\d+ = <optimized out>', recording)
                 assert 'Cannot access memory' not in recording
                 if marker['marker'] == 'after-shadow':
                     assert re.search(r'#0\s+scope_call \(input=2\)', recording)
@@ -163,7 +172,7 @@ def main():
         elif label == 'shadow-type': shadow['attributes'][0x49] = next(node['offset'] for node in nodes.values() if node['tag'] == 0x24 and node['attributes'][3] == 'int')
         elif label == 'variable-scope': next(node for node in nodes.values() if shadow in node['children'])['children'].remove(shadow)
         else: record['locations'][shadow['attributes'][2]['offset']] = [dict(begin=0, end=1, cfa=-24)]
-        try: validate(record, boundaries['-O0'])
+        try: validate(record, boundaries['-O0'], True)
         except AssertionError: rejected.append(label)
         else: raise AssertionError('reader accepted ' + label)
     assert digest(compiler) == identity and inputs == {name: digest(pathlib.Path(name)) for name in inputs}

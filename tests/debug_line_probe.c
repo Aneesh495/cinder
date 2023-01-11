@@ -40,10 +40,13 @@ int main(int argc, char **argv) {
     CinderIRLocal local = {"local", types.int_type, loc, 1, 0}; cinder_vec_push((CinderVec *)&ir.debug_locals, &local);
     cinder_vec_push((CinderVec *)&module.functions, &ir);
     CinderIRFunction *owned = &module.functions.data[0];
-    for (unsigned mutation = 0U; mutation < 43U; ++mutation) {
+    for (unsigned mutation = 0U; mutation < 48U; ++mutation) {
         CinderMachineObject machine; object(&machine, loc);
         if (mutation >= 15U) {
             CinderDebugParameter entry = {0U, 0U, 5, -24}; cinder_vec_push((CinderVec *)&machine.debug_parameters, &entry);
+        }
+        if (mutation >= 43U) {
+            CinderDebugLocalHome home = {0U, 0U, -32}; cinder_vec_push((CinderVec *)&machine.debug_local_homes, &home);
         }
         CinderDebugFunction *function = &machine.debug_functions.data[0];
         CinderDebugRow *row = &machine.debug_rows.data[1];
@@ -95,6 +98,13 @@ int main(int argc, char **argv) {
             case 42U: {
                 CinderDebugPoint point = machine.debug_points.data[0]; cinder_vec_push((CinderVec *)&machine.debug_points, &point); break;
             }
+            case 43U: machine.debug_local_homes.data[0].symbol = 1U; break;
+            case 44U: machine.debug_local_homes.data[0].local = 1U; break;
+            case 45U: machine.debug_local_homes.data[0].cfa_offset = -17; break;
+            case 46U: machine.debug_local_homes.data[0].cfa_offset = -24; break;
+            case 47U: {
+                CinderDebugLocalHome home = machine.debug_local_homes.data[0]; cinder_vec_push((CinderVec *)&machine.debug_local_homes, &home); break;
+            }
             default: return 2;
         }
         CinderDiagnostics diags; cinder_diags_init(&diags);
@@ -111,6 +121,6 @@ int main(int argc, char **argv) {
         sections != machine.debug_sections.len || fixups != machine.fixups.len) return 1;
     cinder_diags_destroy(&diags); cinder_machine_destroy(&machine); cinder_sources_destroy(&sources);
     cinder_ir_destroy(&module); cinder_types_destroy(&types);
-    puts("Source debug: forty-three malformed maps and repeated finalization rejected before mutation");
+    puts("Source debug: forty-eight malformed maps and repeated finalization rejected before mutation");
     return 0;
 }

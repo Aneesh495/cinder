@@ -301,7 +301,7 @@ int cinder_debug_finish(CinderMachineObject *object, const CinderIRModule *modul
             }
         }
         if (ir->type->variadic) cinder_dwarf_uleb(bytes, 4U);
-        cinder_debug_scope_entries(object, info, ranges, locations, function, ir, &files, sources, &types);
+        if (cinder_debug_scope_entries(object, info, ranges, locations, function, ir, &files, sources, &types, diags) != 0) { types.failed = true; break; }
         if (has_parameters) cinder_dwarf_uleb(bytes, 0U);
     }
     int types_failed = cinder_debug_types_finish(&types, diags);

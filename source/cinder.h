@@ -889,6 +889,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderIRScope) debug_scopes;
     CINDER_VEC_TYPE(CinderIRLocal) debug_locals;
     int debug_scope;
+    bool preserve_debug_locals;
     bool global;
     bool is_noreturn;
     CinderHIR *hir;
@@ -1175,6 +1176,7 @@ typedef struct {
 
 typedef struct { size_t offset; CinderLoc loc; } CinderDebugRow;
 typedef struct { size_t symbol, parameter; int reg, cfa_offset; } CinderDebugParameter;
+typedef struct { size_t symbol, local; int cfa_offset; } CinderDebugLocalHome;
 typedef struct { size_t symbol, block, instruction, begin, end; int scope; } CinderDebugPoint;
 typedef struct {
     size_t symbol;
@@ -1202,6 +1204,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderDebugFunction) debug_functions;
     CINDER_VEC_TYPE(CinderDebugParameter) debug_parameters;
     CINDER_VEC_TYPE(CinderDebugPoint) debug_points;
+    CINDER_VEC_TYPE(CinderDebugLocalHome) debug_local_homes;
     bool debug_enabled;
     unsigned literal_counter;
     size_t frame_size;

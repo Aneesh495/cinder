@@ -15,6 +15,14 @@ for every selected operation, including zero-byte lifetime operations, and
 builds DWARF scope ranges from those boundaries. This metadata survives HIR
 retirement and does not enter canonical CIR or executable semantics.
 
+At `-g -O0`, the function configuration keeps named local slots out of scalar
+promotion so their current values remain in actual storage. Parameters and
+unnamed temporaries keep their normal eligibility. Ordinary compilation and
+`-g -O2` retain the original promotion profile. This debug choice does not
+serialize into CIR; the retained memory operations themselves remain ordinary
+verified IR. Debug availability uses reachable predecessor intersection,
+actual store-end PCs and lifetime resets. See [ADR 0018](ADRs/0018-initialized-scalar-debug-locations.md).
+
 `source/analysis.c` computes reachable reverse postorder without recursive CFG
 traversal, immediate dominators, dominator-tree children, dominance frontiers,
 and backedges. Irreducible regions still have dominators; only edges whose

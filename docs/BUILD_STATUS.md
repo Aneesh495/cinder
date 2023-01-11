@@ -2,6 +2,29 @@
 
 Updated: 2026-10-15
 
+## Initialized scalar debug locations
+
+The O0 debug profile preserves named scalar local storage. Locations derive
+from actual allocated CFA homes, reachable predecessor intersection, retained
+store-end PCs and lifetime resets. Uninitialized intervals, partial joins,
+promoted O2 values and addressed/aggregate locals remain unavailable. The
+ordinary optimization profile is unchanged.
+
+Strict GCC and ASan/UBSan builds pass all six debug suites. The new value suite
+checks eight initialization/join/loop/pointer boundaries, actual store bytes,
+reference/interpreter behavior and five deliberately false availability
+records. The source API probe now rejects 48 malformed maps plus repeated
+finalization. Frame and source readers retain O2 debug/plain text equality
+and O0 data/rodata/BSS layout equality. Independent baseline checks also
+compare complete ordinary objects with the preceding compiler.
+
+All 60 current compiler modules compile through Cinder as original ordinary
+objects. The owned emulated Linux compiler passes all six debug suites and 40 actual
+GDB sessions. An independent audit binds all ordinary source objects, the
+58-object probe core, debug artifacts and recorded current/unavailable values.
+Current native value checks and bootstrap remain pending. Native
+acceptance and performance still require the full source-bound campaigns.
+
 ## Owned lexical scope increment
 
 Automatic-object declarations and nested scope identities now survive AST/HIR
@@ -20,7 +43,8 @@ LLVM DWARF verification without warnings. The emulated Linux compiler passes
 all five debug suites, including 26 actual GDB sessions; a second scope run
 also requires an actual step into the callee and its returned value. Full
 1,239-case source and 2,478-round-trip CIR campaigns pass on the frozen host
-compiler. A native bootstrap for this source is pending.
+compiler. The native ordinary and deterministic bootstrap runs for the scope increment
+both passed.
 
 ## Stack parameter verification increment
 

@@ -194,6 +194,11 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
     for (size_t slot = 0U; slot < function->local_count; ++slot) {
         eligible[slot] = promotable(function->local_types.data[slot]); current[slot] = CINDER_INVALID_VALUE;
     }
+    if (function->preserve_debug_locals)
+        for (size_t l = 0U; l < function->debug_locals.len; ++l) {
+            int slot = function->debug_locals.data[l].slot;
+            if (slot >= 0 && (size_t)slot < function->local_count) eligible[slot] = false;
+        }
     for (size_t b = 0U; b < function->blocks.len; ++b)
         for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
             const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];

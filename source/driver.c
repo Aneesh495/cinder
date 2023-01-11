@@ -133,6 +133,8 @@ int cinder_driver_run(const CinderOptions *options) {
     if (inspection_only && options->dump_hir && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done_sema; }
     cinder_ir_init(&module, &types);
     if (cinder_lower_hir_ir(&module, &hir, &diags) != 0) goto done_ir;
+    for (size_t f = 0U; f < module.functions.len; ++f)
+        module.functions.data[f].preserve_debug_locals = options->debug && options->optimization == 0;
     if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) { fputs("; before scalar promotion\n", stdout); cinder_dump_ir(&module, stdout); }
     CinderOptStats stats;

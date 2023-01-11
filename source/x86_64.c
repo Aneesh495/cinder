@@ -618,7 +618,7 @@ static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunctio
 
 void cinder_machine_init(CinderMachineObject *object) { memset(object, 0, sizeof(*object)); }
 
-void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); for (size_t i = 0U; i < object->debug_sections.len; ++i) { free(object->debug_sections.data[i].name); free(object->debug_sections.data[i].bytes.data); } free(object->debug_sections.data); free(object->debug_rows.data); free(object->debug_functions.data); free(object->debug_parameters.data); free(object->debug_points.data); }
+void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); for (size_t i = 0U; i < object->debug_sections.len; ++i) { free(object->debug_sections.data[i].name); free(object->debug_sections.data[i].bytes.data); } free(object->debug_sections.data); free(object->debug_rows.data); free(object->debug_functions.data); free(object->debug_parameters.data); free(object->debug_points.data); free(object->debug_local_homes.data); }
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)assembly; (void)asm_out;
@@ -683,6 +683,20 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
             location.cfa_offset = -(int)((incoming_base + reg + (floating ? 7U : 1U)) * 8U) - 16;
         }
         cinder_vec_push((CinderVec *)&object->debug_parameters, &location);
+    }
+    if (object->debug_enabled) for (size_t l = 0U; l < function->debug_locals.len; ++l) {
+        const CinderIRLocal *local = &function->debug_locals.data[l]; const CinderType *type = local->type;
+        if (type->size == 0U || type->size > 8U || type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) continue;
+        bool addressed = false;
+        for (size_t b = 0U; b < function->blocks.len; ++b)
+            for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+                const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+                if (inst->op == IR_LOCAL_ADDRESS && inst->slot == local->slot) addressed = true;
+            }
+        if (!addressed) {
+            CinderDebugLocalHome home = {debug.symbol, l, local_offset(allocation, local->slot) - 16};
+            cinder_vec_push((CinderVec *)&object->debug_local_homes, &home);
+        }
     }
     if (object->debug_enabled) cinder_debug_row(object, function->loc);
     CINDER_VEC_TYPE(BranchFixup) branches = {NULL, 0U, 0U};

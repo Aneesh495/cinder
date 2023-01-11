@@ -58,8 +58,9 @@ and deterministic date policy are in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIB
 `-g` emits original DWARF v4 frames, source lines, function/type entries and lexical scopes. The current scope and
 independent instruction/assembly/debugger checks are in
 [`docs/DEBUG.md`](docs/DEBUG.md). Unchanged scalar parameters have ABI locations;
-automatic declaration types and shadows are recorded. Automatic/global values
-and assigned parameter locations remain open.
+automatic types and shadows are recorded. `-g -O0` also tracks supported scalar
+locals after initialization. Addressed/aggregate locals, global entries and
+assigned parameter locations remain open.
 
 ## Language and target contract
 
