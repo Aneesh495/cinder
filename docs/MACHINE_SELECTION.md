@@ -54,9 +54,10 @@ operations carry byte templates. Bitfield plans record occupied bytes, masks,
 shift and sign extension so masked updates preserve neighboring members.
 
 The verifier seals those encodings and layout choices as well as the original
-operand/type contracts. Pointer arithmetic, address formation and control/frame
-expansion still include typed target pseudos. Their complete selection and a
-separate typed HIR remain open. Full acceptance is incomplete.
+operand/type contracts. Pointer arithmetic and address formation now have
+selected target programs. Control/frame expansion and other remaining target
+pseudos still require complete selection. The frontend's owned typed HIR is
+documented in [HIR.md](HIR.md). Full acceptance is incomplete.
 
 `make test-mir` executes 43 independently specified typed integer/floating
 cases through the interpreter and original object path. It rejects seven
@@ -84,3 +85,23 @@ objects. Generic ELF inspection keeps fixture-specific symbol assertions in
 the object campaign that defines those symbols.
 
 See [the editable selection diagram](diagrams/machine-selection.mmd).
+
+Address plans select frame/RIP-relative `lea`, member immediates, scaled offset
+programs and signed pointer differences. Their before/after byte segments
+preserve operand staging while removing pointer-specific opcode selection from
+the encoder. Frame slots resolve through actual allocation. Symbol plans carry
+the exact PC-relative relocation and addend. Masks account for RBP reads,
+RAX/R10 scratch, RDX in division and real flag effects. `--dump-mir` shows the
+actual selected role, immediates, relocation and byte segments. See
+[ADR 0019](ADRs/0019-selected-pointer-address-programs.md).
+
+`make test-mir-address` checks four source units forming three programs. It
+rejects 928 altered plans, restores them and requires normal object identity.
+An independent reader checks all five roles and six typed origins against
+hand-specified encodings and masks. The pointer-pressure fixture must actually
+spill. GCC/Clang and IR references cover 24-byte strides, negative indexing,
+signed differences, a 65536-byte member offset, callbacks and separate
+compilation. Linux cross-links objects in both directions. Original sections
+and relocations must match LLVM assembly; optional baseline checks require
+complete byte identity with a preceding compiler. Reports retain unique run
+directories, raw commands, tool/core hashes and original objects.

@@ -473,6 +473,21 @@ static void symbol_displacement(CinderMachineObject *object, const char *name) {
     cinder_vec_push((CinderVec *)&object->fixups, &fix);
 }
 
+static void emit_address(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderMIRAddress *address = &selected->address; const CinderIRInst *operands = &selected->operands;
+    if (address->kind == MIR_ADDRESS_OFFSET) load_value_alloc(object, function, allocation, operands->right);
+    else if (address->kind == MIR_ADDRESS_MEMBER || address->kind == MIR_ADDRESS_DIFFERENCE) load_value_alloc(object, function, allocation, operands->left);
+    if (address->kind == MIR_ADDRESS_DIFFERENCE) load_value_to_r10(object, function, allocation, operands->right);
+    cinder_bytes_append(&object->text, address->before, address->before_size);
+    if (address->kind == MIR_ADDRESS_FRAME) emit32(object, (uint32_t)local_offset(allocation, address->frame_slot));
+    else if (address->kind == MIR_ADDRESS_SYMBOL) {
+        CinderFixup fix = {object->text.len, cinder_strndup(operands->callee, strlen(operands->callee)), address->relocation, address->addend, 0U};
+        cinder_vec_push((CinderVec *)&object->fixups, &fix); emit32(object, 0U);
+    } else if (address->kind == MIR_ADDRESS_OFFSET) load_value_to_r10(object, function, allocation, operands->left);
+    cinder_bytes_append(&object->text, address->after, address->after_size);
+    store_value_alloc(object, function, allocation, operands->dst);
+}
+
 /* Object storage uses its declared width. Register values use 64-bit integer
  * bits or canonical binary64, including values whose source type is float. */
 static void access_prefix(CinderMachineObject *object, const CinderMIRAccess *access, bool extended, bool store) {
@@ -712,6 +727,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
             if (selected->kind == MIR_INTEGER_ALU) { emit_binary(object, function, allocation, selected); continue; }
             if (selected->kind == MIR_FLOAT_ALU) { emit_float_binary(object, function, allocation, selected); continue; }
             if (selected->kind == MIR_FLOAT_COMPARE) { emit_float_compare(object, function, allocation, selected); continue; }
+            if (selected->kind == MIR_ADDRESS) { emit_address(object, function, allocation, selected); continue; }
             if (selected->kind == MIR_INTEGER_UNARY) {
                 load_value_alloc(object, function, allocation, inst->left);
                 for (unsigned n = 0U; n < selected->encoding_size; ++n) emit8(object, selected->encoding[n]);
@@ -750,12 +766,6 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     } else { emit_mov_rax_imm(object, 0); store_value_alloc(object, function, allocation, inst->dst); }
                     break;
                 case IR_PHI: break;
-                case IR_LOCAL_ADDRESS:
-                    emit8(object, 0x48U); emit8(object, 0x8DU); emit8(object, 0x85U); emit32(object, (uint32_t)local_offset(allocation, inst->slot));
-                    store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_FUNCTION_ADDRESS: case IR_GLOBAL_ADDRESS:
-                    emit8(object, 0x48U); emit8(object, 0x8DU); emit8(object, 0x05U); symbol_displacement(object, inst->callee);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_ZERO_INIT:
                     load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 7U, 0U);
                     emit8(object, 0x31U); emit8(object, 0xC0U);
@@ -789,21 +799,6 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     if (selected->access.floating) load_float_value(object, function, allocation, inst->right, 0U);
                     else load_value_alloc(object, function, allocation, inst->right);
                     object_store(object, &selected->access, 0x82U, true, 0); break;
-                case IR_POINTER_OFFSET:
-                    load_value_alloc(object, function, allocation, inst->right);
-                    emit8(object, 0x49U); emit8(object, 0xBAU); emit64(object, (uint64_t)inst->integer);
-                    emit8(object, 0x49U); emit8(object, 0x0FU); emit8(object, 0xAFU); emit8(object, 0xC2U);
-                    load_value_to_r10(object, function, allocation, inst->left);
-                    if (inst->operator_code < 0) { emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); }
-                    emit8(object, 0x4CU); emit8(object, 0x01U); emit8(object, 0xD0U); store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_POINTER_DIFF:
-                    load_value_alloc(object, function, allocation, inst->left); load_value_to_r10(object, function, allocation, inst->right);
-                    emit8(object, 0x4CU); emit8(object, 0x29U); emit8(object, 0xD0U); emit8(object, 0x48U); emit8(object, 0x99U);
-                    emit8(object, 0x49U); emit8(object, 0xBAU); emit64(object, (uint64_t)inst->integer); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xFAU);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_POINTER_MEMBER:
-                    load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0x05U); emit32(object, (uint32_t)inst->integer);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_LOCAL_LOAD:
                     object_load(object, &selected->access, 0x85U, false, local_offset(allocation, inst->slot));
                     if (selected->access.floating) store_float_value(object, function, allocation, inst->dst);

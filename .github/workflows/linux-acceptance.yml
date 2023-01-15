@@ -70,6 +70,8 @@ jobs:
         run: make test-mir-abi
       - name: Selected storage, conversion, bitfield and normalization plans
         run: make test-mir-scalar
+      - name: Selected pointer arithmetic and frame or symbol address plans
+        run: make test-mir-address
       - name: Dependency rules, C17 profiles and structured diagnostics
         run: make test-driver
       - name: Repeated source instances, include traces and qualified pointer differences

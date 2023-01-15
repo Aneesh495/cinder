@@ -2,6 +2,27 @@
 
 Updated: 2026-10-15
 
+## Selected pointer and address plans
+
+Pointer arithmetic and local/global/function/member address formation now use
+selected MIR byte programs and actual fixed-register/clobber contracts. The
+encoder resolves allocated frame offsets and emits selected programs and
+relocations. Raw pointer expansion cases have been removed from its IR switch.
+Control/frame expansion and other remaining target pseudos are still open.
+
+Strict GCC and ASan/UBSan builds pass five address roles and six typed origins,
+928 plan rejections, original/assembled identity and three independent reference
+programs. Ordinary objects match the preceding compiler at O0/O2. Both builds
+also pass the existing 43-form, 64-source ABI and 142-source scalar suites,
+including all existing plan mutations and restored object identity. All 60
+current compiler modules compile through Cinder into original ordinary objects.
+The frozen compiler passes all 1,239 source cases and 2,478 CIR round trips
+plus 36 malformed-input rejections. The Cinder-built emulated Linux compiler
+passes the address suite, both mixed-toolchain call directions and all six
+debug suites with 40 actual GDB sessions. An independent audit binds its source
+objects, probe core, artifacts and reported values. Native publication checks
+for this source remain pending.
+
 ## Initialized scalar debug locations
 
 The O0 debug profile preserves named scalar local storage. Locations derive

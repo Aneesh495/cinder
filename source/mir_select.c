@@ -1,5 +1,6 @@
 #include "cinder.h"
 #include <inttypes.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -156,9 +157,55 @@ static bool select_access(const CinderType *type, CinderMIRAccess *access) {
     return true;
 }
 
+static void address_immediate(unsigned char *bytes, uint64_t value, unsigned width) {
+    for (unsigned i = 0U; i < width; ++i) bytes[i] = (unsigned char)(value >> (i * 8U));
+}
+
+static bool select_address(CinderMIRInst *machine) {
+    const CinderIRInst *inst = &machine->operands; CinderMIRAddress *address = &machine->address;
+    CinderIROp op = inst->op;
+    if (op != IR_LOCAL_ADDRESS && op != IR_GLOBAL_ADDRESS && op != IR_FUNCTION_ADDRESS && op != IR_POINTER_MEMBER && op != IR_POINTER_OFFSET && op != IR_POINTER_DIFF) return false;
+    machine->kind = MIR_ADDRESS; address->frame_slot = -1; machine->clobbers = GPR(0);
+    if (op == IR_LOCAL_ADDRESS || op == IR_GLOBAL_ADDRESS || op == IR_FUNCTION_ADDRESS) {
+        address->kind = op == IR_LOCAL_ADDRESS ? MIR_ADDRESS_FRAME : MIR_ADDRESS_SYMBOL;
+        address->before[0] = 0x48U; address->before[1] = 0x8dU;
+        address->before[2] = op == IR_LOCAL_ADDRESS ? 0x85U : 0x05U; address->before_size = 3U;
+        if (op == IR_LOCAL_ADDRESS) { address->frame_slot = inst->slot; machine->fixed_uses = GPR(5); }
+        else { address->relocation = 2; address->addend = -4; }
+    } else if (op == IR_POINTER_MEMBER) {
+        address->kind = MIR_ADDRESS_MEMBER; address->displacement = inst->integer;
+        address->before[0] = 0x48U; address->before[1] = 0x05U; address->before_size = 6U;
+        address_immediate(address->before + 2U, (uint64_t)inst->integer, 4U);
+        machine->fixed_uses = GPR(0); machine->clobbers |= FLAGS;
+    } else if (op == IR_POINTER_OFFSET) {
+        address->kind = MIR_ADDRESS_OFFSET; address->scale = inst->integer;
+        address->before[0] = 0x49U; address->before[1] = 0xbaU;
+        address_immediate(address->before + 2U, (uint64_t)inst->integer, 8U);
+        const unsigned char multiply[] = {0x49U, 0x0fU, 0xafU, 0xc2U};
+        memcpy(address->before + 10U, multiply, sizeof(multiply)); address->before_size = 14U;
+        if (inst->operator_code < 0) {
+            const unsigned char negate[] = {0x48U, 0xf7U, 0xd8U};
+            memcpy(address->after, negate, sizeof(negate)); address->after_size = 3U;
+        }
+        const unsigned char add[] = {0x4cU, 0x01U, 0xd0U};
+        memcpy(address->after + address->after_size, add, sizeof(add)); address->after_size += 3U;
+        machine->fixed_uses = GPR(0)|GPR(10); machine->clobbers |= GPR(10)|FLAGS;
+    } else {
+        address->kind = MIR_ADDRESS_DIFFERENCE; address->scale = inst->integer;
+        const unsigned char subtract[] = {0x4cU, 0x29U, 0xd0U, 0x48U, 0x99U, 0x49U, 0xbaU};
+        memcpy(address->before, subtract, sizeof(subtract));
+        address_immediate(address->before + 7U, (uint64_t)inst->integer, 8U);
+        const unsigned char divide[] = {0x49U, 0xf7U, 0xfaU};
+        memcpy(address->before + 15U, divide, sizeof(divide)); address->before_size = 18U;
+        machine->fixed_uses = GPR(0)|GPR(10); machine->clobbers |= GPR(2)|GPR(10)|FLAGS;
+    }
+    return true;
+}
+
 static void select_operation(CinderMIRInst *machine) {
     CinderIROp op = machine->operands.op;
     machine->single_precision = machine->operands.type != NULL && machine->operands.type->kind == TYPE_FLOAT;
+    if (select_address(machine)) return;
     for (size_t n = 0U; n < CINDER_ARRAY_LEN(integer_forms); ++n) {
         const IntegerForm *form = &integer_forms[n];
         if (form->source != op) continue;
@@ -304,6 +351,14 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected memory or conversion plan");
             if (memcmp(&inst->bitfield, &expected.bitfield, sizeof(inst->bitfield)) != 0 || (inst->kind == MIR_BITFIELD && inst->bitfield.mask == 0U))
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected bitfield plan");
+            if (memcmp(&inst->address, &expected.address, sizeof(inst->address)) != 0 ||
+                (inst->kind == MIR_ADDRESS && (inst->address.before_size == 0U || inst->address.before_size > sizeof(inst->address.before) || inst->address.after_size > sizeof(inst->address.after) ||
+                 (inst->address.kind == MIR_ADDRESS_FRAME && (inst->address.frame_slot < 0 || (size_t)inst->address.frame_slot >= machine->source->local_count)) ||
+                 (inst->address.kind == MIR_ADDRESS_SYMBOL && inst->operands.callee == NULL) ||
+                 (inst->address.kind == MIR_ADDRESS_MEMBER && (inst->address.displacement < 0 || inst->address.displacement > INT32_MAX)) ||
+                 ((inst->address.kind == MIR_ADDRESS_OFFSET || inst->address.kind == MIR_ADDRESS_DIFFERENCE) && inst->address.scale <= 0) ||
+                 (inst->address.kind == MIR_ADDRESS_OFFSET && inst->operands.operator_code != 1 && inst->operands.operator_code != -1))))
+                cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected pointer or address plan");
             if (inst->operands.dst != CINDER_INVALID_VALUE && (size_t)inst->operands.dst < machine->value_count) {
                 const CinderMIRValue *value = &machine->values[inst->operands.dst];
                 if (value->type != original->type || value->bank != (cinder_ir_floating(original->type) ? MIR_BANK_SSE : MIR_BANK_GPR)) cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "selected machine value has an incorrect register bank");
@@ -335,6 +390,11 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
             }
             if (inst->kind == MIR_CONVERSION) fprintf(out, " conversion=%u precision=%s", (unsigned)inst->conversion, inst->single_precision ? "f32" : "f64");
             if (inst->kind == MIR_BITFIELD) fprintf(out, " occupied=%u:%u mask=%" PRIx64 " shift=%u sign-shift=%u", inst->bitfield.begin, inst->bitfield.end, inst->bitfield.mask, inst->bitfield.shift, inst->bitfield.signed_shift);
+            if (inst->kind == MIR_ADDRESS) {
+                fprintf(out, " address=%u slot=%d scale=%" PRId64 " displacement=%" PRId64 " relocation=%d addend=%" PRId64 " before=", (unsigned)inst->address.kind, inst->address.frame_slot, inst->address.scale, inst->address.displacement, inst->address.relocation, inst->address.addend);
+                for (unsigned n = 0U; n < inst->address.before_size; ++n) fprintf(out, "%02x", inst->address.before[n]);
+                fputs(" after=", out); for (unsigned n = 0U; n < inst->address.after_size; ++n) fprintf(out, "%02x", inst->address.after[n]);
+            }
             fputc('\n', out);
         }
     }

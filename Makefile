@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-hir test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-unwind test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-mir-address test-hir test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-unwind test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -190,6 +190,10 @@ test-mir-scalar: build
 	@$(CMAKE) --build $(BUILD_DIR) --target cinder_mir_scalar_probe --parallel
 	@python3 -B tests/test_mir_scalar.py $(BUILD_DIR)/cinder_mir_scalar_probe
 	@python3 -B tests/test_initializers.py $(BUILD_DIR)/cindercc machine_memory
+
+test-mir-address: build
+	@$(CMAKE) --build $(BUILD_DIR) --target cinder_mir_address_probe --parallel
+	@python3 -B tests/test_mir_address.py $(BUILD_DIR)/cindercc
 
 test-driver: build
 	@python3 -B tests/test_driver.py $(BUILD_DIR)/cindercc

@@ -7,12 +7,14 @@ flowchart TD
   SELECT --> ABI[Select incoming outgoing and variadic ABI layouts]
   SELECT --> STORAGE[Select memory encodings normalization and bitfield masks]
   SELECT --> CONVERT[Select integer floating and boolean conversions]
+  SELECT --> ADDRESS[Select frame and RIP-relative addresses, scaled offsets and signed differences]
   OWN --> VERIFY[Verify sealed selected representation]
   BANK --> VERIFY
   CONTRACT --> VERIFY
   ABI --> VERIFY
   STORAGE --> VERIFY
   CONVERT --> VERIFY
+  ADDRESS --> VERIFY
   VERIFY --> LIVE[CFG liveness and linear-scan allocation]
   BANK --> LIVE
   CONTRACT --> LIVE
@@ -21,5 +23,6 @@ flowchart TD
   ABI --> ENCODE
   STORAGE --> ENCODE
   CONVERT --> ENCODE
+  ADDRESS --> ENCODE
   ENCODE --> ELF[Original ELF writer]
   ELF --> CHECK[Independent object and native result checks]
