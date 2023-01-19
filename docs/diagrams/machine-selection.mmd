@@ -8,6 +8,7 @@ flowchart TD
   SELECT --> STORAGE[Select memory encodings normalization and bitfield masks]
   SELECT --> CONVERT[Select integer floating and boolean conversions]
   SELECT --> ADDRESS[Select frame and RIP-relative addresses, scaled offsets and signed differences]
+  SELECT --> CONTROL[Select branches traps and ABI return forms]
   OWN --> VERIFY[Verify sealed selected representation]
   BANK --> VERIFY
   CONTRACT --> VERIFY
@@ -15,14 +16,18 @@ flowchart TD
   STORAGE --> VERIFY
   CONVERT --> VERIFY
   ADDRESS --> VERIFY
+  CONTROL --> VERIFY
   VERIFY --> LIVE[CFG liveness and linear-scan allocation]
   BANK --> LIVE
   CONTRACT --> LIVE
   LIVE --> COPY[Resolve edge copies with selected phi operands]
+  LIVE --> FRAME[Select physical frame entry preservation and exit programs]
   COPY --> ENCODE[Encode selected scalar forms and expand target pseudos]
   ABI --> ENCODE
   STORAGE --> ENCODE
   CONVERT --> ENCODE
   ADDRESS --> ENCODE
+  CONTROL --> ENCODE
+  FRAME --> ENCODE
   ENCODE --> ELF[Original ELF writer]
   ELF --> CHECK[Independent object and native result checks]

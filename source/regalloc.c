@@ -12,6 +12,7 @@ void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function)
     cinder_selected_mir_init(&allocation->machine);
     allocation->ir = function; allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; allocation->frame_size = 0U; allocation->spills = 0U; allocation->spill_slots = 0U; allocation->saved_gpr_mask = 0U;
     allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; allocation->local_bytes = 0U;
+    memset(&allocation->frame, 0, sizeof(allocation->frame));
 }
 
 void cinder_alloc_destroy(CinderAllocation *allocation) { cinder_selected_mir_destroy(&allocation->machine); free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; free(allocation->local_offsets.data); allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; }
@@ -127,13 +128,23 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     size_t variadic = function->type->variadic ? 22U : 0U;
     allocation->frame_size = (allocation->local_bytes + (allocation->spill_slots + saved + 14U + variadic) * 8U + 15U) & ~(size_t)15U;
     free(slot_end); free(calls.data); free(intervals); cinder_liveness_destroy(&live);
-    return 0;
+    return cinder_plan_frame(allocation, diags);
 }
 
 static void dump_phi_copy_plans(const CinderAllocation *allocation, FILE *out);
 
 void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out) {
     fprintf(out, "allocation function=%s frame=%zu spills=%u\n", allocation->ir->name, allocation->frame_size, allocation->spills);
+    fprintf(out, "  frame-program size=%zu incoming-base=%zu variadic=%d prologue=", allocation->frame.size, allocation->frame.incoming_base, allocation->frame.variadic_area);
+    for (unsigned n = 0U; n < allocation->frame.prologue_size; ++n) fprintf(out, "%02x", allocation->frame.prologue[n]);
+    fprintf(out, " epilogue=%02x%02x\n", allocation->frame.epilogue[0], allocation->frame.epilogue[1]);
+    for (unsigned n = 0U; n < allocation->frame.saved_count; ++n) {
+        const CinderMIRPreserved *saved = &allocation->frame.saved[n];
+        fprintf(out, "  preserve reg=%u offset=%d save=", saved->reg, saved->offset);
+        for (unsigned k = 0U; k < sizeof(saved->save); ++k) fprintf(out, "%02x", saved->save[k]);
+        fputs(" restore=", out); for (unsigned k = 0U; k < sizeof(saved->restore); ++k) fprintf(out, "%02x", saved->restore[k]);
+        fputc('\n', out);
+    }
     for (size_t i = 0U; i < allocation->intervals.len; ++i) {
         const CinderInterval *interval = &allocation->intervals.data[i];
         if (interval->location.kind == LOC_REGISTER) fprintf(out, "  %%v%u [%zu,%zu] -> %s\n", interval->value, interval->start, interval->end, register_name(interval->location.reg));

@@ -1092,9 +1092,20 @@ typedef struct {
     CinderMIRBitfield bitfield;
     CinderMIRAddress address;
 } CinderMIRInst;
+typedef enum { MIR_CONTROL_TRAP, MIR_CONTROL_RETURN, MIR_CONTROL_JUMP, MIR_CONTROL_BRANCH } CinderMIRControlKind;
+typedef struct {
+    CinderMIRControlKind kind;
+    CinderMIRBank bank;
+    CinderValueId value;
+    unsigned char prefix[4], branches[2][2];
+    unsigned prefix_size, branch_sizes[2], edge_count;
+    CinderBlockId targets[2];
+    uint64_t fixed_uses, clobbers;
+} CinderMIRControl;
 typedef struct {
     CINDER_VEC_TYPE(CinderMIRInst) instructions;
     CinderTerminator terminator;
+    CinderMIRControl control;
 } CinderMIRBlock;
 typedef struct {
     const CinderIRFunction *source;
@@ -1122,6 +1133,18 @@ typedef struct {
 } CinderInterval;
 
 typedef struct {
+    unsigned reg;
+    int offset;
+    unsigned char save[10], restore[10];
+} CinderMIRPreserved;
+typedef struct {
+    size_t size, incoming_base;
+    unsigned char prologue[11], epilogue[2];
+    unsigned prologue_size, saved_count;
+    CinderMIRPreserved saved[4];
+    int incoming_gpr[6], incoming_sse[8], variadic_area;
+} CinderMIRFrame;
+typedef struct {
     CinderIRFunction *ir;
     CinderMIRFunction machine;
     CINDER_VEC_TYPE(CinderInterval) intervals;
@@ -1131,6 +1154,7 @@ typedef struct {
     size_t spill_slots;
     CINDER_VEC_TYPE(int) local_offsets;
     size_t local_bytes;
+    CinderMIRFrame frame;
 } CinderAllocation;
 
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function);
@@ -1138,6 +1162,8 @@ void cinder_alloc_destroy(CinderAllocation *allocation);
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_layout_stack(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_plan_frame(CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_verify_frame(const CinderAllocation *allocation, CinderDiagnostics *diags);
 bool cinder_ir_floating(const CinderType *type);
 CinderType *cinder_ir_value_type(const CinderIRFunction *function, CinderValueId value);
 typedef struct {

@@ -2,13 +2,38 @@
 
 Updated: 2026-10-15
 
+## Selected control and physical frame programs
+
+Branches, traps and scalar/void/SSE returns now own verified machine programs.
+The encoder consumes selected comparison, narrowing and near-branch bytes,
+then checks final signed rel32 displacements. After allocation, a physical
+frame plan owns entry/exit bytes, R12-R15 preservation programs, incoming
+register homes and the variadic area. Unwind events follow actual emitted PCs.
+Remaining target pseudos and physical phi-copy scheduling are still open.
+
+Strict GCC and ASan/UBSan builds pass all four control roles, fourteen physical
+frames and 1,212 malformed control/frame rejections before output mutation.
+Independent readers check actual save/restore bytes and every near-branch
+target against instruction boundaries. Three reference programs cover multiple
+returns, integer/float/void results, cyclic SSA, recursion, variadic register
+exhaustion, real spills and a 16 KiB local. Restored plans match normal objects;
+ten O0/O2 ordinary objects match the preceding compiler byte for byte.
+Native publication checks for this increment remain pending.
+
+The preceding initialized-local revision passed native ordinary validation and
+the complete deterministic bootstrap. Downloaded raw evidence was independently
+rehashed and replayed: sixty compiler modules, matching stage-2/stage-3 objects
+and executables, 1,000 eligible generated programs, and forty actual GDB
+sessions on each stage. These are historical source-bound results. Final
+acceptance still requires the remaining implementation and complete campaigns.
+
 ## Selected pointer and address plans
 
 Pointer arithmetic and local/global/function/member address formation now use
 selected MIR byte programs and actual fixed-register/clobber contracts. The
 encoder resolves allocated frame offsets and emits selected programs and
 relocations. Raw pointer expansion cases have been removed from its IR switch.
-Control/frame expansion and other remaining target pseudos are still open.
+Control/frame selection was completed in the subsequent increment above.
 
 Strict GCC and ASan/UBSan builds pass five address roles and six typed origins,
 928 plan rejections, original/assembled identity and three independent reference
@@ -43,7 +68,8 @@ All 60 current compiler modules compile through Cinder as original ordinary
 objects. The owned emulated Linux compiler passes all six debug suites and 40 actual
 GDB sessions. An independent audit binds all ordinary source objects, the
 58-object probe core, debug artifacts and recorded current/unavailable values.
-Current native value checks and bootstrap remain pending. Native
+Native value checks and deterministic bootstrap subsequently passed, including
+forty actual debugger sessions on each of stages 2 and 3. Final native
 acceptance and performance still require the full source-bound campaigns.
 
 ## Owned lexical scope increment

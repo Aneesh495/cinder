@@ -55,8 +55,9 @@ shift and sign extension so masked updates preserve neighboring members.
 
 The verifier seals those encodings and layout choices as well as the original
 operand/type contracts. Pointer arithmetic and address formation now have
-selected target programs. Control/frame expansion and other remaining target
-pseudos still require complete selection. The frontend's owned typed HIR is
+selected target programs. Branches, returns and physical frames also own
+selected programs. Other remaining target pseudos still require complete
+selection. The frontend's owned typed HIR is
 documented in [HIR.md](HIR.md). Full acceptance is incomplete.
 
 `make test-mir` executes 43 independently specified typed integer/floating
@@ -105,3 +106,31 @@ compilation. Linux cross-links objects in both directions. Original sections
 and relocations must match LLVM assembly; optional baseline checks require
 complete byte identity with a preceding compiler. Reports retain unique run
 directories, raw commands, tool/core hashes and original objects.
+
+Control plans choose traps, integer/SSE/void returns, float return narrowing,
+conditional comparisons, near jump opcodes and exact successor IDs. They
+declare RAX/XMM0, RBP/RSP, scratch and flag effects before allocation. The
+encoder resolves rel32 displacements after laying out blocks; a missing target
+or signed displacement overflow fails compilation. It does not choose forms
+from the source terminator or return type.
+
+After allocation, frame selection owns the prologue, epilogue, preserved
+register save/restore programs, incoming GPR/SSE homes and variadic area.
+Offsets come from actual locals, spills, preservation and argument storage.
+The allocation checker and encoder both reject stale or altered frame plans.
+Unwind events follow the emitted selected bytes at their actual PCs.
+
+`make test-mir-control` checks all four control roles, integer/SSE/void returns,
+multiple returns, recursion, variadics, physical spills and a 16 KiB local.
+An independent reader decodes frame bytes and every branch target against
+LLVM instruction boundaries. Twelve corruptions per control and eighteen per
+frame must fail both verification and encoding before output mutation. Restored
+plans reproduce ordinary objects. GCC/Clang and IR references check three
+programs, including the actual nonreturning exit path on Linux. Optional
+baseline checks compare complete objects with the preceding compiler. See
+[ADR 0020](ADRs/0020-selected-control-and-frame-programs.md).
+
+Physical phi-copy resolution still occurs during encoding. Constant materialization,
+bulk memory, argument/call and variadic expansion retain target pseudos. These
+remaining boundaries are explicit work; selected control/frame programs alone
+do not close the complete machine-IR gate.

@@ -279,6 +279,36 @@ static CinderIRInst copy_operands(const CinderIRInst *source) {
     return result;
 }
 
+static void select_control(const CinderIRFunction *function, const CinderTerminator *term, CinderMIRControl *control) {
+    memset(control, 0, sizeof(*control)); control->value = CINDER_INVALID_VALUE;
+    if (term->kind == TERM_UNREACHABLE || (term->kind == TERM_RETURN && function->is_noreturn)) {
+        control->kind = MIR_CONTROL_TRAP; control->prefix[0] = 0x0fU; control->prefix[1] = 0x0bU; control->prefix_size = 2U;
+    } else if (term->kind == TERM_RETURN) {
+        control->kind = MIR_CONTROL_RETURN; control->value = term->value;
+        control->fixed_uses = GPR(4)|GPR(5); control->clobbers = GPR(4)|GPR(5)|GPR(10);
+        if (term->value != CINDER_INVALID_VALUE) {
+            control->bank = cinder_ir_floating(function->type->return_type) ? MIR_BANK_SSE : MIR_BANK_GPR;
+            control->fixed_uses |= control->bank == MIR_BANK_SSE ? SSE(0) : GPR(0);
+            control->clobbers |= control->bank == MIR_BANK_SSE ? SSE(0) : GPR(0);
+        }
+        if (function->type->return_type->kind == TYPE_FLOAT) {
+            const unsigned char narrow[] = {0xf2U, 0x0fU, 0x5aU, 0xc0U};
+            memcpy(control->prefix, narrow, sizeof(narrow)); control->prefix_size = 4U;
+        }
+    } else if (term->kind == TERM_JUMP) {
+        control->kind = MIR_CONTROL_JUMP; control->edge_count = 1U;
+        control->branches[0][0] = 0xe9U; control->branch_sizes[0] = 1U; control->targets[0] = term->target;
+    } else {
+        control->kind = MIR_CONTROL_BRANCH; control->bank = MIR_BANK_GPR; control->value = term->condition;
+        const unsigned char compare[] = {0x48U, 0x83U, 0xf8U, 0U};
+        memcpy(control->prefix, compare, sizeof(compare)); control->prefix_size = 4U;
+        control->branches[0][0] = 0x0fU; control->branches[0][1] = 0x85U; control->branch_sizes[0] = 2U;
+        control->branches[1][0] = 0xe9U; control->branch_sizes[1] = 1U;
+        control->edge_count = 2U; control->targets[0] = term->yes; control->targets[1] = term->no;
+        control->fixed_uses = GPR(0); control->clobbers = GPR(0)|FLAGS;
+    }
+}
+
 int cinder_select_mir(const CinderIRFunction *source, CinderMIRFunction *machine, CinderDiagnostics *diags) {
     cinder_selected_mir_destroy(machine); machine->source = source;
     if (source == NULL || source->value_count > 1000000U || source->blocks.len == 0U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "invalid selected machine function extent"); return 1; }
@@ -286,7 +316,8 @@ int cinder_select_mir(const CinderIRFunction *source, CinderMIRFunction *machine
     machine->values = cinder_alloc((machine->value_count == 0U ? 1U : machine->value_count) * sizeof(*machine->values));
     memset(machine->values, 0, machine->value_count * sizeof(*machine->values));
     for (size_t b = 0U; b < source->blocks.len; ++b) {
-        CinderMIRBlock block = {{NULL,0U,0U}, source->blocks.data[b].terminator};
+        CinderMIRBlock block; memset(&block, 0, sizeof(block)); block.terminator = source->blocks.data[b].terminator;
+        select_control(source, &block.terminator, &block.control);
         for (size_t i = 0U; i < source->blocks.data[b].instructions.len; ++i) {
             const CinderIRInst *original = &source->blocks.data[b].instructions.data[i];
             CinderMIRInst instruction; memset(&instruction, 0, sizeof(instruction));
@@ -325,6 +356,13 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
         const CinderTerminator *term = &block->terminator, *original_term = &machine->source->blocks.data[b].terminator;
         if (term->kind != original_term->kind || term->value != original_term->value || term->condition != original_term->condition || term->target != original_term->target || term->yes != original_term->yes || term->no != original_term->no)
             cinder_diag(diags, CINDER_FATAL, term->loc, "selected machine terminator disagrees with its CFG edge");
+        CinderMIRControl control; select_control(machine->source, original_term, &control);
+        bool valid_control = original_term->kind >= TERM_UNREACHABLE && original_term->kind <= TERM_BRANCH;
+        if (memcmp(&control, &block->control, sizeof(control)) != 0 || !valid_control ||
+            (control.value != CINDER_INVALID_VALUE && (size_t)control.value >= machine->value_count))
+            cinder_diag(diags, CINDER_FATAL, term->loc, "invalid selected control program");
+        for (unsigned edge = 0U; edge < control.edge_count; ++edge)
+            if ((size_t)control.targets[edge] >= machine->blocks.len) cinder_diag(diags, CINDER_FATAL, term->loc, "selected control target is outside its function");
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderMIRInst *inst = &block->instructions.data[i];
             const CinderIRInst *original = &machine->source->blocks.data[b].instructions.data[i];
@@ -376,6 +414,14 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
     fprintf(out, "incoming-abi arguments=%zu gpr=%u sse=%u stack=%zu sret=%s\n", machine->signature->argument_count, machine->signature->state.gpr, machine->signature->state.sse, machine->signature->state.stack, machine->signature->result.memory ? "yes" : "no");
     for (size_t b = 0U; b < machine->blocks.len; ++b) {
         fprintf(out, "machine-block %zu\n", b);
+        const CinderMIRControl *control = &machine->blocks.data[b].control;
+        fprintf(out, "  control=%u bank=%u value=%u fixed=%09" PRIx64 " clobbers=%09" PRIx64 " prefix=", (unsigned)control->kind, (unsigned)control->bank, control->value, control->fixed_uses, control->clobbers);
+        for (unsigned n = 0U; n < control->prefix_size; ++n) fprintf(out, "%02x", control->prefix[n]);
+        for (unsigned edge = 0U; edge < control->edge_count; ++edge) {
+            fprintf(out, " edge%u=%u:", edge, control->targets[edge]);
+            for (unsigned n = 0U; n < control->branch_sizes[edge]; ++n) fprintf(out, "%02x", control->branches[edge][n]);
+        }
+        fputc('\n', out);
         for (size_t i = 0U; i < machine->blocks.data[b].instructions.len; ++i) {
             const CinderMIRInst *inst = &machine->blocks.data[b].instructions.data[i];
             fprintf(out, "  machine-kind=%u origin=%s dst=%u fixed=%09" PRIx64 " clobbers=%09" PRIx64 " bytes=", (unsigned)inst->kind, cinder_ir_op_name(inst->operands.op), inst->operands.dst, inst->fixed_uses, inst->clobbers);

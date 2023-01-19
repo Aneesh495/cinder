@@ -1,5 +1,6 @@
 #include "cinder.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,10 +29,9 @@ static void emit_mov_rax_from_reg(CinderMachineObject *object, unsigned reg) {
     if (reg < 8U) { emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | (reg << 3U))); }
     else { emit8(object, 0x4CU); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | ((reg - 8U) << 3U))); }
 }
-static void emit_prologue(CinderMachineObject *object, size_t frame) { emit8(object, 0x55U); emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0xE5U); if (frame != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xECU); emit32(object, (uint32_t)frame); } }
-static void emit_epilogue(CinderMachineObject *object, CinderUnwind *unwind) {
-    emit8(object, 0xC9U); cinder_unwind_leave(unwind, object);
-    emit8(object, 0xC3U); cinder_unwind_epilogue_end(unwind, object);
+static void emit_epilogue(CinderMachineObject *object, CinderUnwind *unwind, const CinderMIRFrame *frame) {
+    emit8(object, frame->epilogue[0]); cinder_unwind_leave(unwind, object);
+    emit8(object, frame->epilogue[1]); cinder_unwind_epilogue_end(unwind, object);
 }
 static int value_offset(const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) { (void)function; return -(int)(allocation->local_bytes + ((size_t)value + 1U) * 8U); }
 static int local_offset(const CinderAllocation *allocation, int slot) { return allocation->local_offsets.data[slot]; }
@@ -638,13 +638,13 @@ void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.dat
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)assembly; (void)asm_out;
     const CinderMIRFunction *machine = &allocation->machine;
-    if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0) return 1;
+    if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0 || cinder_verify_frame(allocation, diags) != 0) return 1;
     const CinderMIRCallPlan *signature = machine->signature;
     if (signature == NULL || signature->argument_count != function->params.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "function has no selected incoming ABI plan"); return 1; }
     CinderABIValue result = signature->result;
     CinderABIState state = signature->state;
     const CinderABIArgument *parameters = signature->arguments;
-    size_t frame = allocation->frame_size;
+    const CinderMIRFrame *frame = &allocation->frame;
     size_t start = object->text.len;
     char *name = cinder_strndup(function->name, strlen(function->name));
     cinder_vec_push((CinderVec *)&object->defined_symbols, &name);
@@ -653,27 +653,25 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     CinderDebugFunction debug = {object->defined_symbols.len - 1U, function->loc, start, object->debug_rows.len, object->debug_rows.len, object->debug_points.len, object->debug_points.len};
     if (object->debug_enabled) cinder_debug_row(object, function->loc);
     CinderUnwind unwind; cinder_unwind_begin(&unwind, object, function->name, start);
-    emit_prologue(object, frame);
+    cinder_bytes_append(&object->text, frame->prologue, frame->prologue_size);
     cinder_unwind_prologue(&unwind, object);
-    unsigned saved = 0U;
-    for (unsigned bit = 0U; bit < 4U; ++bit) {
-        if ((allocation->saved_gpr_mask & (1U << bit)) == 0U) continue;
-        emit_mov_rax_from_reg(object, bit + 12U);
-        emit_mov_mem_rax(object, -(int)((allocation->local_bytes / 8U + allocation->spill_slots + ++saved) * 8U));
-        cinder_unwind_saved(&unwind, object, bit + 12U, -(int)((allocation->local_bytes / 8U + allocation->spill_slots + saved) * 8U));
+    for (unsigned n = 0U; n < frame->saved_count; ++n) {
+        const CinderMIRPreserved *saved = &frame->saved[n];
+        cinder_bytes_append(&object->text, saved->save, sizeof(saved->save));
+        cinder_unwind_saved(&unwind, object, saved->reg, saved->offset);
     }
-    size_t incoming_base = allocation->local_bytes / 8U + allocation->spill_slots + saved;
+    size_t incoming_base = frame->incoming_base;
     for (unsigned a = 0U; a < 6U; ++a) {
         emit_mov_rax_from_reg(object, abi_register(a));
-        emit_mov_mem_rax(object, -(int)((incoming_base + a + 1U) * 8U));
+        emit_mov_mem_rax(object, frame->incoming_gpr[a]);
     }
     for (unsigned a = 0U; a < 8U; ++a) {
         emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x11U);
         emit8(object, (uint8_t)(0x85U | (a << 3U)));
-        emit32(object, (uint32_t)(-(int)((incoming_base + 7U + a) * 8U)));
+        emit32(object, (uint32_t)frame->incoming_sse[a]);
     }
     if (function->type->variadic) {
-        int area = -(int)allocation->frame_size;
+        int area = frame->variadic_area;
         for (unsigned a = 0U; a < 6U; ++a) {
             emit_mov_rax_mem(object, -(int)((incoming_base + a + 1U) * 8U)); emit_mov_mem_rax(object, area + (int)(a * 8U));
         }
@@ -828,30 +826,40 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         }
         debug_point(object, debug.symbol, b, SIZE_MAX, block->terminator.debug_scope);
         if (object->debug_enabled) cinder_debug_row(object, block->terminator.loc);
-        switch (block->terminator.kind) {
-            case TERM_RETURN:
-                if (function->is_noreturn) { emit8(object, 0x0FU); emit8(object, 0x0BU); break; }
-                if (block->terminator.value != CINDER_INVALID_VALUE) { if (function->type->return_type->kind == TYPE_FLOAT || function->type->return_type->kind == TYPE_DOUBLE) load_float_value(object, function, allocation, block->terminator.value, 0U); else load_value_alloc(object, function, allocation, block->terminator.value); }
-                if (function->type->return_type->kind == TYPE_FLOAT) { emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-                cinder_unwind_epilogue_begin(&unwind, object);
-                saved = 0U;
-                for (unsigned bit = 0U; bit < 4U; ++bit) {
-                    if ((allocation->saved_gpr_mask & (1U << bit)) == 0U) continue;
-                    emit_mov_r10_mem(object, -(int)((allocation->local_bytes / 8U + allocation->spill_slots + ++saved) * 8U));
-                    emit_mov_reg_reg(object, bit + 12U, 10U);
-                    cinder_unwind_restored(&unwind, object, bit + 12U);
-                }
-                emit_epilogue(object, &unwind); break;
-            case TERM_JUMP:
-                if (emit_phi_transfers(object, function, allocation, (CinderBlockId)b, block->terminator.target, diags) != 0) { free(labels); free(branches.data); return 1; }
-                emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
-            case TERM_BRANCH:
-                load_value_alloc(object, function, allocation, block->terminator.condition); emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xF8U); emit8(object, 0U); emit8(object, 0x0FU); emit8(object, 0x85U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup yes = {offset, block->terminator.yes}; cinder_vec_push((CinderVec *)&branches, &yes); } emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup no = {offset, block->terminator.no}; cinder_vec_push((CinderVec *)&branches, &no); } break;
-            case TERM_UNREACHABLE: emit8(object, 0x0FU); emit8(object, 0x0BU); break;
+        const CinderMIRControl *control = &block->control;
+        if (control->value != CINDER_INVALID_VALUE) {
+            if (control->bank == MIR_BANK_SSE) load_float_value(object, function, allocation, control->value, 0U);
+            else load_value_alloc(object, function, allocation, control->value);
+        }
+        cinder_bytes_append(&object->text, control->prefix, control->prefix_size);
+        if (control->kind == MIR_CONTROL_RETURN) {
+            cinder_unwind_epilogue_begin(&unwind, object);
+            for (unsigned n = 0U; n < frame->saved_count; ++n) {
+                const CinderMIRPreserved *saved = &frame->saved[n];
+                cinder_bytes_append(&object->text, saved->restore, sizeof(saved->restore));
+                cinder_unwind_restored(&unwind, object, saved->reg);
+            }
+            emit_epilogue(object, &unwind, frame);
+        } else {
+            if (control->kind == MIR_CONTROL_JUMP && emit_phi_transfers(object, function, allocation, (CinderBlockId)b, control->targets[0], diags) != 0) { free(labels); free(branches.data); return 1; }
+            for (unsigned edge = 0U; edge < control->edge_count; ++edge) {
+                cinder_bytes_append(&object->text, control->branches[edge], control->branch_sizes[edge]);
+                BranchFixup branch = {object->text.len, control->targets[edge]}; emit32(object, 0U);
+                cinder_vec_push((CinderVec *)&branches, &branch);
+            }
         }
     }
-    for (size_t i = 0U; i < branches.len; ++i) { BranchFixup *branch = &branches.data[i]; if (branch->target >= function->blocks.len || labels[branch->target] == SIZE_MAX) continue; int64_t displacement = (int64_t)labels[branch->target] - (int64_t)(branch->offset + 4U); cinder_bytes_patch32(&object->text, branch->offset, (uint32_t)(int32_t)displacement); }
+    for (size_t i = 0U; i < branches.len; ++i) {
+        BranchFixup *branch = &branches.data[i];
+        if ((size_t)branch->target >= function->blocks.len || labels[branch->target] == SIZE_MAX || branch->offset > (size_t)INT64_MAX - 4U || labels[branch->target] > INT64_MAX) {
+            cinder_diag(diags, CINDER_FATAL, function->loc, "selected branch has no encodable target"); break;
+        }
+        int64_t displacement = (int64_t)labels[branch->target] - (int64_t)(branch->offset + 4U);
+        if (displacement < INT32_MIN || displacement > INT32_MAX) { cinder_diag(diags, CINDER_FATAL, function->loc, "branch exceeds the signed rel32 target profile"); break; }
+        cinder_bytes_patch32(&object->text, branch->offset, (uint32_t)(int32_t)displacement);
+    }
     free(labels); free(branches.data);
+    if (diags->errors != 0U) return 1;
     size_t function_size = object->text.len - start;
     cinder_vec_push((CinderVec *)&object->symbol_sizes, &function_size);
     if (object->debug_enabled) {
