@@ -83,7 +83,7 @@ static int forced_cycle(CinderAllocation *allocation, CinderDiagnostics *diagnos
         } else interval->location = (CinderLocation){LOC_STACK, REG_NONE, -(int)((allocation->local_bytes / 8U + interval->value + 1U) * 8U)};
     }
     allocation->frame_size = ((allocation->local_bytes / 8U + allocation->spill_slots + (fp ? 0U : 3U) + 14U) * 8U + 15U) & ~(size_t)15U;
-    return cinder_verify_allocation(allocation, diagnostics);
+    return cinder_plan_frame(allocation, diagnostics) || cinder_verify_allocation(allocation, diagnostics);
 }
 
 int main(int argc, char **argv) {
