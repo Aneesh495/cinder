@@ -30,8 +30,11 @@ the verified input. It runs at selection and before encoding. The independent
 interpreter and native executions check the semantic result separately. The
 machine verifier is not an independent proof of instruction semantics.
 
-Critical edges are split before selection. Edge transfers use the selected
-function's owned phi operands and the existing physical parallel-copy resolver.
+Conditional edges targeting phis are split before selection, including
+single-predecessor targets and branches with equal successors. After
+allocation, the physical parallel-copy resolver creates owned source/value,
+destination/value and bank schedules on the predecessor's selected block.
+The encoder consumes those moves without inspecting phis or scheduling copies.
 `--dump-mir` prints selected forms, byte templates, banks and masks, together
 with actual CFG analysis and optimizer counters.
 
@@ -130,7 +133,22 @@ programs, including the actual nonreturning exit path on Linux. Optional
 baseline checks compare complete objects with the preceding compiler. See
 [ADR 0020](ADRs/0020-selected-control-and-frame-programs.md).
 
-Physical phi-copy resolution still occurs during encoding. Constant materialization,
-bulk memory, argument/call and variadic expansion retain target pseudos. These
-remaining boundaries are explicit work; selected control/frame programs alone
-do not close the complete machine-IR gate.
+The copy checker separately simulates symbolic values in physical registers,
+spill cells and the GPR/SSE temporaries. It verifies simultaneous phi results,
+allowed endpoints, banks, bounds and temporary accounting without invoking the
+resolver. Both allocation verification and encoding require it to pass. Dumped
+copy schedules now describe the actual allocated schedule, rather than a
+separately resolved virtual copy set.
+
+`make test-mir-copies` checks 36 integer/binary32/binary64 cyclic schedules and
+four single-predecessor/equal-successor cases, with GCC/Clang references and
+original target execution on Linux. Nine corruptions per case include a wrong
+live value, missing final transfer and unsafe ordering around a cycle temporary.
+Each must fail verification and encoding before output mutation. Optional
+baseline probes require complete object identity for the preceding cyclic
+profile. Linux compiles the API probe with Cinder and links the actual core.
+See [ADR 0021](ADRs/0021-allocated-phi-transfer-schedules.md).
+
+Constant materialization, bulk memory, argument/call and variadic expansion
+retain target pseudos. These remaining boundaries are explicit work; selected
+control/frame/copy programs alone do not close the complete machine-IR gate.

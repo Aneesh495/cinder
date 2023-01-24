@@ -31,5 +31,17 @@ the local object area. The checker reconstructs these extents independently
 and rejects overlaps, undersized frames, and spill locations in reserved areas.
 
 Native phi edges use simultaneous physical transfers, including cycles and
-critical edges. Aggregate ABI classification, indirect calls, full variadic
-cursors, explicit target instruction MIR, and scheduling remain separate work.
+conditional targets with only one predecessor. Every conditional phi edge is
+split before allocation. Physical schedules belong to selected predecessor
+blocks and are checked by separate storage-token simulation before encoding.
+GPR cycles use R11 and SSE cycles use XMM1 as reserved temporary storage.
+The encoder performs the scheduled moves and does not run the resolver.
+
+`cinder_allocate` creates both the physical frame and edge-copy plans. A caller
+that deliberately replaces locations or frame storage must regenerate both
+with `cinder_plan_frame` and `cinder_plan_edge_copies` before verification.
+Stale plans are rejected. The forced-cycle test uses this explicit boundary.
+
+Aggregate classification, indirect calls and variadic cursors are implemented
+through selected ABI layouts. Remaining target pseudo expansion is described
+in [MACHINE_SELECTION.md](MACHINE_SELECTION.md).

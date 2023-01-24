@@ -128,7 +128,7 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     size_t variadic = function->type->variadic ? 22U : 0U;
     allocation->frame_size = (allocation->local_bytes + (allocation->spill_slots + saved + 14U + variadic) * 8U + 15U) & ~(size_t)15U;
     free(slot_end); free(calls.data); free(intervals); cinder_liveness_destroy(&live);
-    return cinder_plan_frame(allocation, diags);
+    return cinder_plan_frame(allocation, diags) || cinder_plan_edge_copies(allocation, diags);
 }
 
 static void dump_phi_copy_plans(const CinderAllocation *allocation, FILE *out);
@@ -185,29 +185,152 @@ int cinder_resolve_parallel_copies(const CinderValueId *sources, const CinderVal
 }
 
 
-static void dump_phi_copy_plans(const CinderAllocation *allocation, FILE *out) {
+static const CinderLocation *copy_location(const CinderAllocation *allocation, CinderValueId value) {
+    for (size_t i = 0U; i < allocation->intervals.len; ++i)
+        if (allocation->intervals.data[i].value == value) return &allocation->intervals.data[i].location;
+    return NULL;
+}
+
+static size_t copy_storage(const CinderLocation *location) {
+    if (location == NULL) return SIZE_MAX;
+    if (location->kind == LOC_REGISTER) return location->reg < REG_NONE ? (size_t)location->reg : SIZE_MAX;
+    if (location->kind != LOC_STACK || location->stack_offset >= 0 || location->stack_offset % 8 != 0) return SIZE_MAX;
+    return (size_t)REG_NONE + 1U + (size_t)(-(int64_t)location->stack_offset / 8);
+}
+
+int cinder_plan_edge_copies(CinderAllocation *allocation, CinderDiagnostics *diags) {
+    for (size_t b = 0U; b < allocation->machine.blocks.len; ++b) {
+        CinderMIRBlock *block = &allocation->machine.blocks.data[b];
+        block->transfers.len = 0U; block->copy_inputs = 0U; block->copy_temporaries = 0U;
+        if (block->control.kind != MIR_CONTROL_JUMP) continue;
+        CinderBlockId to = block->control.targets[0];
+        if ((size_t)to >= allocation->machine.blocks.len) { cinder_diag(diags, CINDER_FATAL, block->terminator.loc, "copy edge has no target"); return 1; }
+        const CinderMIRBlock *target = &allocation->machine.blocks.data[to]; size_t count = 0U;
+        for (size_t i = 0U; i < target->instructions.len; ++i) if (target->instructions.data[i].operands.op == IR_PHI) ++count;
+        if (count == 0U) continue;
+        CinderValueId *sources = cinder_alloc(count * sizeof(*sources)), *destinations = cinder_alloc(count * sizeof(*destinations));
+        CinderValueId *source_values = cinder_alloc(count * sizeof(*source_values)), *destination_values = cinder_alloc(count * sizeof(*destination_values));
+        size_t index = 0U;
+        for (size_t i = 0U; i < target->instructions.len; ++i) {
+            const CinderIRInst *phi = &target->instructions.data[i].operands; if (phi->op != IR_PHI) continue;
+            size_t incoming = SIZE_MAX;
+            for (size_t p = 0U; p < phi->phi_blocks.len; ++p) if (phi->phi_blocks.data[p] == b) incoming = p;
+            if (incoming == SIZE_MAX || incoming >= phi->args.len) { cinder_diag(diags, CINDER_FATAL, phi->loc, "copy edge has no phi input"); break; }
+            size_t source = copy_storage(copy_location(allocation, phi->args.data[incoming]));
+            size_t destination = copy_storage(copy_location(allocation, phi->dst));
+            if (source >= CINDER_INVALID_VALUE || destination >= CINDER_INVALID_VALUE) { cinder_diag(diags, CINDER_FATAL, phi->loc, "copy edge has no physical storage"); break; }
+            sources[index] = (CinderValueId)source; destinations[index] = (CinderValueId)destination;
+            source_values[index] = phi->args.data[incoming]; destination_values[index] = phi->dst; ++index;
+        }
+        CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
+        if (diags->errors == 0U) (void)cinder_resolve_parallel_copies(sources, destinations, count, &plan, diags);
+        CinderMIRBank temporary = MIR_BANK_NONE;
+        for (size_t m = 0U; m < plan.moves.len && diags->errors == 0U; ++m) {
+            CinderParallelCopy move = plan.moves.data[m]; CinderMIREdgeMove selected = {CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, MIR_BANK_NONE};
+            for (size_t k = 0U; k < count; ++k) {
+                if (sources[k] == move.source) selected.source = source_values[k];
+                if (destinations[k] == move.destination) selected.destination = destination_values[k];
+            }
+            selected.bank = selected.source != CINDER_INVALID_VALUE ? allocation->machine.values[selected.source].bank : temporary;
+            if ((move.source != CINDER_INVALID_VALUE && selected.source == CINDER_INVALID_VALUE) ||
+                (move.destination != CINDER_INVALID_VALUE && selected.destination == CINDER_INVALID_VALUE) || selected.bank == MIR_BANK_NONE) {
+                cinder_diag(diags, CINDER_FATAL, block->terminator.loc, "copy schedule has an absent operand or bank"); break;
+            }
+            if (selected.destination == CINDER_INVALID_VALUE) temporary = selected.bank;
+            cinder_vec_push((CinderVec *)&block->transfers, &selected);
+        }
+        block->copy_inputs = count; block->copy_temporaries = plan.temporary_count;
+        cinder_parallel_copy_destroy(&plan); free(destination_values); free(source_values); free(destinations); free(sources);
+        if (diags->errors != 0U) return 1;
+    }
+    return cinder_verify_edge_copies(allocation, diags);
+}
+
+/* This checker simulates storage tokens. It does not invoke the scheduler or
+ * compare against another schedule produced by the same copy resolver. */
+int cinder_verify_edge_copies(const CinderAllocation *allocation, CinderDiagnostics *diags) {
     const CinderIRFunction *function = allocation->ir;
+    if (function == NULL || function->value_count > 1000000U || allocation->machine.value_count != function->value_count ||
+        allocation->machine.blocks.len != function->blocks.len || allocation->frame_size > 128U * 1024U * 1024U ||
+        (function->value_count != 0U && allocation->machine.values == NULL) ||
+        (function->blocks.len != 0U && allocation->machine.blocks.data == NULL)) {
+        cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "copy checker has inconsistent machine dimensions"); return 1;
+    }
     for (size_t b = 0U; b < function->blocks.len; ++b) {
-        const CinderIRBlock *block = &function->blocks.data[b];
-        for (size_t p = 0U; p < block->predecessors.len; ++p) {
-            CINDER_VEC_TYPE(CinderValueId) sources = {NULL, 0U, 0U}, destinations = {NULL, 0U, 0U};
-            for (size_t i = 0U; i < block->instructions.len; ++i) {
-                const CinderIRInst *phi = &block->instructions.data[i];
-                if (phi->op != IR_PHI) continue;
-                for (size_t a = 0U; a < phi->phi_blocks.len; ++a)
-                    if (phi->phi_blocks.data[a] == block->predecessors.data[p]) {
-                        cinder_vec_push((CinderVec *)&sources, &phi->args.data[a]);
-                        cinder_vec_push((CinderVec *)&destinations, &phi->dst);
-                    }
+        const CinderMIRBlock *block = &allocation->machine.blocks.data[b]; const CinderTerminator *term = &function->blocks.data[b].terminator;
+        size_t count = 0U; const CinderIRBlock *target = NULL;
+        if (term->kind == TERM_JUMP && (size_t)term->target < function->blocks.len) {
+            target = &function->blocks.data[term->target];
+            for (size_t i = 0U; i < target->instructions.len; ++i) if (target->instructions.data[i].op == IR_PHI) ++count;
+        }
+        if (block->copy_inputs != count || block->transfers.len > count * 2U || block->copy_temporaries > count ||
+            (block->transfers.len != 0U && block->transfers.data == NULL)) {
+            cinder_diag(diags, CINDER_FATAL, term->loc, "copy schedule has inconsistent extents"); return 1;
+        }
+        if (term->kind == TERM_BRANCH) {
+            CinderBlockId successors[2] = {term->yes, term->no};
+            for (unsigned s = 0U; s < 2U; ++s) if ((size_t)successors[s] < function->blocks.len) {
+                const CinderIRBlock *successor = &function->blocks.data[successors[s]];
+                for (size_t i = 0U; i < successor->instructions.len; ++i) if (successor->instructions.data[i].op == IR_PHI)
+                    cinder_diag(diags, CINDER_FATAL, term->loc, "conditional phi edge was not split before allocation");
             }
-            if (sources.len != 0U) {
-                CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
-                CinderDiagnostics diagnostics; cinder_diags_init(&diagnostics);
-                (void)cinder_resolve_parallel_copies(sources.data, destinations.data, sources.len, &plan, &diagnostics);
-                fprintf(out, "  parallel-copy edge=%u->%zu moves=%zu temporaries=%u\n", block->predecessors.data[p], b, plan.moves.len, plan.temporary_count);
-                cinder_diags_destroy(&diagnostics); cinder_parallel_copy_destroy(&plan);
+        }
+        if (count == 0U) continue;
+        size_t cells = (size_t)REG_NONE + 2U + allocation->frame_size / 8U;
+        CinderValueId *tokens = cinder_alloc(cells * sizeof(*tokens));
+        CinderValueId *inputs = cinder_alloc(count * sizeof(*inputs)), *outputs = cinder_alloc(count * sizeof(*outputs));
+        for (size_t k = 0U; k < cells; ++k) tokens[k] = CINDER_INVALID_VALUE;
+        size_t index = 0U;
+        for (size_t i = 0U; i < target->instructions.len; ++i) {
+            const CinderIRInst *phi = &target->instructions.data[i]; if (phi->op != IR_PHI) continue;
+            size_t incoming = SIZE_MAX;
+            for (size_t p = 0U; p < phi->phi_blocks.len; ++p) if (phi->phi_blocks.data[p] == b) incoming = p;
+            if (incoming == SIZE_MAX || incoming >= phi->args.len) { cinder_diag(diags, CINDER_FATAL, phi->loc, "copy checker has no phi source"); break; }
+            inputs[index] = phi->args.data[incoming]; outputs[index] = phi->dst;
+            size_t storage = copy_storage(copy_location(allocation, inputs[index]));
+            if ((size_t)inputs[index] >= function->value_count || (size_t)outputs[index] >= function->value_count || storage >= cells ||
+                (tokens[storage] != CINDER_INVALID_VALUE && tokens[storage] != inputs[index])) {
+                cinder_diag(diags, CINDER_FATAL, phi->loc, "phi sources have absent or conflicting physical storage"); break;
             }
-            free(destinations.data); free(sources.data);
+            tokens[storage] = inputs[index]; ++index;
+        }
+        CinderValueId temporary[3] = {CINDER_INVALID_VALUE,CINDER_INVALID_VALUE,CINDER_INVALID_VALUE}; unsigned saved = 0U;
+        for (size_t m = 0U; m < block->transfers.len && diags->errors == 0U; ++m) {
+            const CinderMIREdgeMove *move = &block->transfers.data[m];
+            bool source = move->source == CINDER_INVALID_VALUE, destination = move->destination == CINDER_INVALID_VALUE;
+            for (size_t i = 0U; i < count; ++i) { source = source || move->source == inputs[i]; destination = destination || move->destination == outputs[i]; }
+            if (!source || !destination || (move->bank != MIR_BANK_GPR && move->bank != MIR_BANK_SSE) ||
+                (move->source == CINDER_INVALID_VALUE && move->destination == CINDER_INVALID_VALUE) ||
+                (move->source != CINDER_INVALID_VALUE && allocation->machine.values[move->source].bank != move->bank) ||
+                (move->destination != CINDER_INVALID_VALUE && allocation->machine.values[move->destination].bank != move->bank)) {
+                cinder_diag(diags, CINDER_FATAL, term->loc, "copy move has an invalid endpoint or register bank"); break;
+            }
+            size_t read = copy_storage(copy_location(allocation, move->source)), write = copy_storage(copy_location(allocation, move->destination));
+            CinderValueId token = move->source == CINDER_INVALID_VALUE ? temporary[move->bank] : read < cells ? tokens[read] : CINDER_INVALID_VALUE;
+            if (token == CINDER_INVALID_VALUE || (move->destination != CINDER_INVALID_VALUE && write >= cells)) {
+                cinder_diag(diags, CINDER_FATAL, term->loc, "copy move reads an unavailable storage token"); break;
+            }
+            if (move->destination == CINDER_INVALID_VALUE) { temporary[move->bank] = token; ++saved; }
+            else tokens[write] = token;
+        }
+        for (size_t i = 0U; i < index && diags->errors == 0U; ++i) {
+            size_t storage = copy_storage(copy_location(allocation, outputs[i]));
+            if (storage >= cells || tokens[storage] != inputs[i]) cinder_diag(diags, CINDER_FATAL, term->loc, "copy schedule does not preserve simultaneous phi values");
+        }
+        if (saved != block->copy_temporaries) cinder_diag(diags, CINDER_FATAL, term->loc, "copy temporary accounting is inconsistent");
+        free(outputs); free(inputs); free(tokens);
+        if (diags->errors != 0U) return 1;
+    }
+    return diags->errors == 0U ? 0 : 1;
+}
+
+static void dump_phi_copy_plans(const CinderAllocation *allocation, FILE *out) {
+    for (size_t b = 0U; b < allocation->machine.blocks.len; ++b) {
+        const CinderMIRBlock *block = &allocation->machine.blocks.data[b]; if (block->copy_inputs == 0U) continue;
+        fprintf(out, "  parallel-copy edge=%zu->%u inputs=%zu moves=%zu temporaries=%u\n", b, block->control.targets[0], block->copy_inputs, block->transfers.len, block->copy_temporaries);
+        for (size_t i = 0U; i < block->transfers.len; ++i) {
+            const CinderMIREdgeMove *move = &block->transfers.data[i];
+            fprintf(out, "    transfer source=%u destination=%u bank=%u\n", move->source, move->destination, (unsigned)move->bank);
         }
     }
 }

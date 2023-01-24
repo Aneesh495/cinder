@@ -573,62 +573,20 @@ static void emit_global_store(CinderMachineObject *object, const CinderIRFunctio
     symbol_displacement(object, inst->callee);
 }
 
-static CinderValueId storage_key(const CinderLocation *location) {
-    return location->kind == LOC_REGISTER ? (CinderValueId)location->reg : (CinderValueId)((size_t)REG_NONE + 1U + (size_t)(-(int64_t)location->stack_offset / 8));
-}
-
-static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderBlockId from, CinderBlockId to, CinderDiagnostics *diags) {
-    const CinderMIRBlock *target = &allocation->machine.blocks.data[to];
-    size_t count = 0U;
-    for (size_t i = 0U; i < target->instructions.len; ++i) if (target->instructions.data[i].operands.op == IR_PHI) ++count;
-    if (count == 0U) return 0;
-    CinderValueId *sources = cinder_alloc(count * sizeof(*sources));
-    CinderValueId *destinations = cinder_alloc(count * sizeof(*destinations));
-    CinderValueId *source_values = cinder_alloc(count * sizeof(*source_values));
-    CinderValueId *destination_values = cinder_alloc(count * sizeof(*destination_values));
-    size_t index = 0U;
-    for (size_t i = 0U; i < target->instructions.len; ++i) {
-        const CinderIRInst *phi = &target->instructions.data[i].operands;
-        if (phi->op != IR_PHI) continue;
-        size_t incoming = SIZE_MAX;
-        for (size_t p = 0U; p < phi->phi_blocks.len; ++p) if (phi->phi_blocks.data[p] == from) incoming = p;
-        if (incoming == SIZE_MAX) { cinder_diag(diags, CINDER_FATAL, phi->loc, "phi transfer has no incoming edge"); break; }
-        const CinderLocation *source = location_for(allocation, phi->args.data[incoming]);
-        const CinderLocation *destination = location_for(allocation, phi->dst);
-        if (source == NULL || destination == NULL) { cinder_diag(diags, CINDER_FATAL, phi->loc, "phi transfer has no physical location"); break; }
-        sources[index] = storage_key(source); destinations[index] = storage_key(destination);
-        source_values[index] = phi->args.data[incoming]; destination_values[index] = phi->dst; ++index;
-    }
-    CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
-    if (diags->errors == 0U) (void)cinder_resolve_parallel_copies(sources, destinations, count, &plan, diags);
-    bool temporary_float = false;
-    for (size_t m = 0U; m < plan.moves.len && diags->errors == 0U; ++m) {
-        CinderParallelCopy move = plan.moves.data[m];
-        CinderValueId source = CINDER_INVALID_VALUE, destination = CINDER_INVALID_VALUE;
-        for (size_t k = 0U; k < count; ++k) {
-            if (sources[k] == move.source) source = source_values[k];
-            if (destinations[k] == move.destination) destination = destination_values[k];
-        }
-        bool floating = source != CINDER_INVALID_VALUE ? cinder_ir_floating(allocation->machine.values[source].type) : temporary_float;
-        if (move.source == CINDER_INVALID_VALUE) {
+static void emit_phi_transfers(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRBlock *block) {
+    for (size_t m = 0U; m < block->transfers.len; ++m) {
+        const CinderMIREdgeMove *move = &block->transfers.data[m]; bool floating = move->bank == MIR_BANK_SSE;
+        if (move->source == CINDER_INVALID_VALUE) {
             if (floating) emit_movsd_xmm_xmm(object, 0U, 1U);
             else emit_mov_reg_reg(object, 0U, 11U);
-        } else if (source != CINDER_INVALID_VALUE) {
-            if (floating) load_float_value(object, function, allocation, source, 0U);
-            else load_value_alloc(object, function, allocation, source);
-        } else { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "parallel-copy source is absent"); break; }
-        if (move.destination == CINDER_INVALID_VALUE) {
-            temporary_float = floating;
+        } else if (floating) load_float_value(object, function, allocation, move->source, 0U);
+        else load_value_alloc(object, function, allocation, move->source);
+        if (move->destination == CINDER_INVALID_VALUE) {
             if (floating) emit_movsd_xmm_xmm(object, 1U, 0U);
             else emit_mov_reg_reg(object, 11U, 0U);
-        } else if (destination != CINDER_INVALID_VALUE) {
-            if (floating) store_float_value(object, function, allocation, destination);
-            else store_value_alloc(object, function, allocation, destination);
-        } else { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "parallel-copy destination is absent"); break; }
+        } else if (floating) store_float_value(object, function, allocation, move->destination);
+        else store_value_alloc(object, function, allocation, move->destination);
     }
-    cinder_parallel_copy_destroy(&plan);
-    free(destination_values); free(source_values); free(destinations); free(sources);
-    return diags->errors == 0U ? 0 : 1;
 }
 
 void cinder_machine_init(CinderMachineObject *object) { memset(object, 0, sizeof(*object)); }
@@ -638,7 +596,7 @@ void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.dat
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)assembly; (void)asm_out;
     const CinderMIRFunction *machine = &allocation->machine;
-    if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0 || cinder_verify_frame(allocation, diags) != 0) return 1;
+    if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0 || cinder_verify_frame(allocation, diags) != 0 || cinder_verify_edge_copies(allocation, diags) != 0) return 1;
     const CinderMIRCallPlan *signature = machine->signature;
     if (signature == NULL || signature->argument_count != function->params.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "function has no selected incoming ABI plan"); return 1; }
     CinderABIValue result = signature->result;
@@ -841,7 +799,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
             }
             emit_epilogue(object, &unwind, frame);
         } else {
-            if (control->kind == MIR_CONTROL_JUMP && emit_phi_transfers(object, function, allocation, (CinderBlockId)b, control->targets[0], diags) != 0) { free(labels); free(branches.data); return 1; }
+            if (control->kind == MIR_CONTROL_JUMP) emit_phi_transfers(object, function, allocation, block);
             for (unsigned edge = 0U; edge < control->edge_count; ++edge) {
                 cinder_bytes_append(&object->text, control->branches[edge], control->branch_sizes[edge]);
                 BranchFixup branch = {object->text.len, control->targets[edge]}; emit32(object, 0U);

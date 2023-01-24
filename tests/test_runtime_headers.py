@@ -83,6 +83,7 @@ for source in sorted(pathlib.Path('tests',group).glob('*.c')):
         assert obj.read_bytes()==parsed.read_bytes() and cir.read_bytes()==canonical.read_bytes(),(source,level)
         observation=json.loads(run([irtool,'--classify',cir]).stdout)
         if source.name=='header_layout.c':assert observation['valid'] and observation['integer']==0,observation
+        if source.name=='stdlib_integer.c':assert not observation['valid'] and observation['class']=='unsupported',observation
         if group=='flexible_allocated':assert not observation['valid'] and observation['class']=='unsupported',observation
         record=dict(level=level,interpreter=observation,ir_sha256=hashlib.sha256(cir.read_bytes()).hexdigest(),objects={kind:hashlib.sha256(path.read_bytes()).hexdigest() for kind,path in [('owned',obj),('assembled',assembled),('parsed',parsed)]},executions=[])
         if native:

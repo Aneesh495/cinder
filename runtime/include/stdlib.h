@@ -12,6 +12,7 @@ void free(void *allocation);
 _Noreturn void abort(void);
 _Noreturn void exit(int status);
 char *getenv(const char *name);
+unsigned long strtoul(const char *restrict text, char **restrict end, int base);
 unsigned long long strtoull(const char *restrict text, char **restrict end, int base);
 long strtol(const char *restrict text, char **restrict end, int base);
 float strtof(const char *restrict text, char **restrict end);

@@ -1,5 +1,5 @@
 flowchart TD
-  IR[Verified typed CFG and SSA] --> EDGE[Split critical edges]
+  IR[Verified typed CFG and SSA] --> EDGE[Split every conditional phi edge]
   EDGE --> SELECT[Select integer and SSE operation forms]
   SELECT --> OWN[Own operands phi vectors and terminators]
   SELECT --> BANK[Build definition bank and type table]
@@ -20,9 +20,10 @@ flowchart TD
   VERIFY --> LIVE[CFG liveness and linear-scan allocation]
   BANK --> LIVE
   CONTRACT --> LIVE
-  LIVE --> COPY[Resolve edge copies with selected phi operands]
+  LIVE --> COPY[Own physical edge-copy schedules and register banks]
   LIVE --> FRAME[Select physical frame entry preservation and exit programs]
-  COPY --> ENCODE[Encode selected scalar forms and expand target pseudos]
+  COPY --> TOKENS[Independently simulate storage tokens and cycle temporaries]
+  TOKENS --> ENCODE[Encode selected scalar forms and expand target pseudos]
   ABI --> ENCODE
   STORAGE --> ENCODE
   CONVERT --> ENCODE

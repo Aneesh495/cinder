@@ -2,6 +2,34 @@
 
 Updated: 2026-10-15
 
+## Allocated phi transfer schedules
+
+Physical phi copies are now scheduled after allocation and owned by selected
+predecessor blocks. The encoder consumes value/bank moves without inspecting
+phis or invoking the resolver. A separate checker simulates physical storage
+tokens and cycle temporaries, then requires the original simultaneous phi
+results. It accepts valid alternative schedules and rejects lost live values,
+bad endpoints/banks, stale plans and inconsistent accounting before encoding.
+
+Conditional edges with single-predecessor phi targets are now split as well as
+critical edges. Branches whose two arms share a phi target also receive the
+required transfer. The direct IR regressions force distinct physical storage
+so omitted transfers cannot pass through accidental register coalescing.
+
+Strict GCC and ASan/UBSan builds pass 36 integer/binary32/binary64 cyclic
+programs, four conditional-edge regressions and 360 altered schedule checks.
+All 36 cyclic objects match the preceding API probe byte for byte. Eight
+ordinary O0/O2 control objects also match the preceding compiler. Existing
+selected-form, ABI, scalar, address and control/frame suites pass both builds.
+Native publication checks for this increment remain pending. Constant,
+bulk-memory, argument/call and variadic target expansion are still open.
+
+Compiling the API probe with Cinder exposed a missing `strtoul` declaration in
+the authored runtime header. The declaration and a native libc boundary
+fixture now cover the exact function-pointer type, bases, end pointers and
+unsigned result limits. Both host builds pass all eighteen runtime probes;
+external libc execution remains explicitly unsupported by the IR interpreter.
+
 ## Selected control and physical frame programs
 
 Branches, traps and scalar/void/SSE returns now own verified machine programs.
@@ -9,7 +37,8 @@ The encoder consumes selected comparison, narrowing and near-branch bytes,
 then checks final signed rel32 displacements. After allocation, a physical
 frame plan owns entry/exit bytes, R12-R15 preservation programs, incoming
 register homes and the variadic area. Unwind events follow actual emitted PCs.
-Remaining target pseudos and physical phi-copy scheduling are still open.
+Physical phi-copy scheduling was completed in the subsequent increment above.
+Other remaining target pseudos are still open.
 
 Strict GCC and ASan/UBSan builds pass all four control roles, fourteen physical
 frames and 1,212 malformed control/frame rejections before output mutation.
@@ -17,8 +46,17 @@ Independent readers check actual save/restore bytes and every near-branch
 target against instruction boundaries. Three reference programs cover multiple
 returns, integer/float/void results, cyclic SSA, recursion, variadic register
 exhaustion, real spills and a 16 KiB local. Restored plans match normal objects;
-ten O0/O2 ordinary objects match the preceding compiler byte for byte.
-Native publication checks for this increment remain pending.
+eight O0/O2 ordinary objects match the preceding compiler byte for byte.
+Native ordinary validation and deterministic bootstrap passed after the
+forced-layout fixture was updated to regenerate its physical frame plan.
+
+The final development compiler also passes all 1,239 source cases and 2,478 CIR
+round trips with 36 malformed-input rejections. Both builds pass 1,000 forced
+physical phi-cycle cases and 10,000 independent allocation checks. The
+Cinder-built emulated Linux compiler passes all eight machine/debug suites,
+including 40 actual GDB sessions, the address suite and 1,212 control/frame
+mutations. Independent audits bind its 60 original source objects, 58-object
+probe core and all retained artifacts. This is functional emulation evidence.
 
 The preceding initialized-local revision passed native ordinary validation and
 the complete deterministic bootstrap. Downloaded raw evidence was independently
@@ -45,8 +83,8 @@ The frozen compiler passes all 1,239 source cases and 2,478 CIR round trips
 plus 36 malformed-input rejections. The Cinder-built emulated Linux compiler
 passes the address suite, both mixed-toolchain call directions and all six
 debug suites with 40 actual GDB sessions. An independent audit binds its source
-objects, probe core, artifacts and reported values. Native publication checks
-for this source remain pending.
+objects, probe core, artifacts and reported values. Native ordinary validation
+and the complete deterministic bootstrap for this address revision both passed.
 
 ## Initialized scalar debug locations
 

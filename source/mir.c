@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Phi transfers execute on one CFG edge. Split critical edges before physical
- * allocation so a transfer cannot affect the untaken branch or another input. */
+/* Phi transfers execute on one CFG edge. Split every conditional phi edge,
+ * including a successor with only one predecessor, before physical allocation. */
 static bool has_phi(const CinderIRBlock *block) {
     for (size_t i = 0U; i < block->instructions.len; ++i)
         if (block->instructions.data[i].op == IR_PHI) return true;
@@ -18,12 +18,12 @@ int cinder_mir_boundary(CinderIRFunction *function, CinderDiagnostics *diags) {
     }
     size_t original = function->blocks.len;
     for (size_t b = 0U; b < original; ++b) {
-        if (function->blocks.data[b].successors.len < 2U) continue;
+        if (function->blocks.data[b].terminator.kind != TERM_BRANCH) continue;
         for (size_t s = 0U; s < function->blocks.data[b].successors.len; ++s) {
             CinderBlockId target = function->blocks.data[b].successors.data[s];
             if (target >= original) continue;
             CinderIRBlock *successor = &function->blocks.data[target];
-            if (successor->predecessors.len < 2U || !has_phi(successor)) continue;
+            if (!has_phi(successor)) continue;
             CinderIRBlock edge;
             memset(&edge, 0, sizeof(edge)); edge.id = (CinderBlockId)function->blocks.len;
             char name[64]; int length = snprintf(name, sizeof(name), "edge.%zu.%u", b, target);

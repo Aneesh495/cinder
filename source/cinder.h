@@ -1103,9 +1103,16 @@ typedef struct {
     uint64_t fixed_uses, clobbers;
 } CinderMIRControl;
 typedef struct {
+    CinderValueId source, destination;
+    CinderMIRBank bank;
+} CinderMIREdgeMove;
+typedef struct {
     CINDER_VEC_TYPE(CinderMIRInst) instructions;
     CinderTerminator terminator;
     CinderMIRControl control;
+    CINDER_VEC_TYPE(CinderMIREdgeMove) transfers;
+    size_t copy_inputs;
+    unsigned copy_temporaries;
 } CinderMIRBlock;
 typedef struct {
     const CinderIRFunction *source;
@@ -1164,6 +1171,8 @@ int cinder_layout_stack(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_plan_frame(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_frame(const CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_plan_edge_copies(CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_verify_edge_copies(const CinderAllocation *allocation, CinderDiagnostics *diags);
 bool cinder_ir_floating(const CinderType *type);
 CinderType *cinder_ir_value_type(const CinderIRFunction *function, CinderValueId value);
 typedef struct {

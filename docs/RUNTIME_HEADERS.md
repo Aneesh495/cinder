@@ -6,6 +6,13 @@ narrow compiler runtime profile, not a complete standard library. The driver
 searches user `-I` directories first, then the configured runtime directory.
 The installed-path discovery contract remains open.
 
+The integer-conversion declarations include `strtol`, `strtoul` and
+`strtoull` with their LP64 result widths and standard end-pointer signatures.
+The native header suite checks the `strtoul` function-pointer type, automatic
+hexadecimal/octal bases, base 2/36, no-conversion end pointers, negative unsigned
+conversion and `ULONG_MAX`. These calls link to the system C library. The IR
+interpreter explicitly reports unsupported external execution for this fixture.
+
 `stdbool.h` defines the four C17 macros. `stddef.h` declares unsigned-long
 `size_t`, signed-long `ptrdiff_t`, signed-int `wchar_t`, and a record with
 16-byte alignment for `max_align_t`. The latter has an implementation-specific

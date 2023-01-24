@@ -41,6 +41,7 @@ void cinder_selected_mir_destroy(CinderMIRFunction *machine) {
             free(machine->blocks.data[b].instructions.data[i].variadic_layout);
         }
         free(machine->blocks.data[b].instructions.data);
+        free(machine->blocks.data[b].transfers.data);
     }
     free(machine->blocks.data); free(machine->values); destroy_call_plan(machine->signature); cinder_selected_mir_init(machine);
 }
