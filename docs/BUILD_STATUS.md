@@ -21,7 +21,12 @@ programs, four conditional-edge regressions and 360 altered schedule checks.
 All 36 cyclic objects match the preceding API probe byte for byte. Eight
 ordinary O0/O2 control objects also match the preceding compiler. Existing
 selected-form, ABI, scalar, address and control/frame suites pass both builds.
-Native publication checks for this increment remain pending. Constant,
+The deterministic native bootstrap passed. Ordinary native validation exposed
+an allocator stress fixture that skipped the required conditional phi-edge
+split. The fixture now runs the MIR boundary and frees its generated edge
+names. Both strict GCC and ASan/UBSan checks pass all 10,000 graphs and 1,000
+rejected mutations against the published compiler sources. The full ordinary
+native rerun remains pending. Constant,
 bulk-memory, argument/call and variadic target expansion are still open.
 
 Compiling the API probe with Cinder exposed a missing `strtoul` declaration in
@@ -29,6 +34,11 @@ the authored runtime header. The declaration and a native libc boundary
 fixture now cover the exact function-pointer type, bases, end pointers and
 unsigned result limits. Both host builds pass all eighteen runtime probes;
 external libc execution remains explicitly unsupported by the IR interpreter.
+The Cinder-built emulated Linux compiler also passes all nine machine/debug
+suites, forty GDB sessions and eighteen runtime probes. An independent audit
+binds its sixty original source objects, fifty-eight-object API probe core,
+selected schedules and raw debugger results. These are functional emulation
+results.
 
 ## Selected control and physical frame programs
 

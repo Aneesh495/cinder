@@ -27,7 +27,7 @@ static void destroy_graph(CinderIRFunction *function) {
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             free(block->instructions.data[i].args.data); free(block->instructions.data[i].arg_floats.data); free(block->instructions.data[i].phi_blocks.data);
         }
-        free(block->instructions.data); free(block->predecessors.data); free(block->successors.data);
+        free(block->instructions.data); free(block->predecessors.data); free(block->successors.data); free((void *)block->name);
     }
     free(function->blocks.data); free(function->local_types.data); free(function->local_alignments.data);
 }
@@ -172,6 +172,7 @@ int main(int argc, char **argv) {
             cinder_diags_destroy(&invalid);
         }
         signature.variadic = test % 2U != 0U; function.type = &signature;
+        if (cinder_mir_boundary(&function, &diagnostics) != 0) return 1;
         if (cinder_allocate(&allocation, &diagnostics) != 0 || cinder_verify_allocation(&allocation, &diagnostics) != 0) {
             fprintf(stderr, "allocation failed seed=%zu errors=%u\n", test, diagnostics.errors); return 1;
         }
