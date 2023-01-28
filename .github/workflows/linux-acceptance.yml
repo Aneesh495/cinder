@@ -76,6 +76,8 @@ jobs:
         run: make test-mir-control
       - name: Physical phi schedules and single-predecessor conditional edges
         run: make test-mir-copies
+      - name: Selected constants, value copies, zeroing and object copies
+        run: make test-mir-material
       - name: Dependency rules, C17 profiles and structured diagnostics
         run: make test-driver
       - name: Repeated source instances, include traces and qualified pointer differences

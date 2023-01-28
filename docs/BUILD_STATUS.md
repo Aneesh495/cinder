@@ -2,6 +2,31 @@
 
 Updated: 2026-10-15
 
+## Selected value materialization and bulk memory
+
+Integer/floating constants, undefined-value placeholders, GPR/SSE copies and
+floating sign changes now own selected result banks, literal bits, byte
+programs and floating relocation contracts. Zeroing, object initialization,
+object assignment and `va_copy` own explicit extents and zero/copy programs.
+Lifetime, phi, no-op and variadic-end markers explicitly emit no bytes. The
+encoder consumes these plans instead of expanding their raw IR operations.
+
+Strict GCC and ASan/UBSan builds pass seven value roles, both bulk roles and
+4,905 altered-plan rejections across 193 materializations, five bulk operations
+and 129 markers. Each rejection is checked by the verifier and by encoding
+before output mutation. Restored plans match normal objects. Four O0/O2
+objects match the preceding compiler byte for byte; independent readers check
+text, floating constant-pool bits and PC-relative fixups against selected plans
+and LLVM assembly. GCC/Clang and IR runs cover both defined source programs,
+including negative zero, copies and independent overflowing variadic cursors.
+
+Both builds pass the six preceding machine suites, all six debug suites and
+1,000 forced phi-cycle cases. The compiler emits all sixty actual production
+source objects. Execution of the Cinder-built compiler on emulated Linux and
+the full native publication runs remain pending. Memory address roles and
+argument/call/aggregate/variadic target protocols still require complete
+selection. The remaining acceptance campaigns are still open.
+
 ## Allocated phi transfer schedules
 
 Physical phi copies are now scheduled after allocation and owned by selected

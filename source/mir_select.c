@@ -162,6 +162,56 @@ static void address_immediate(unsigned char *bytes, uint64_t value, unsigned wid
     for (unsigned i = 0U; i < width; ++i) bytes[i] = (unsigned char)(value >> (i * 8U));
 }
 
+static bool select_material(CinderMIRInst *machine) {
+    const CinderIRInst *inst = &machine->operands; CinderIROp op = inst->op;
+    if (op == IR_NOP || op == IR_PHI || op == IR_LOCAL_BEGIN || op == IR_LOCAL_END || op == IR_LOCAL_RESET || op == IR_LOCAL_FREEZE || op == IR_VA_END) {
+        machine->kind = MIR_MARKER; return true;
+    }
+    if (op == IR_ZERO_INIT || op == IR_OBJECT_COPY || op == IR_OBJECT_INIT || op == IR_VA_COPY) {
+        machine->kind = MIR_BULK; bool zero = op == IR_ZERO_INIT;
+        machine->bulk.kind = zero ? MIR_BULK_ZERO : MIR_BULK_COPY;
+        machine->bulk.extent = zero ? (uint64_t)inst->integer : op == IR_VA_COPY ? 24U : inst->type->size;
+        unsigned n = 0U;
+        if (zero) { machine->encoding[n++] = 0x31U; machine->encoding[n++] = 0xc0U; }
+        machine->encoding[n++] = 0x48U; machine->encoding[n++] = 0xb9U;
+        address_immediate(machine->encoding + n, machine->bulk.extent, 8U); n += 8U;
+        machine->encoding[n++] = 0xf3U; machine->encoding[n++] = zero ? 0xaaU : 0xa4U; machine->encoding_size = n;
+        machine->fixed_uses = GPR(7)|(zero ? 0U : GPR(6));
+        machine->clobbers = GPR(0)|GPR(1)|GPR(7)|(zero ? FLAGS : GPR(6)); return true;
+    }
+    if (op != IR_CONST && op != IR_FCONST && op != IR_UNDEF && op != IR_COPY && op != IR_FNEG) return false;
+    machine->kind = MIR_MATERIAL; CinderMIRMaterial *material = &machine->material;
+    bool floating = cinder_ir_floating(inst->type); material->bank = floating ? MIR_BANK_SSE : MIR_BANK_GPR;
+    machine->clobbers = floating ? SSE(0) : GPR(0);
+    if (!floating && inst->type != NULL && inst->type->kind == TYPE_BOOL) machine->clobbers |= FLAGS;
+    if (op == IR_CONST || (op == IR_UNDEF && !floating)) {
+        material->kind = op == IR_CONST ? MIR_MATERIAL_INTEGER : MIR_MATERIAL_UNDEF_INTEGER;
+        material->bits = op == IR_CONST ? (uint64_t)inst->integer : 0U;
+        machine->encoding[0] = 0x48U; machine->encoding[1] = 0xb8U;
+        address_immediate(machine->encoding + 2U, material->bits, 8U); machine->encoding_size = 10U;
+    } else if (op == IR_FCONST) {
+        material->kind = MIR_MATERIAL_FLOAT; memcpy(&material->bits, &inst->floating, sizeof(material->bits));
+        const unsigned char load[] = {0xf2U, 0x0fU, 0x10U, 0x05U};
+        memcpy(machine->encoding, load, sizeof(load)); machine->encoding_size = 4U;
+        material->relocation = 2; material->addend = -4;
+    } else if (op == IR_UNDEF) {
+        material->kind = MIR_MATERIAL_UNDEF_FLOAT;
+        const unsigned char clear[] = {0x66U, 0x0fU, 0x57U, 0xc0U};
+        memcpy(machine->encoding, clear, sizeof(clear)); machine->encoding_size = 4U;
+    } else if (op == IR_COPY) {
+        material->kind = floating ? MIR_MATERIAL_COPY_FLOAT : MIR_MATERIAL_COPY_INTEGER;
+        machine->fixed_uses = floating ? SSE(0) : GPR(0);
+    } else {
+        material->kind = MIR_MATERIAL_NEGATE_FLOAT; material->bits = UINT64_C(1) << 63U;
+        machine->encoding[0] = 0x48U; machine->encoding[1] = 0xb8U;
+        address_immediate(machine->encoding + 2U, material->bits, 8U);
+        const unsigned char negate[] = {0x66U, 0x48U, 0x0fU, 0x6eU, 0xc8U, 0x66U, 0x0fU, 0x57U, 0xc1U};
+        memcpy(machine->encoding + 10U, negate, sizeof(negate)); machine->encoding_size = 19U;
+        machine->fixed_uses = SSE(0); machine->clobbers = GPR(0)|SSE(0)|SSE(1);
+    }
+    return true;
+}
+
 static bool select_address(CinderMIRInst *machine) {
     const CinderIRInst *inst = &machine->operands; CinderMIRAddress *address = &machine->address;
     CinderIROp op = inst->op;
@@ -206,6 +256,7 @@ static bool select_address(CinderMIRInst *machine) {
 static void select_operation(CinderMIRInst *machine) {
     CinderIROp op = machine->operands.op;
     machine->single_precision = machine->operands.type != NULL && machine->operands.type->kind == TYPE_FLOAT;
+    if (select_material(machine)) return;
     if (select_address(machine)) return;
     for (size_t n = 0U; n < CINDER_ARRAY_LEN(integer_forms); ++n) {
         const IntegerForm *form = &integer_forms[n];
@@ -390,6 +441,9 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected memory or conversion plan");
             if (memcmp(&inst->bitfield, &expected.bitfield, sizeof(inst->bitfield)) != 0 || (inst->kind == MIR_BITFIELD && inst->bitfield.mask == 0U))
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected bitfield plan");
+            if (memcmp(&inst->material, &expected.material, sizeof(inst->material)) != 0 || memcmp(&inst->bulk, &expected.bulk, sizeof(inst->bulk)) != 0 ||
+                (inst->kind == MIR_BULK && ((inst->operands.op == IR_ZERO_INIT && inst->operands.integer < 0) || (inst->bulk.kind != MIR_BULK_ZERO && inst->bulk.kind != MIR_BULK_COPY))))
+                cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected materialization or bulk-memory plan");
             if (memcmp(&inst->address, &expected.address, sizeof(inst->address)) != 0 ||
                 (inst->kind == MIR_ADDRESS && (inst->address.before_size == 0U || inst->address.before_size > sizeof(inst->address.before) || inst->address.after_size > sizeof(inst->address.after) ||
                  (inst->address.kind == MIR_ADDRESS_FRAME && (inst->address.frame_slot < 0 || (size_t)inst->address.frame_slot >= machine->source->local_count)) ||
@@ -436,6 +490,8 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
                 fputs(" store-form=", out); for (unsigned n = 0U; n < inst->access.store_size; ++n) fprintf(out, "%02x", inst->access.store[n]);
             }
             if (inst->kind == MIR_CONVERSION) fprintf(out, " conversion=%u precision=%s", (unsigned)inst->conversion, inst->single_precision ? "f32" : "f64");
+            if (inst->kind == MIR_MATERIAL) fprintf(out, " material=%u result-bank=%u bits=%016" PRIx64 " relocation=%d addend=%" PRId64, (unsigned)inst->material.kind, (unsigned)inst->material.bank, inst->material.bits, inst->material.relocation, inst->material.addend);
+            if (inst->kind == MIR_BULK) fprintf(out, " bulk=%u extent=%" PRIu64, (unsigned)inst->bulk.kind, inst->bulk.extent);
             if (inst->kind == MIR_BITFIELD) fprintf(out, " occupied=%u:%u mask=%" PRIx64 " shift=%u sign-shift=%u", inst->bitfield.begin, inst->bitfield.end, inst->bitfield.mask, inst->bitfield.shift, inst->bitfield.signed_shift);
             if (inst->kind == MIR_ADDRESS) {
                 fprintf(out, " address=%u slot=%d scale=%" PRId64 " displacement=%" PRId64 " relocation=%d addend=%" PRId64 " before=", (unsigned)inst->address.kind, inst->address.frame_slot, inst->address.scale, inst->address.displacement, inst->address.relocation, inst->address.addend);

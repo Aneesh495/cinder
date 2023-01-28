@@ -59,8 +59,9 @@ shift and sign extension so masked updates preserve neighboring members.
 The verifier seals those encodings and layout choices as well as the original
 operand/type contracts. Pointer arithmetic and address formation now have
 selected target programs. Branches, returns and physical frames also own
-selected programs. Other remaining target pseudos still require complete
-selection. The frontend's owned typed HIR is
+selected programs. Constants, value copies, floating sign changes, bulk memory
+and zero-emission markers also have selected roles. Argument/call and variadic
+target expansion still require complete selection. The frontend's owned typed HIR is
 documented in [HIR.md](HIR.md). Full acceptance is incomplete.
 
 `make test-mir` executes 43 independently specified typed integer/floating
@@ -152,3 +153,22 @@ See [ADR 0021](ADRs/0021-allocated-phi-transfer-schedules.md).
 Constant materialization, bulk memory, argument/call and variadic expansion
 retain target pseudos. These remaining boundaries are explicit work; selected
 control/frame/copy programs alone do not close the complete machine-IR gate.
+
+Materialization plans own full integer immediates, canonical binary64 pool bits,
+PC-relative floating fixups, undefined-value placeholders, integer/SSE copies
+and floating sign masks. The encoder consumes these roles and byte programs.
+Undefined placeholders do not establish a defined source value. Bulk plans
+own zero/copy extents and `rep stosb`/`rep movsb` programs, including the
+24-byte `va_copy` object. Lifetime, phi, no-op and `va_end` markers explicitly
+emit no bytes. See [ADR 0022](ADRs/0022-selected-materialization-and-bulk.md).
+
+`make test-mir-material` checks seven value roles, two bulk roles and zero-byte
+markers. The API probe alters fifteen fields on every such instruction and
+requires both verification and encoding rejection before output mutation, then
+restores each plan and requires normal original-object identity. Independent
+readers check hand-specified encodings, masks, constant-pool bits and actual
+floating relocation sites. O0/O2 programs cover integer/SSE copies, wide
+immediates, negative zero, initialized conditional values, structure copies,
+zeroing and independent variadic cursors across register exhaustion. GCC and
+Clang provide reference executions; Linux also executes Cinder objects and
+compiles the API probe through Cinder against the actual compiler core.

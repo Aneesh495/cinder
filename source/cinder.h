@@ -1049,7 +1049,17 @@ int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStat
 typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
 typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_XMM2, REG_XMM3, REG_XMM4, REG_XMM5, REG_XMM6, REG_XMM7, REG_NONE } CinderRegister;
 typedef enum { MIR_BANK_NONE, MIR_BANK_GPR, MIR_BANK_SSE } CinderMIRBank;
-typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE, MIR_MEMORY, MIR_CONVERSION, MIR_INTEGER_UNARY, MIR_BITFIELD, MIR_ADDRESS } CinderMIRKind;
+typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE, MIR_MEMORY, MIR_CONVERSION, MIR_INTEGER_UNARY, MIR_BITFIELD, MIR_ADDRESS, MIR_MATERIAL, MIR_BULK, MIR_MARKER } CinderMIRKind;
+typedef enum { MIR_MATERIAL_NONE, MIR_MATERIAL_INTEGER, MIR_MATERIAL_FLOAT, MIR_MATERIAL_UNDEF_INTEGER, MIR_MATERIAL_UNDEF_FLOAT, MIR_MATERIAL_COPY_INTEGER, MIR_MATERIAL_COPY_FLOAT, MIR_MATERIAL_NEGATE_FLOAT } CinderMIRMaterialKind;
+typedef struct {
+    CinderMIRMaterialKind kind;
+    CinderMIRBank bank;
+    uint64_t bits;
+    int relocation;
+    int64_t addend;
+} CinderMIRMaterial;
+typedef enum { MIR_BULK_NONE, MIR_BULK_ZERO, MIR_BULK_COPY } CinderMIRBulkKind;
+typedef struct { CinderMIRBulkKind kind; uint64_t extent; } CinderMIRBulk;
 typedef enum { MIR_ADDRESS_NONE, MIR_ADDRESS_FRAME, MIR_ADDRESS_SYMBOL, MIR_ADDRESS_MEMBER, MIR_ADDRESS_OFFSET, MIR_ADDRESS_DIFFERENCE } CinderMIRAddressKind;
 typedef struct {
     CinderMIRAddressKind kind;
@@ -1080,7 +1090,7 @@ typedef struct {
 typedef struct {
     CinderMIRKind kind;
     CinderIRInst operands;
-    unsigned char encoding[16];
+    unsigned char encoding[24];
     unsigned encoding_size;
     unsigned char float_opcode, condition_opcode, parity_opcode, parity_combine;
     bool single_precision, shift_count;
@@ -1091,6 +1101,8 @@ typedef struct {
     CinderMIRConversion conversion;
     CinderMIRBitfield bitfield;
     CinderMIRAddress address;
+    CinderMIRMaterial material;
+    CinderMIRBulk bulk;
 } CinderMIRInst;
 typedef enum { MIR_CONTROL_TRAP, MIR_CONTROL_RETURN, MIR_CONTROL_JUMP, MIR_CONTROL_BRANCH } CinderMIRControlKind;
 typedef struct {

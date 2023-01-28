@@ -8,6 +8,9 @@ flowchart TD
   SELECT --> STORAGE[Select memory encodings normalization and bitfield masks]
   SELECT --> CONVERT[Select integer floating and boolean conversions]
   SELECT --> ADDRESS[Select frame and RIP-relative addresses, scaled offsets and signed differences]
+  SELECT --> MATERIAL[Select literal bits value copies and floating sign changes]
+  SELECT --> BULK[Select zero and copy extents and byte programs]
+  SELECT --> MARKER[Explicit zero-emission lifetime and phi markers]
   SELECT --> CONTROL[Select branches traps and ABI return forms]
   OWN --> VERIFY[Verify sealed selected representation]
   BANK --> VERIFY
@@ -17,6 +20,9 @@ flowchart TD
   CONVERT --> VERIFY
   ADDRESS --> VERIFY
   CONTROL --> VERIFY
+  MATERIAL --> VERIFY
+  BULK --> VERIFY
+  MARKER --> VERIFY
   VERIFY --> LIVE[CFG liveness and linear-scan allocation]
   BANK --> LIVE
   CONTRACT --> LIVE
@@ -29,6 +35,8 @@ flowchart TD
   CONVERT --> ENCODE
   ADDRESS --> ENCODE
   CONTROL --> ENCODE
+  MATERIAL --> ENCODE
+  BULK --> ENCODE
   FRAME --> ENCODE
   ENCODE --> ELF[Original ELF writer]
   ELF --> CHECK[Independent object and native result checks]
