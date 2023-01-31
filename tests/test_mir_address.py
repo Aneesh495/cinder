@@ -17,7 +17,7 @@ from test_unwind import digest, elf, normalized, tool
 def validate_dump(text, code):
     roles = set(); origins = set()
     for line in text.splitlines():
-        if ' address=' not in line: continue
+        if not line.startswith('  machine-kind=8 '): continue
         match = re.search(r'machine-kind=8 origin=(\S+).* fixed=([0-9a-f]+) clobbers=([0-9a-f]+).* address=(\d+) slot=(-?\d+) scale=(-?\d+) displacement=(-?\d+) relocation=(\d+) addend=(-?\d+) before=([0-9a-f]+) after=([0-9a-f]*)$', line)
         assert match, line
         origin, fixed, clobbers, role, slot, scale, displacement, relocation, addend, before, after = match.groups()

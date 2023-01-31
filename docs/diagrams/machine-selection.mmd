@@ -5,7 +5,7 @@ flowchart TD
   SELECT --> BANK[Build definition bank and type table]
   SELECT --> CONTRACT[Declare fixed operands and clobber masks]
   SELECT --> ABI[Select incoming outgoing and variadic ABI layouts]
-  SELECT --> STORAGE[Select memory encodings normalization and bitfield masks]
+  SELECT --> STORAGE[Select memory address and value roles, byte forms and bitfield operations]
   SELECT --> CONVERT[Select integer floating and boolean conversions]
   SELECT --> ADDRESS[Select frame and RIP-relative addresses, scaled offsets and signed differences]
   SELECT --> MATERIAL[Select literal bits value copies and floating sign changes]

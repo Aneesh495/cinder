@@ -485,12 +485,6 @@ static int emit_va_arg(CinderMachineObject *object, const CinderIRFunction *func
     return 0;
 }
 
-static void symbol_displacement(CinderMachineObject *object, const char *name) {
-    size_t offset = object->text.len; emit32(object, 0U);
-    CinderFixup fix = {offset, cinder_strndup(name, strlen(name)), R_X86_64_PC32, -4, 0U};
-    cinder_vec_push((CinderVec *)&object->fixups, &fix);
-}
-
 static void emit_address(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
     const CinderMIRAddress *address = &selected->address; const CinderIRInst *operands = &selected->operands;
     if (address->kind == MIR_ADDRESS_OFFSET) load_value_alloc(object, function, allocation, operands->right);
@@ -573,22 +567,39 @@ static void bitfield_store(CinderMachineObject *object, const CinderMIRInst *sel
     }
 }
 
-static void emit_global_load(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
-    const CinderIRInst *inst = &selected->operands;
-    access_prefix(object, &selected->access, false, false); emit8(object, 0x05U);
-    symbol_displacement(object, inst->callee);
-    if (selected->access.single) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-    if (selected->access.floating) store_float_value(object, function, allocation, inst->dst);
-    else store_value_alloc(object, function, allocation, inst->dst);
+static void emit_storage(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderMIRStorage *storage = &selected->storage; const CinderMIRAccess *access = &selected->access;
+    if (storage->kind == MIR_STORAGE_INDIRECT) load_value_to_r10(object, function, allocation, storage->address);
+    if (storage->store) {
+        if (access->floating) load_float_value(object, function, allocation, storage->value, 0U);
+        else load_value_alloc(object, function, allocation, storage->value);
+    }
+    int displacement = storage->kind == MIR_STORAGE_FRAME ? local_offset(allocation, storage->frame_slot) : 0;
+    if (storage->kind == MIR_STORAGE_SYMBOL) {
+        if (storage->store && access->single) { emit8(object, 0xf2U); emit8(object, 0x0fU); emit8(object, 0x5aU); emit8(object, 0xc0U); }
+        access_prefix(object, access, storage->extended, storage->store); emit8(object, storage->modrm);
+        const char *name = selected->operands.callee;
+        CinderFixup fix = {object->text.len, cinder_strndup(name, strlen(name)), storage->relocation, storage->addend, 0U};
+        cinder_vec_push((CinderVec *)&object->fixups, &fix); emit32(object, 0U);
+        if (!storage->store && access->single) { emit8(object, 0xf3U); emit8(object, 0x0fU); emit8(object, 0x5aU); emit8(object, 0xc0U); }
+    } else if (storage->store) object_store(object, access, storage->modrm, storage->extended, displacement);
+    else object_load(object, access, storage->modrm, storage->extended, displacement);
+    if (!storage->store) {
+        if (access->floating) store_float_value(object, function, allocation, storage->value);
+        else store_value_alloc(object, function, allocation, storage->value);
+    }
 }
 
-static void emit_global_store(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
-    const CinderIRInst *inst = &selected->operands;
-    if (selected->access.floating) load_float_value(object, function, allocation, inst->left, 0U);
-    else load_value_alloc(object, function, allocation, inst->left);
-    if (selected->access.single) { emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-    access_prefix(object, &selected->access, false, true); emit8(object, 0x05U);
-    symbol_displacement(object, inst->callee);
+static void emit_bitfield(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
+    const CinderIRInst *operands = &selected->operands;
+    if (selected->bitfield.kind == MIR_BITFIELD_NORMALIZE) {
+        load_value_alloc(object, function, allocation, operands->left); bitfield_normalize(object, &selected->bitfield);
+    } else {
+        load_value_to_r10(object, function, allocation, operands->left);
+        if (selected->bitfield.kind == MIR_BITFIELD_STORE) { load_value_alloc(object, function, allocation, operands->right); bitfield_store(object, selected); return; }
+        bitfield_load(object, selected);
+    }
+    store_value_alloc(object, function, allocation, operands->dst);
 }
 
 static void emit_phi_transfers(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRBlock *block) {
@@ -710,9 +721,10 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 for (unsigned n = 0U; n < selected->encoding_size; ++n) emit8(object, selected->encoding[n]);
                 store_value_alloc(object, function, allocation, inst->dst); continue;
             }
+            if (selected->kind == MIR_MEMORY) { emit_storage(object, function, allocation, selected); continue; }
+            if (selected->kind == MIR_BITFIELD) { emit_bitfield(object, function, allocation, selected); continue; }
+            if (selected->kind == MIR_CONVERSION) { emit_conversion(object, function, allocation, selected); continue; }
             switch (inst->op) {
-                case IR_GLOBAL_LOAD: emit_global_load(object, function, allocation, selected); break;
-                case IR_GLOBAL_STORE: emit_global_store(object, function, allocation, selected); break;
                 case IR_ARG:
                     if (parameters[inst->slot].stack_offset == SIZE_MAX) emit_mov_rax_mem(object, -(int)((incoming_base + parameters[inst->slot].registers[0] + 1U) * 8U));
                     else emit_mov_rax_mem(object, (int)(16U + parameters[inst->slot].stack_offset));
@@ -728,40 +740,6 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_VA_ARG:
                     if (emit_va_arg(object, function, allocation, selected, diags) != 0) { free(labels); free(branches.data); return 1; }
                     break;
-                case IR_BIT_LOAD:
-                    load_value_to_r10(object, function, allocation, inst->left);
-                    bitfield_load(object, selected);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_BIT_CONVERT:
-                    load_value_alloc(object, function, allocation, inst->left);
-                    bitfield_normalize(object, &selected->bitfield);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_BIT_STORE: case IR_BIT_INIT:
-                    load_value_to_r10(object, function, allocation, inst->left);
-                    load_value_alloc(object, function, allocation, inst->right);
-                    bitfield_store(object, selected); break;
-                case IR_MEMORY_LOAD:
-                    load_value_to_r10(object, function, allocation, inst->left);
-                    object_load(object, &selected->access, 0x82U, true, 0);
-                    if (selected->access.floating) store_float_value(object, function, allocation, inst->dst);
-                    else store_value_alloc(object, function, allocation, inst->dst);
-                    break;
-                case IR_MEMORY_STORE: case IR_MEMORY_INIT:
-                    load_value_to_r10(object, function, allocation, inst->left);
-                    if (selected->access.floating) load_float_value(object, function, allocation, inst->right, 0U);
-                    else load_value_alloc(object, function, allocation, inst->right);
-                    object_store(object, &selected->access, 0x82U, true, 0); break;
-                case IR_LOCAL_LOAD:
-                    object_load(object, &selected->access, 0x85U, false, local_offset(allocation, inst->slot));
-                    if (selected->access.floating) store_float_value(object, function, allocation, inst->dst);
-                    else store_value_alloc(object, function, allocation, inst->dst);
-                    break;
-                case IR_LOCAL_STORE: case IR_LOCAL_INIT:
-                    if (selected->access.floating) load_float_value(object, function, allocation, inst->left, 0U);
-                    else load_value_alloc(object, function, allocation, inst->left);
-                    object_store(object, &selected->access, 0x85U, false, local_offset(allocation, inst->slot));
-                    break;
-                case IR_CONVERT: emit_conversion(object, function, allocation, selected); break;
                 case IR_CALL:
                     if (emit_call(object, function, allocation, selected, diags) != 0) { free(labels); free(branches.data); return 1; }
                     break;

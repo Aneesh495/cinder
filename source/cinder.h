@@ -1074,7 +1074,9 @@ typedef struct {
     unsigned char load_size, load_extended_size, store_size, store_extended_size;
     bool floating, single;
 } CinderMIRAccess;
+typedef enum { MIR_BITFIELD_NONE, MIR_BITFIELD_LOAD, MIR_BITFIELD_STORE, MIR_BITFIELD_NORMALIZE } CinderMIRBitfieldKind;
 typedef struct {
+    CinderMIRBitfieldKind kind;
     uint64_t mask, positioned_mask;
     unsigned begin, end, shift, signed_shift;
 } CinderMIRBitfield;
@@ -1087,6 +1089,16 @@ typedef struct {
     unsigned char normalization_size;
     bool incoming_bool;
 } CinderMIRValue;
+typedef enum { MIR_STORAGE_NONE, MIR_STORAGE_FRAME, MIR_STORAGE_SYMBOL, MIR_STORAGE_INDIRECT } CinderMIRStorageKind;
+typedef struct {
+    CinderMIRStorageKind kind;
+    CinderValueId address, value;
+    int frame_slot;
+    unsigned char modrm;
+    bool extended, store;
+    int relocation;
+    int64_t addend;
+} CinderMIRStorage;
 typedef struct {
     CinderMIRKind kind;
     CinderIRInst operands;
@@ -1098,6 +1110,7 @@ typedef struct {
     CinderMIRCallPlan *call;
     CinderABIValue *variadic_layout;
     CinderMIRAccess access;
+    CinderMIRStorage storage;
     CinderMIRConversion conversion;
     CinderMIRBitfield bitfield;
     CinderMIRAddress address;

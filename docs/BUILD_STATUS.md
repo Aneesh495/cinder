@@ -1,6 +1,31 @@
 # Build status
 
-Updated: 2026-10-15
+Updated: 2026-10-16
+
+## Selected storage addresses and bitfield roles
+
+Memory instructions now select frame, RIP-relative symbol or indirect
+addressing, explicit load/store direction, address/value IDs, frame slots,
+ModRM bytes and symbol relocation contracts. Fixed-register and scratch masks
+reflect staged operands, addressing and boolean-load flag effects. Bitfield
+load/store/normalization and conversions dispatch by selected role. Their raw
+IR cases have been removed from the encoder.
+
+Strict GCC and ASan/UBSan builds pass fifteen source units, twelve scalar
+storage profiles and all three bitfield roles. The API probe rejects 1,760
+alterations across 87 memory and 23 bitfield instructions before output
+mutation. Counts match actual O0 MIR instructions. Thirty O0/O2 objects match
+the preceding compiler byte for byte and agree with LLVM-assembled sections
+and relocations. Sixty GCC/Clang executions and thirty IR runs match expected
+source results. The address reader now selects its machine kind explicitly,
+so memory base values are not mistaken for address-producing operations.
+
+Both builds pass the seven preceding machine suites, all six debug suites and
+1,000 forced phi-cycle cases. All sixty actual production modules compile
+through Cinder. The Cinder-built emulated Linux execution and native publication
+runs remain pending for this increment. Argument/call, aggregate ABI and
+variadic target programs remain open, along with the remaining acceptance
+campaigns.
 
 ## Selected value materialization and bulk memory
 
@@ -22,10 +47,15 @@ including negative zero, copies and independent overflowing variadic cursors.
 
 Both builds pass the six preceding machine suites, all six debug suites and
 1,000 forced phi-cycle cases. The compiler emits all sixty actual production
-source objects. Execution of the Cinder-built compiler on emulated Linux and
-the full native publication runs remain pending. Memory address roles and
-argument/call/aggregate/variadic target protocols still require complete
-selection. The remaining acceptance campaigns are still open.
+source objects. The frozen compiler also passes all 1,239 source cases and 2,478 CIR/backend
+comparisons plus 36 malformed-input rejections. The Cinder-built emulated Linux
+compiler passes ten machine/debug suites, forty actual GDB sessions and all
+eighteen runtime probes. Independent audits bind all original source/core
+objects, raw debugger values, 72 reference executions and 108 original,
+assembled or CIR-derived runtime executions. These are functional emulation
+results. Native publication runs remain pending. Storage roles were completed
+in the subsequent increment above; argument/call/aggregate/variadic target
+protocols remain open. The remaining acceptance campaigns are still open.
 
 ## Allocated phi transfer schedules
 
@@ -50,9 +80,10 @@ The deterministic native bootstrap passed. Ordinary native validation exposed
 an allocator stress fixture that skipped the required conditional phi-edge
 split. The fixture now runs the MIR boundary and frees its generated edge
 names. Both strict GCC and ASan/UBSan checks pass all 10,000 graphs and 1,000
-rejected mutations against the published compiler sources. The full ordinary
-native rerun remains pending. Constant,
-bulk-memory, argument/call and variadic target expansion are still open.
+rejected mutations against the published compiler sources. The full ordinary native rerun and deterministic bootstrap both passed after
+this fixture fix. Constant and bulk-memory selection were completed in the
+subsequent increment above. Argument/call and variadic target programs remain
+open.
 
 Compiling the API probe with Cinder exposed a missing `strtoul` declaration in
 the authored runtime header. The declaration and a native libc boundary

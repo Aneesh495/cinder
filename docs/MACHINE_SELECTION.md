@@ -46,8 +46,9 @@ ABI classifier or placing arguments again. The verifier recomputes and checks
 each plan against the verified function and actual call signatures. Calls with
 missing signatures are rejected before layout selection.
 
-Scalar object accesses own selected load/store prefixes and opcodes for frame,
-RIP-relative and extended-base addressing. Their precision plans preserve the
+Scalar object accesses own selected load/store prefixes and opcodes, explicit
+frame/RIP-relative/indirect address roles, read/write direction, value IDs,
+ModRM bytes, frame slots and symbol relocation contracts. Their precision plans preserve the
 internal binary64 float representation and declared binary32 storage. Each
 definition owns its sign/zero-extension or boolean-normalization template;
 incoming ABI booleans retain the separate low-byte rule. Conversions select
@@ -172,3 +173,15 @@ immediates, negative zero, initialized conditional values, structure copies,
 zeroing and independent variadic cursors across register exhaustion. GCC and
 Clang provide reference executions; Linux also executes Cinder objects and
 compiles the API probe through Cinder against the actual compiler core.
+
+`make test-mir-storage` checks fifteen source units across twelve scalar
+storage profiles and load/store/normalization bitfield roles. Sixteen altered
+fields per selected instruction must fail both verification and encoding
+before output mutation. Actual O0 MIR counts bind the rejection workload.
+Independent readers compare address choices, register effects and actual
+load/store forms, then count named-symbol relocation sites without treating
+floating constant pools as globals. Thirty O0/O2 objects match the preceding
+compiler and LLVM-assembled code/relocations. GCC/Clang and IR runs check every
+source result; Linux additionally executes original Cinder objects and uses a
+Cinder-compiled API probe. See
+[ADR 0023](ADRs/0023-selected-storage-address-and-bitfield-roles.md).

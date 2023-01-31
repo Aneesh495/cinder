@@ -291,9 +291,26 @@ static void select_operation(CinderMIRInst *machine) {
     }
     if (op == IR_LOCAL_LOAD || op == IR_LOCAL_STORE || op == IR_LOCAL_INIT || op == IR_GLOBAL_LOAD || op == IR_GLOBAL_STORE || op == IR_MEMORY_LOAD || op == IR_MEMORY_STORE || op == IR_MEMORY_INIT) {
         machine->kind = MIR_MEMORY; (void)select_access(machine->operands.type, &machine->access);
+        CinderMIRStorage *storage = &machine->storage;
+        storage->store = op != IR_LOCAL_LOAD && op != IR_GLOBAL_LOAD && op != IR_MEMORY_LOAD;
+        bool frame = op == IR_LOCAL_LOAD || op == IR_LOCAL_STORE || op == IR_LOCAL_INIT;
+        bool symbol = op == IR_GLOBAL_LOAD || op == IR_GLOBAL_STORE;
+        storage->kind = frame ? MIR_STORAGE_FRAME : symbol ? MIR_STORAGE_SYMBOL : MIR_STORAGE_INDIRECT;
+        storage->frame_slot = frame ? machine->operands.slot : -1;
+        storage->address = !frame && !symbol ? machine->operands.left : CINDER_INVALID_VALUE;
+        storage->value = storage->store ? (!frame && !symbol ? machine->operands.right : machine->operands.left) : machine->operands.dst;
+        storage->extended = !frame && !symbol; storage->modrm = frame ? 0x85U : symbol ? 0x05U : 0x82U;
+        storage->relocation = symbol ? 2 : 0; storage->addend = symbol ? -4 : 0;
+        uint64_t value_register = machine->access.floating ? SSE(0) : GPR(0);
+        machine->fixed_uses = frame ? GPR(5) : symbol ? 0U : GPR(10);
+        if (storage->store) machine->fixed_uses |= value_register;
+        machine->clobbers = value_register | (storage->extended ? GPR(0)|GPR(10) : 0U);
+        if (!storage->store && machine->operands.type->kind == TYPE_BOOL) machine->clobbers |= FLAGS;
+        return;
     }
     if (op == IR_BIT_LOAD || op == IR_BIT_STORE || op == IR_BIT_INIT || op == IR_BIT_CONVERT) {
         machine->kind = MIR_BITFIELD;
+        machine->bitfield.kind = op == IR_BIT_LOAD ? MIR_BITFIELD_LOAD : op == IR_BIT_CONVERT ? MIR_BITFIELD_NORMALIZE : MIR_BITFIELD_STORE;
         CinderType byte; memset(&byte, 0, sizeof(byte)); byte.kind = TYPE_CHAR; byte.size = 1U; byte.is_unsigned = true;
         (void)select_access(&byte, &machine->access);
         unsigned width = (unsigned)machine->operands.integer, offset = (unsigned)machine->operands.operator_code;
@@ -439,6 +456,8 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected x86 instruction contract");
             if (inst->conversion != expected.conversion || memcmp(&inst->access, &expected.access, sizeof(inst->access)) != 0 || (inst->kind == MIR_MEMORY && inst->access.load_size == 0U))
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected memory or conversion plan");
+            if (memcmp(&inst->storage, &expected.storage, sizeof(inst->storage)) != 0)
+                cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected storage address or value plan");
             if (memcmp(&inst->bitfield, &expected.bitfield, sizeof(inst->bitfield)) != 0 || (inst->kind == MIR_BITFIELD && inst->bitfield.mask == 0U))
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected bitfield plan");
             if (memcmp(&inst->material, &expected.material, sizeof(inst->material)) != 0 || memcmp(&inst->bulk, &expected.bulk, sizeof(inst->bulk)) != 0 ||
@@ -489,10 +508,11 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
                 fputs(" load-form=", out); for (unsigned n = 0U; n < inst->access.load_size; ++n) fprintf(out, "%02x", inst->access.load[n]);
                 fputs(" store-form=", out); for (unsigned n = 0U; n < inst->access.store_size; ++n) fprintf(out, "%02x", inst->access.store[n]);
             }
+            if (inst->kind == MIR_MEMORY) fprintf(out, " storage=%u store=%s address=%u value=%u frame-slot=%d modrm=%02x extended=%s relocation=%d addend=%" PRId64, (unsigned)inst->storage.kind, inst->storage.store ? "yes" : "no", inst->storage.address, inst->storage.value, inst->storage.frame_slot, (unsigned)inst->storage.modrm, inst->storage.extended ? "yes" : "no", inst->storage.relocation, inst->storage.addend);
             if (inst->kind == MIR_CONVERSION) fprintf(out, " conversion=%u precision=%s", (unsigned)inst->conversion, inst->single_precision ? "f32" : "f64");
             if (inst->kind == MIR_MATERIAL) fprintf(out, " material=%u result-bank=%u bits=%016" PRIx64 " relocation=%d addend=%" PRId64, (unsigned)inst->material.kind, (unsigned)inst->material.bank, inst->material.bits, inst->material.relocation, inst->material.addend);
             if (inst->kind == MIR_BULK) fprintf(out, " bulk=%u extent=%" PRIu64, (unsigned)inst->bulk.kind, inst->bulk.extent);
-            if (inst->kind == MIR_BITFIELD) fprintf(out, " occupied=%u:%u mask=%" PRIx64 " shift=%u sign-shift=%u", inst->bitfield.begin, inst->bitfield.end, inst->bitfield.mask, inst->bitfield.shift, inst->bitfield.signed_shift);
+            if (inst->kind == MIR_BITFIELD) fprintf(out, " bitfield-role=%u occupied=%u:%u mask=%" PRIx64 " shift=%u sign-shift=%u", (unsigned)inst->bitfield.kind, inst->bitfield.begin, inst->bitfield.end, inst->bitfield.mask, inst->bitfield.shift, inst->bitfield.signed_shift);
             if (inst->kind == MIR_ADDRESS) {
                 fprintf(out, " address=%u slot=%d scale=%" PRId64 " displacement=%" PRId64 " relocation=%d addend=%" PRId64 " before=", (unsigned)inst->address.kind, inst->address.frame_slot, inst->address.scale, inst->address.displacement, inst->address.relocation, inst->address.addend);
                 for (unsigned n = 0U; n < inst->address.before_size; ++n) fprintf(out, "%02x", inst->address.before[n]);
