@@ -21,10 +21,6 @@ static void emit_mov_rax_mem(CinderMachineObject *object, int offset) { emit8(ob
 static void emit_mov_r10_mem(CinderMachineObject *object, int offset) { emit8(object, 0x4CU); emit8(object, 0x8BU); emit8(object, 0x95U); emit32(object, (uint32_t)offset); }
 static void emit_mov_rcx_mem(CinderMachineObject *object, int offset) { emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x8DU); emit32(object, (uint32_t)offset); }
 static void emit_mov_mem_rax(CinderMachineObject *object, int offset) { emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x85U); emit32(object, (uint32_t)offset); }
-static void emit_mov_reg_from_rax(CinderMachineObject *object, unsigned reg) {
-    if (reg < 8U) { emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | reg)); }
-    else { emit8(object, 0x49U); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | (reg - 8U))); }
-}
 static void emit_mov_rax_from_reg(CinderMachineObject *object, unsigned reg) {
     if (reg < 8U) { emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | (reg << 3U))); }
     else { emit8(object, 0x4CU); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | ((reg - 8U) << 3U))); }
@@ -59,13 +55,6 @@ static const CinderLocation *location_for(const CinderAllocation *allocation, Ci
     return NULL;
 }
 
-static void normalize_incoming_scalar(CinderMachineObject *object, bool incoming_bool) {
-    /* The ABI specifies only the low byte of a _Bool argument or result.
-     * A C conversion, in contrast, must inspect the entire scalar value. */
-    if (incoming_bool) {
-        emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U);
-    }
-}
 
 static void load_value_alloc(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
     const CinderLocation *location = location_for(allocation, value);
@@ -250,239 +239,32 @@ static void emit_binary(CinderMachineObject *object, const CinderIRFunction *fun
 
 static unsigned abi_register(unsigned index) { static const unsigned regs[] = {7U, 6U, 2U, 1U, 8U, 9U}; return index < CINDER_ARRAY_LEN(regs) ? regs[index] : 0U; }
 
-static void stack_store_rax(CinderMachineObject *object, size_t offset) {
-    emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
-}
-
-static void stack_load_rax(CinderMachineObject *object, size_t offset) {
-    emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
-}
-
-static bool aggregate_type(const CinderType *type) {
-    return type->kind == TYPE_STRUCT || type->kind == TYPE_UNION;
-}
-
-static void stack_adjust(CinderMachineObject *object, size_t size, bool allocate) {
-    if (size == 0U) return;
-    emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, allocate ? 0xECU : 0xC4U); emit32(object, (uint32_t)size);
-}
-
-static void address_rbp(CinderMachineObject *object, unsigned reg, int offset) {
-    emit8(object, reg < 8U ? 0x48U : 0x4CU); emit8(object, 0x8DU);
-    emit8(object, (uint8_t)(0x85U | ((reg & 7U) << 3U))); emit32(object, (uint32_t)offset);
-}
-
-static void address_rsp(CinderMachineObject *object, unsigned reg, size_t offset) {
-    emit8(object, reg < 8U ? 0x48U : 0x4CU); emit8(object, 0x8DU);
-    emit8(object, (uint8_t)(0x84U | ((reg & 7U) << 3U))); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
-}
-
-static void xmm_rbp(CinderMachineObject *object, unsigned xmm, int offset, bool store) {
-    emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, store ? 0x11U : 0x10U);
-    emit8(object, (uint8_t)(0x85U | (xmm << 3U))); emit32(object, (uint32_t)offset);
-}
-
-static void xmm_rsp(CinderMachineObject *object, unsigned xmm, size_t offset, bool store) {
-    emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, store ? 0x11U : 0x10U);
-    emit8(object, (uint8_t)(0x84U | (xmm << 3U))); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
-}
-
-static void copy_bytes(CinderMachineObject *object, size_t size) {
-    emit8(object, 0x48U); emit8(object, 0xB9U); emit64(object, size);
-    emit8(object, 0xF3U); emit8(object, 0xA4U);
-}
-
-/* Pack only bytes belonging to the object. A three-byte aggregate at a page
- * boundary must not cause an eight-byte load into the next page. */
-static void pack_eightbyte(CinderMachineObject *object, size_t offset, size_t size) {
-    emit8(object, 0x31U); emit8(object, 0xC0U);
-    size_t count = size - offset < 8U ? size - offset : 8U;
-    for (size_t byte = 0U; byte < count; ++byte) {
-        emit8(object, 0x45U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0x9AU); emit32(object, (uint32_t)(offset + byte));
-        if (byte != 0U) { emit8(object, 0x49U); emit8(object, 0xC1U); emit8(object, 0xE3U); emit8(object, (uint8_t)(byte * 8U)); }
-        emit8(object, 0x4CU); emit8(object, 0x09U); emit8(object, 0xD8U);
-    }
-}
-
-static int emit_call(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected, CinderDiagnostics *diags) {
-    const CinderIRInst *inst = &selected->operands;
-    const CinderMIRCallPlan *plan = selected->call;
-    if (plan == NULL || plan->argument_count != inst->args.len) { cinder_diag(diags, CINDER_FATAL, inst->loc, "call has no selected ABI plan"); return 1; }
-    CinderABIValue result = plan->result;
-    CinderABIState state = plan->state;
-    const CinderABIArgument *arguments = plan->arguments;
-    const size_t *staging = plan->staging;
-    size_t frame = plan->frame_size;
-    stack_adjust(object, frame, true);
-    /* Stage every argument before assigning registers, including arguments
-     * currently held in XMM2-XMM7. Register exhaustion rolls back an entire
-     * aggregate, leaving both register banks available to later arguments. */
-    for (size_t a = 0U; a < inst->args.len; ++a) {
-        const CinderType *type = plan->argument_types[a];
-        if (aggregate_type(type)) {
-            if (arguments[a].stack_offset != SIZE_MAX) {
-                load_value_alloc(object, function, allocation, inst->args.data[a]); emit_mov_reg_reg(object, 6U, 0U);
-                address_rsp(object, 7U, staging[a]); copy_bytes(object, type->size);
-            } else {
-                load_value_to_r10(object, function, allocation, inst->args.data[a]);
-                for (unsigned p = 0U; p < arguments[a].value.count; ++p) {
-                    pack_eightbyte(object, p * 8U, type->size); stack_store_rax(object, staging[a] + p * 8U);
-                }
-            }
-        } else if (cinder_ir_floating(type)) {
-            load_float_value(object, function, allocation, inst->args.data[a], 0U);
-            if (type->kind == TYPE_FLOAT) { emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-            xmm_rsp(object, 0U, staging[a], true);
-        } else { load_value_alloc(object, function, allocation, inst->args.data[a]); stack_store_rax(object, staging[a]); }
-    }
-    if (result.memory) address_rbp(object, 7U, local_offset(allocation, inst->slot));
-    for (size_t a = 0U; a < inst->args.len; ++a) {
-        if (arguments[a].stack_offset != SIZE_MAX) continue;
-        for (unsigned p = 0U; p < arguments[a].value.count; ++p) {
-            if (arguments[a].value.classes[p] == ABI_INTEGER) { stack_load_rax(object, staging[a] + p * 8U); emit_mov_reg_from_rax(object, abi_register(arguments[a].registers[p])); }
-            else if (arguments[a].value.classes[p] == ABI_SSE) xmm_rsp(object, arguments[a].registers[p], staging[a] + p * 8U, false);
-        }
-    }
-    if (inst->callee == NULL) { load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 11U, 0U); }
-    emit8(object, 0xB0U); emit8(object, (uint8_t)state.sse);
-    if (inst->callee == NULL) { emit8(object, 0x41U); emit8(object, 0xFFU); emit8(object, 0xD3U); }
-    else {
-        emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U);
-        CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4, 0U};
-        cinder_vec_push((CinderVec *)&object->fixups, &fix);
-    }
-    if (inst->noreturn_call) { emit8(object, 0x0FU); emit8(object, 0x0BU); }
-    stack_adjust(object, frame, false);
-    if (inst->dst != CINDER_INVALID_VALUE) {
-        if (aggregate_type(inst->callee_type->return_type)) {
-            if (!result.memory) {
-                unsigned integer = 0U, floating = 0U;
-                for (unsigned p = 0U; p < result.count; ++p) {
-                    int offset = local_offset(allocation, inst->slot) + (int)(p * 8U);
-                    if (result.classes[p] == ABI_INTEGER) { if (integer++ != 0U) emit_mov_reg_reg(object, 0U, 2U); emit_mov_mem_rax(object, offset); }
-                    else if (result.classes[p] == ABI_SSE) xmm_rbp(object, floating++, offset, true);
-                }
-            }
-            address_rbp(object, 0U, local_offset(allocation, inst->slot));
-            store_value_alloc(object, function, allocation, inst->dst);
-        } else if (inst->floating_result) {
-            if (inst->type->kind == TYPE_FLOAT) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-            store_float_value(object, function, allocation, inst->dst);
-        }
+static void emit_protocol(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRProgram *program) {
+    const CinderMIRFrame *frame = &allocation->frame;
+    for (size_t s = 0U; s < program->steps.len; ++s) {
+        const CinderMIRProgramStep *step = &program->steps.data[s];
+        if (step->kind == MIR_STEP_LOAD_GPR) {
+            if (step->reg == 10U) load_value_to_r10(object, function, allocation, step->value);
+            else load_value_alloc(object, function, allocation, step->value);
+        } else if (step->kind == MIR_STEP_LOAD_SSE) load_float_value(object, function, allocation, step->value, step->reg);
+        else if (step->kind == MIR_STEP_STORE_GPR) store_value_alloc(object, function, allocation, step->value);
+        else if (step->kind == MIR_STEP_STORE_SSE) store_float_value(object, function, allocation, step->value);
         else {
-            normalize_incoming_scalar(object, allocation->machine.values[inst->dst].incoming_bool);
-            store_value_alloc(object, function, allocation, inst->dst);
+            size_t start = object->text.len; cinder_bytes_append(&object->text, step->bytes.data, step->bytes.len);
+            for (size_t p = 0U; p < step->patches.len; ++p) {
+                const CinderMIRFramePatch *patch = &step->patches.data[p]; int64_t offset;
+                if (patch->kind == MIR_PATCH_LOCAL) offset = local_offset(allocation, patch->slot);
+                else if (patch->kind == MIR_PATCH_INCOMING_GPR) offset = frame->incoming_gpr[patch->slot];
+                else if (patch->kind == MIR_PATCH_INCOMING_SSE) offset = frame->incoming_sse[patch->slot];
+                else offset = frame->variadic_area;
+                cinder_bytes_patch32(&object->text, start + patch->offset, (uint32_t)(offset + patch->addend));
+            }
+            for (size_t f = 0U; f < step->fixups.len; ++f) {
+                CinderFixup fix = step->fixups.data[f]; fix.offset += start; fix.symbol = cinder_strndup(fix.symbol, strlen(fix.symbol));
+                cinder_vec_push((CinderVec *)&object->fixups, &fix);
+            }
         }
     }
-    return 0;
-}
-
-static void emit_aggregate_argument(CinderMachineObject *object, const CinderAllocation *allocation, const CinderIRInst *inst, const CinderABIArgument *argument, size_t incoming_base) {
-    if (argument->stack_offset != SIZE_MAX) {
-        address_rbp(object, 6U, (int)(16U + argument->stack_offset));
-        address_rbp(object, 7U, local_offset(allocation, inst->slot)); copy_bytes(object, inst->type->size);
-    } else {
-        for (unsigned p = 0U; p < argument->value.count; ++p) {
-            unsigned reg = argument->registers[p];
-            if (argument->value.classes[p] == ABI_INTEGER) emit_mov_rax_mem(object, -(int)((incoming_base + reg + 1U) * 8U));
-            else if (argument->value.classes[p] == ABI_SSE) emit_mov_rax_mem(object, -(int)((incoming_base + reg + 7U) * 8U));
-            else continue;
-            emit_mov_mem_rax(object, local_offset(allocation, inst->slot) + (int)(p * 8U));
-        }
-    }
-}
-
-static void emit_aggregate_return(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst, const CinderABIValue *result, size_t incoming_base) {
-    if (result->memory) {
-        emit_mov_rax_mem(object, -(int)((incoming_base + 1U) * 8U)); emit_mov_reg_reg(object, 7U, 0U);
-        load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 6U, 0U);
-        copy_bytes(object, inst->type->size); emit_mov_rax_mem(object, -(int)((incoming_base + 1U) * 8U));
-    } else {
-        load_value_to_r10(object, function, allocation, inst->left); stack_adjust(object, 16U, true);
-        for (unsigned p = 0U; p < result->count; ++p) { pack_eightbyte(object, p * 8U, inst->type->size); stack_store_rax(object, p * 8U); }
-        unsigned floating = 0U, integer = 0U;
-        for (unsigned p = 0U; p < result->count; ++p) if (result->classes[p] == ABI_SSE) xmm_rsp(object, floating++, p * 8U, false);
-        for (unsigned p = 0U; p < result->count; ++p) if (result->classes[p] == ABI_INTEGER) ++integer;
-        for (unsigned p = result->count; p-- > 0U;) if (result->classes[p] == ABI_INTEGER) { stack_load_rax(object, p * 8U); if (--integer != 0U) emit_mov_reg_reg(object, 2U, 0U); }
-        stack_adjust(object, 16U, false);
-    }
-}
-
-static void r10_store_rax(CinderMachineObject *object, unsigned offset) {
-    emit8(object, 0x49U); emit8(object, 0x89U); emit8(object, 0x82U); emit32(object, offset);
-}
-
-static void emit_va_start(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst, const CinderABIState *named) {
-    load_value_to_r10(object, function, allocation, inst->left);
-    emit8(object, 0x41U); emit8(object, 0xC7U); emit8(object, 0x82U); emit32(object, 0U); emit32(object, named->gpr * 8U);
-    emit8(object, 0x41U); emit8(object, 0xC7U); emit8(object, 0x82U); emit32(object, 4U); emit32(object, 48U + named->sse * 16U);
-    address_rbp(object, 0U, (int)(16U + named->stack)); r10_store_rax(object, 8U);
-    address_rbp(object, 0U, -(int)allocation->frame_size); r10_store_rax(object, 16U);
-}
-
-static void patch_here(CinderMachineObject *object, size_t offset) {
-    cinder_bytes_patch32(&object->text, offset, (uint32_t)(object->text.len - offset - 4U));
-}
-
-static int emit_va_arg(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected, CinderDiagnostics *diags) {
-    const CinderIRInst *inst = &selected->operands;
-    if (selected->variadic_layout == NULL) { cinder_diag(diags, CINDER_FATAL, inst->loc, "va_arg has no selected layout"); return 1; }
-    CinderABIValue value = *selected->variadic_layout;
-    bool aggregate = aggregate_type(inst->source_type);
-    unsigned gpr = 0U, sse = 0U;
-    for (unsigned p = 0U; p < value.count; ++p) {
-        if (value.classes[p] == ABI_INTEGER) ++gpr;
-        else if (value.classes[p] == ABI_SSE) ++sse;
-    }
-    load_value_to_r10(object, function, allocation, inst->left);
-    size_t gp_stack = SIZE_MAX, fp_stack = SIZE_MAX, done = SIZE_MAX;
-    if (!value.memory) {
-        if (gpr != 0U) {
-            emit8(object, 0x41U); emit8(object, 0x8BU); emit8(object, 0x8AU); emit32(object, 0U);
-            emit8(object, 0x81U); emit8(object, 0xF9U); emit32(object, 48U - gpr * 8U);
-            emit8(object, 0x0FU); emit8(object, 0x87U); gp_stack = object->text.len; emit32(object, 0U);
-        }
-        if (sse != 0U) {
-            emit8(object, 0x41U); emit8(object, 0x8BU); emit8(object, 0x92U); emit32(object, 4U);
-            emit8(object, 0x81U); emit8(object, 0xFAU); emit32(object, 176U - sse * 16U);
-            emit8(object, 0x0FU); emit8(object, 0x87U); fp_stack = object->text.len; emit32(object, 0U);
-        }
-        emit8(object, 0x4DU); emit8(object, 0x8BU); emit8(object, 0x9AU); emit32(object, 16U);
-        if (aggregate) address_rbp(object, 7U, local_offset(allocation, inst->slot));
-        for (unsigned p = 0U; p < value.count; ++p) {
-            if (value.classes[p] != ABI_INTEGER && value.classes[p] != ABI_SSE) continue;
-            emit8(object, 0x49U); emit8(object, 0x8BU); emit8(object, 0x04U); emit8(object, value.classes[p] == ABI_INTEGER ? 0x0BU : 0x13U);
-            emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, value.classes[p] == ABI_INTEGER ? 0xC1U : 0xC2U); emit8(object, value.classes[p] == ABI_INTEGER ? 8U : 16U);
-            if (aggregate) { emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x87U); emit32(object, p * 8U); }
-        }
-        if (gpr != 0U) { emit8(object, 0x41U); emit8(object, 0x89U); emit8(object, 0x8AU); emit32(object, 0U); }
-        if (sse != 0U) { emit8(object, 0x41U); emit8(object, 0x89U); emit8(object, 0x92U); emit32(object, 4U); }
-        emit8(object, 0xE9U); done = object->text.len; emit32(object, 0U);
-    }
-    if (gp_stack != SIZE_MAX) patch_here(object, gp_stack);
-    if (fp_stack != SIZE_MAX) patch_here(object, fp_stack);
-    emit8(object, 0x49U); emit8(object, 0x8BU); emit8(object, 0xB2U); emit32(object, 8U);
-    if (value.align > 8U) {
-        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xC6U); emit8(object, 15U);
-        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xE6U); emit8(object, 0xF0U);
-    }
-    if (aggregate) {
-        address_rbp(object, 7U, local_offset(allocation, inst->slot)); copy_bytes(object, value.size);
-        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xC6U); emit8(object, 7U);
-        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xE6U); emit8(object, 0xF8U);
-    } else {
-        emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x06U);
-        emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xC6U); emit8(object, 8U);
-    }
-    emit8(object, 0x49U); emit8(object, 0x89U); emit8(object, 0xB2U); emit32(object, 8U);
-    if (done != SIZE_MAX) patch_here(object, done);
-    if (aggregate) { address_rbp(object, 0U, local_offset(allocation, inst->slot)); store_value_alloc(object, function, allocation, inst->dst); }
-    else if (cinder_ir_floating(inst->type)) {
-        emit8(object, 0x66U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0x6EU); emit8(object, 0xC0U);
-        if (inst->type->kind == TYPE_FLOAT) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-        store_float_value(object, function, allocation, inst->dst);
-    } else { normalize_incoming_scalar(object, allocation->machine.values[inst->dst].incoming_bool); store_value_alloc(object, function, allocation, inst->dst); }
-    return 0;
 }
 
 static void emit_address(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected) {
@@ -628,8 +410,6 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0 || cinder_verify_frame(allocation, diags) != 0 || cinder_verify_edge_copies(allocation, diags) != 0) return 1;
     const CinderMIRCallPlan *signature = machine->signature;
     if (signature == NULL || signature->argument_count != function->params.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "function has no selected incoming ABI plan"); return 1; }
-    CinderABIValue result = signature->result;
-    CinderABIState state = signature->state;
     const CinderABIArgument *parameters = signature->arguments;
     const CinderMIRFrame *frame = &allocation->frame;
     size_t start = object->text.len;
@@ -657,7 +437,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         emit8(object, (uint8_t)(0x85U | (a << 3U)));
         emit32(object, (uint32_t)frame->incoming_sse[a]);
     }
-    if (function->type->variadic) {
+    if (frame->variadic_area != 0) {
         int area = frame->variadic_area;
         for (unsigned a = 0U; a < 6U; ++a) {
             emit_mov_rax_mem(object, -(int)((incoming_base + a + 1U) * 8U)); emit_mov_mem_rax(object, area + (int)(a * 8U));
@@ -724,27 +504,8 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
             if (selected->kind == MIR_MEMORY) { emit_storage(object, function, allocation, selected); continue; }
             if (selected->kind == MIR_BITFIELD) { emit_bitfield(object, function, allocation, selected); continue; }
             if (selected->kind == MIR_CONVERSION) { emit_conversion(object, function, allocation, selected); continue; }
-            switch (inst->op) {
-                case IR_ARG:
-                    if (parameters[inst->slot].stack_offset == SIZE_MAX) emit_mov_rax_mem(object, -(int)((incoming_base + parameters[inst->slot].registers[0] + 1U) * 8U));
-                    else emit_mov_rax_mem(object, (int)(16U + parameters[inst->slot].stack_offset));
-                    normalize_incoming_scalar(object, allocation->machine.values[inst->dst].incoming_bool);
-                    store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_FARG:
-                    xmm_rbp(object, 0U, parameters[inst->slot].stack_offset == SIZE_MAX ? -(int)((incoming_base + parameters[inst->slot].registers[0] + 7U) * 8U) : (int)(16U + parameters[inst->slot].stack_offset), false);
-                    if (inst->type->kind == TYPE_FLOAT) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
-                    store_float_value(object, function, allocation, inst->dst); break;
-                case IR_AGG_ARG: emit_aggregate_argument(object, allocation, inst, &parameters[inst->operator_code], incoming_base); break;
-                case IR_AGG_RETURN: emit_aggregate_return(object, function, allocation, inst, &result, incoming_base); break;
-                case IR_VA_START: emit_va_start(object, function, allocation, inst, &state); break;
-                case IR_VA_ARG:
-                    if (emit_va_arg(object, function, allocation, selected, diags) != 0) { free(labels); free(branches.data); return 1; }
-                    break;
-                case IR_CALL:
-                    if (emit_call(object, function, allocation, selected, diags) != 0) { free(labels); free(branches.data); return 1; }
-                    break;
-                default: cinder_diag(diags, CINDER_FATAL, inst->loc, "unselected machine instruction"); free(labels); free(branches.data); return 1;
-            }
+            if (selected->kind == MIR_PROTOCOL) { emit_protocol(object, function, allocation, selected->program); continue; }
+            cinder_diag(diags, CINDER_FATAL, inst->loc, "unselected machine instruction"); free(labels); free(branches.data); return 1;
         }
         debug_point(object, debug.symbol, b, SIZE_MAX, block->terminator.debug_scope);
         if (object->debug_enabled) cinder_debug_row(object, block->terminator.loc);

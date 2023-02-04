@@ -2,6 +2,35 @@
 
 Updated: 2026-10-16
 
+## Complete selected ABI programs
+
+Argument entry, calls, aggregate returns and variadic protocols now own
+concrete byte programs before allocation. Seven roles contain explicit GPR/SSE
+value transfers, fixed-width frame holes and owned call relocations. Selection
+handles argument staging, mixed-class packing, register exhaustion, hidden
+return storage, binary32 conversions and variadic cursor paths. The encoder
+replays programs using verified physical locations. Its raw IR instruction
+switch has been removed; source-type queries retained for debug metadata do
+not choose target instructions.
+
+Strict GCC and ASan/UBSan builds pass forty-five source programs covering all
+seven roles, five step kinds and four frame-patch kinds. Their 272 programs,
+1,023 steps, 280 frame patches and 63 call fixups reject 9,995 altered records
+before output mutation. Restored plans match normal objects. An independent
+reader reconstructs complete allocated program sequences, checks contiguous
+function bytes, actual call targets and disassembler boundaries, and rejects
+zeroed code, wrong roles and wrong call targets. Ninety O0/O2 objects match the
+preceding compiler and LLVM-assembled code/relocations; GCC/Clang and IR
+observations agree for every program.
+
+Both builds pass the eight preceding machine suites, all six debug suites and
+1,000 forced physical phi-cycle cases. The GCC build also passes all 1,239
+source cases and 2,478 CIR/backend comparisons plus 36 rejection mutations.
+All sixty-one actual production modules compile through Cinder. The
+Cinder-built emulated execution and native publication runs remain pending
+for this increment. The explorer, realistic application corpus and remaining
+acceptance campaigns are still incomplete.
+
 ## Selected storage addresses and bitfield roles
 
 Memory instructions now select frame, RIP-relative symbol or indirect
@@ -22,10 +51,14 @@ so memory base values are not mistaken for address-producing operations.
 
 Both builds pass the seven preceding machine suites, all six debug suites and
 1,000 forced phi-cycle cases. All sixty actual production modules compile
-through Cinder. The Cinder-built emulated Linux execution and native publication
-runs remain pending for this increment. Argument/call, aggregate ABI and
-variadic target programs remain open, along with the remaining acceptance
-campaigns.
+through Cinder. The Cinder-built emulated Linux compiler passes all eleven machine/debug
+suites, forty actual GDB sessions and eighteen runtime probes. Independent
+audits bind its sixty original source objects, fifty-eight-object probe core,
+selected plans, raw debugger values and original/assembled/CIR executions.
+These are functional emulation results. Native ordinary validation and the
+complete deterministic bootstrap both passed. ABI program selection was
+completed in the subsequent increment above; the remaining acceptance
+campaigns are still open.
 
 ## Selected value materialization and bulk memory
 
@@ -53,7 +86,12 @@ compiler passes ten machine/debug suites, forty actual GDB sessions and all
 eighteen runtime probes. Independent audits bind all original source/core
 objects, raw debugger values, 72 reference executions and 108 original,
 assembled or CIR-derived runtime executions. These are functional emulation
-results. Native publication runs remain pending. Storage roles were completed
+results. Native ordinary validation and deterministic bootstrap passed. Their raw
+artifacts were independently rehashed and replayed: sixty actual compiler
+modules, matching stage-2/stage-3 objects and executables, 1,000 eligible
+generated programs, 8,000 native executions, 4,000 IR executions and eighty
+actual GDB sessions across both stages. These are historical source-bound
+results. Storage roles were completed
 in the subsequent increment above; argument/call/aggregate/variadic target
 protocols remain open. The remaining acceptance campaigns are still open.
 

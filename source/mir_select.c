@@ -39,6 +39,7 @@ void cinder_selected_mir_destroy(CinderMIRFunction *machine) {
             free(inst->callee); free(inst->args.data); free(inst->arg_floats.data); free(inst->phi_blocks.data);
             destroy_call_plan(machine->blocks.data[b].instructions.data[i].call);
             free(machine->blocks.data[b].instructions.data[i].variadic_layout);
+            cinder_mir_program_destroy(machine->blocks.data[b].instructions.data[i].program);
         }
         free(machine->blocks.data[b].instructions.data);
         free(machine->blocks.data[b].transfers.data);
@@ -330,6 +331,7 @@ static void select_operation(CinderMIRInst *machine) {
         else if (from_fp && to != NULL) machine->conversion = to->kind == TYPE_BOOL ? MIR_CONVERT_FLOAT_BOOL : to->is_unsigned && to->size == 8U ? MIR_CONVERT_FLOAT_UNSIGNED : MIR_CONVERT_FLOAT_SIGNED;
         else if (to_fp && from != NULL) machine->conversion = from->is_unsigned && from->size == 8U ? MIR_CONVERT_UNSIGNED_FLOAT : MIR_CONVERT_SIGNED_FLOAT;
     }
+    if (op == IR_ARG || op == IR_FARG || op == IR_AGG_ARG || op == IR_AGG_RETURN || op == IR_VA_START || op == IR_VA_ARG || op == IR_CALL) machine->kind = MIR_PROTOCOL;
     if (op == IR_CALL) machine->clobbers = GPR(0)|GPR(1)|GPR(2)|GPR(6)|GPR(7)|GPR(8)|GPR(9)|GPR(10)|GPR(11)|UINT64_C(0xffff0000)|FLAGS;
     else if (op != IR_NOP && op != IR_PHI && op != IR_LOCAL_BEGIN && op != IR_LOCAL_END && op != IR_LOCAL_RESET && op != IR_LOCAL_FREEZE && op != IR_VA_END)
         /* Conservative scratch set for target pseudos expanded after allocation. */
@@ -408,8 +410,9 @@ int cinder_select_mir(const CinderIRFunction *source, CinderMIRFunction *machine
                 selected->variadic_layout = cinder_alloc(sizeof(*selected->variadic_layout));
                 if (!cinder_abi_classify(selected->operands.source_type, selected->variadic_layout)) { cinder_diag(diags, CINDER_FATAL, selected->operands.loc, "unsupported selected va_arg layout"); return 1; }
             }
-            if (selected->operands.op != IR_CALL) continue;
-            selected->call = instruction_plan(machine, &selected->operands, diags); if (selected->call == NULL) return 1;
+            if (selected->operands.op == IR_CALL) { selected->call = instruction_plan(machine, &selected->operands, diags); if (selected->call == NULL) return 1; }
+            selected->program = cinder_mir_program_select(&selected->operands, machine->signature, selected->call, selected->variadic_layout, diags);
+            if (selected->kind == MIR_PROTOCOL && selected->program == NULL) return 1;
         }
     return cinder_verify_selected_mir(machine, diags);
 }
@@ -418,7 +421,6 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
     if (machine->source == NULL || machine->value_count != machine->source->value_count || machine->blocks.len != machine->source->blocks.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "selected machine function has stale dimensions"); return 1; }
     CinderMIRCallPlan *signature = function_plan(machine->source, diags);
     if (!plan_matches(machine->signature, signature)) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "selected incoming ABI plan is inconsistent");
-    destroy_call_plan(signature);
     for (size_t b = 0U; b < machine->blocks.len; ++b) {
         const CinderMIRBlock *block = &machine->blocks.data[b];
         if (block->instructions.len != machine->source->blocks.data[b].instructions.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "selected machine block has stale instructions"); continue; }
@@ -444,6 +446,15 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
                 if (!plan_matches(inst->call, call)) cinder_diag(diags, CINDER_FATAL, original->loc, "selected outgoing ABI plan is inconsistent");
                 destroy_call_plan(call);
             } else if (inst->call != NULL) cinder_diag(diags, CINDER_FATAL, original->loc, "non-call machine instruction owns an ABI plan");
+            bool protocol = original->op == IR_ARG || original->op == IR_FARG || original->op == IR_AGG_ARG || original->op == IR_AGG_RETURN || original->op == IR_VA_START || original->op == IR_VA_ARG || original->op == IR_CALL;
+            if (protocol) {
+                CinderMIRCallPlan *protocol_call = original->op == IR_CALL ? instruction_plan(machine, original, diags) : NULL;
+                CinderABIValue protocol_variadic; memset(&protocol_variadic, 0, sizeof(protocol_variadic));
+                if (original->op == IR_VA_ARG) (void)cinder_abi_classify(original->source_type, &protocol_variadic);
+                CinderMIRProgram *program = cinder_mir_program_select(original, signature, protocol_call, &protocol_variadic, diags);
+                if (!cinder_mir_program_matches(inst->program, program)) cinder_diag(diags, CINDER_FATAL, original->loc, "selected ABI byte program is inconsistent");
+                cinder_mir_program_destroy(program); destroy_call_plan(protocol_call);
+            } else if (inst->program != NULL) cinder_diag(diags, CINDER_FATAL, original->loc, "non-ABI instruction owns a byte program");
             const CinderIRInst *operand = &inst->operands;
             bool same_callee = operand->callee == NULL || original->callee == NULL ? operand->callee == original->callee : strcmp(operand->callee, original->callee) == 0;
             bool same_args = operand->args.len == original->args.len && (operand->args.len == 0U || (operand->args.data != NULL && memcmp(operand->args.data, original->args.data, operand->args.len * sizeof(*operand->args.data)) == 0));
@@ -452,7 +463,7 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
             if (operand->op != original->op || operand->dst != original->dst || operand->left != original->left || operand->right != original->right || operand->type != original->type || operand->source_type != original->source_type || operand->callee_type != original->callee_type || operand->slot != original->slot || operand->operator_code != original->operator_code || operand->integer != original->integer || memcmp(&operand->floating, &original->floating, sizeof(operand->floating)) != 0 || operand->noreturn_call != original->noreturn_call || operand->floating_result != original->floating_result || !same_callee || !same_args || !same_classes || !same_edges)
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "selected machine operands disagree with source definitions");
             CinderMIRInst expected; memset(&expected, 0, sizeof(expected)); expected.operands = *original; select_operation(&expected);
-            if (inst->kind != expected.kind || inst->encoding_size != expected.encoding_size || memcmp(inst->encoding, expected.encoding, sizeof(inst->encoding)) != 0 || inst->fixed_uses != expected.fixed_uses || inst->clobbers != expected.clobbers || inst->float_opcode != expected.float_opcode || inst->condition_opcode != expected.condition_opcode || inst->parity_opcode != expected.parity_opcode || inst->parity_combine != expected.parity_combine || inst->single_precision != expected.single_precision || inst->shift_count != expected.shift_count)
+            if (expected.kind == MIR_PSEUDO || inst->kind != expected.kind || inst->encoding_size != expected.encoding_size || memcmp(inst->encoding, expected.encoding, sizeof(inst->encoding)) != 0 || inst->fixed_uses != expected.fixed_uses || inst->clobbers != expected.clobbers || inst->float_opcode != expected.float_opcode || inst->condition_opcode != expected.condition_opcode || inst->parity_opcode != expected.parity_opcode || inst->parity_combine != expected.parity_combine || inst->single_precision != expected.single_precision || inst->shift_count != expected.shift_count)
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected x86 instruction contract");
             if (inst->conversion != expected.conversion || memcmp(&inst->access, &expected.access, sizeof(inst->access)) != 0 || (inst->kind == MIR_MEMORY && inst->access.load_size == 0U))
                 cinder_diag(diags, CINDER_FATAL, inst->operands.loc, "invalid selected memory or conversion plan");
@@ -480,12 +491,19 @@ int cinder_verify_selected_mir(const CinderMIRFunction *machine, CinderDiagnosti
             }
         }
     }
+    destroy_call_plan(signature);
     return diags->errors != 0U;
 }
 
 void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
     fprintf(out, "selected-mir %s target=x86_64-sysv values=%zu\n", machine->source->name, machine->value_count);
     fprintf(out, "incoming-abi arguments=%zu gpr=%u sse=%u stack=%zu sret=%s\n", machine->signature->argument_count, machine->signature->state.gpr, machine->signature->state.sse, machine->signature->state.stack, machine->signature->result.memory ? "yes" : "no");
+    for (size_t v = 0U; v < machine->value_count; ++v) {
+        const CinderMIRValue *value = &machine->values[v];
+        fprintf(out, "machine-value %zu bank=%u normalization=", v, (unsigned)value->bank);
+        for (unsigned n = 0U; n < value->normalization_size; ++n) fprintf(out, "%02x", value->normalization[n]);
+        fprintf(out, " incoming-bool=%s\n", value->incoming_bool ? "yes" : "no");
+    }
     for (size_t b = 0U; b < machine->blocks.len; ++b) {
         fprintf(out, "machine-block %zu\n", b);
         const CinderMIRControl *control = &machine->blocks.data[b].control;
@@ -519,6 +537,7 @@ void cinder_dump_selected_mir(const CinderMIRFunction *machine, FILE *out) {
                 fputs(" after=", out); for (unsigned n = 0U; n < inst->address.after_size; ++n) fprintf(out, "%02x", inst->address.after[n]);
             }
             fputc('\n', out);
+            if (inst->program != NULL) cinder_dump_mir_program(inst->program, out);
         }
     }
 }

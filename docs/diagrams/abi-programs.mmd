@@ -1,0 +1,17 @@
+flowchart LR
+  IR[Verified IR operands and function signature] --> LAYOUT[Selected SysV argument result and variadic layouts]
+  IR --> SELECT[Original ABI program selector]
+  LAYOUT --> SELECT
+  SELECT --> BYTES[Concrete target byte fragments]
+  SELECT --> VALUES[Explicit GPR and SSE value transfers]
+  SELECT --> FRAME[Fixed-width symbolic frame patches]
+  SELECT --> RELOCS[Owned direct-call relocation records]
+  BYTES --> SEAL[Verify complete selected program]
+  VALUES --> SEAL
+  FRAME --> SEAL
+  RELOCS --> SEAL
+  SEAL --> ALLOC[Allocate virtual values and verify physical frame]
+  ALLOC --> REPLAY[Replay programs using verified locations]
+  REPLAY --> ELF[Original object bytes and relocations]
+  ELF --> READ[Independent allocated-byte and disassembler checks]
+  ELF --> RUN[Native reference and mixed-toolchain behavior]

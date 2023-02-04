@@ -52,6 +52,7 @@ set(CINDER_SOURCES
   source/opt_loop.c
   source/mir.c
   source/mir_select.c
+  source/mir_program.c
   source/regalloc.c
   source/stack_layout.c
   source/liveness.c
@@ -125,6 +126,10 @@ target_link_libraries(cinder_mir_material_probe PRIVATE cinder_core)
 add_executable(cinder_mir_storage_probe EXCLUDE_FROM_ALL tests/mir_storage_probe.c)
 cinder_target_profile(cinder_mir_storage_probe)
 target_link_libraries(cinder_mir_storage_probe PRIVATE cinder_core)
+
+add_executable(cinder_mir_program_probe EXCLUDE_FROM_ALL tests/mir_program_probe.c)
+cinder_target_profile(cinder_mir_program_probe)
+target_link_libraries(cinder_mir_program_probe PRIVATE cinder_core)
 
 add_executable(cinderir source/ir_main.c)
 cinder_target_profile(cinderir)

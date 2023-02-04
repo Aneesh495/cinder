@@ -1049,7 +1049,7 @@ int cinder_optimize_only(CinderIRModule *module, const char *name, CinderOptStat
 typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
 typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_XMM2, REG_XMM3, REG_XMM4, REG_XMM5, REG_XMM6, REG_XMM7, REG_NONE } CinderRegister;
 typedef enum { MIR_BANK_NONE, MIR_BANK_GPR, MIR_BANK_SSE } CinderMIRBank;
-typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE, MIR_MEMORY, MIR_CONVERSION, MIR_INTEGER_UNARY, MIR_BITFIELD, MIR_ADDRESS, MIR_MATERIAL, MIR_BULK, MIR_MARKER } CinderMIRKind;
+typedef enum { MIR_PSEUDO, MIR_INTEGER_ALU, MIR_FLOAT_ALU, MIR_FLOAT_COMPARE, MIR_MEMORY, MIR_CONVERSION, MIR_INTEGER_UNARY, MIR_BITFIELD, MIR_ADDRESS, MIR_MATERIAL, MIR_BULK, MIR_MARKER, MIR_PROTOCOL } CinderMIRKind;
 typedef enum { MIR_MATERIAL_NONE, MIR_MATERIAL_INTEGER, MIR_MATERIAL_FLOAT, MIR_MATERIAL_UNDEF_INTEGER, MIR_MATERIAL_UNDEF_FLOAT, MIR_MATERIAL_COPY_INTEGER, MIR_MATERIAL_COPY_FLOAT, MIR_MATERIAL_NEGATE_FLOAT } CinderMIRMaterialKind;
 typedef struct {
     CinderMIRMaterialKind kind;
@@ -1081,6 +1081,7 @@ typedef struct {
     unsigned begin, end, shift, signed_shift;
 } CinderMIRBitfield;
 typedef struct CinderMIRCallPlan CinderMIRCallPlan;
+typedef struct CinderMIRProgram CinderMIRProgram;
 typedef struct CinderABIValue CinderABIValue;
 typedef struct {
     CinderMIRBank bank;
@@ -1108,6 +1109,7 @@ typedef struct {
     bool single_precision, shift_count;
     uint64_t fixed_uses, clobbers;
     CinderMIRCallPlan *call;
+    CinderMIRProgram *program;
     CinderABIValue *variadic_layout;
     CinderMIRAccess access;
     CinderMIRStorage storage;
@@ -1228,6 +1230,24 @@ typedef struct {
     int64_t addend;
     unsigned section_kind;
 } CinderFixup;
+
+typedef enum { MIR_STEP_BYTES, MIR_STEP_LOAD_GPR, MIR_STEP_LOAD_SSE, MIR_STEP_STORE_GPR, MIR_STEP_STORE_SSE } CinderMIRProgramStepKind;
+typedef enum { MIR_PATCH_LOCAL, MIR_PATCH_INCOMING_GPR, MIR_PATCH_INCOMING_SSE, MIR_PATCH_VARIADIC } CinderMIRFramePatchKind;
+typedef struct { CinderMIRFramePatchKind kind; size_t offset; int slot; int64_t addend; } CinderMIRFramePatch;
+typedef struct {
+    CinderMIRProgramStepKind kind;
+    CinderValueId value;
+    unsigned reg;
+    CinderBytes bytes;
+    CINDER_VEC_TYPE(CinderMIRFramePatch) patches;
+    CINDER_VEC_TYPE(CinderFixup) fixups;
+} CinderMIRProgramStep;
+typedef enum { MIR_PROGRAM_NONE, MIR_PROGRAM_INTEGER_ARGUMENT, MIR_PROGRAM_FLOAT_ARGUMENT, MIR_PROGRAM_AGG_ARGUMENT, MIR_PROGRAM_AGG_RETURN, MIR_PROGRAM_VA_START, MIR_PROGRAM_VA_ARG, MIR_PROGRAM_CALL } CinderMIRProgramRole;
+struct CinderMIRProgram { CinderMIRProgramRole role; CINDER_VEC_TYPE(CinderMIRProgramStep) steps; };
+CinderMIRProgram *cinder_mir_program_select(const CinderIRInst *inst, const CinderMIRCallPlan *signature, const CinderMIRCallPlan *call, const CinderABIValue *variadic, CinderDiagnostics *diags);
+void cinder_mir_program_destroy(CinderMIRProgram *program);
+void cinder_dump_mir_program(const CinderMIRProgram *program, FILE *out);
+bool cinder_mir_program_matches(const CinderMIRProgram *program, const CinderMIRProgram *expected);
 
 typedef struct {
     char *name;

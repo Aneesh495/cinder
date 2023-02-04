@@ -145,6 +145,8 @@ void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out) {
         fputs(" restore=", out); for (unsigned k = 0U; k < sizeof(saved->restore); ++k) fprintf(out, "%02x", saved->restore[k]);
         fputc('\n', out);
     }
+    for (size_t slot = 0U; slot < allocation->local_offsets.len; ++slot)
+        fprintf(out, "  object-slot=%zu offset=%d bytes=%zu align=%zu\n", slot, allocation->local_offsets.data[slot], allocation->ir->local_types.data[slot]->size, cinder_ir_local_alignment(allocation->ir, slot));
     for (size_t i = 0U; i < allocation->intervals.len; ++i) {
         const CinderInterval *interval = &allocation->intervals.data[i];
         if (interval->location.kind == LOC_REGISTER) fprintf(out, "  %%v%u [%zu,%zu] -> %s\n", interval->value, interval->start, interval->end, register_name(interval->location.reg));

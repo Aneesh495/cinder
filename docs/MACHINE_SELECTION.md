@@ -11,8 +11,8 @@ Selected blocks own instruction operands, call names, argument/class vectors,
 phi incoming vectors and terminators. Type metadata remains borrowed from the
 translation unit's type context. The machine value table records the register
 bank and type for each definition. Allocation uses that bank table instead of
-repeatedly scanning CFG instructions. The encoder also uses the table for
-value normalization and ABI/phi operand queries.
+repeatedly scanning CFG instructions. The encoder uses the table for value normalization. Selected ABI programs and
+phi schedules carry their own transfer roles and register-bank choices.
 
 Physical masks use hardware GPR codes in bits 0 through 15, XMM numbers in
 bits 16 through 31 and flags in bit 32. Integer bundles describe their RAX/R10
@@ -61,8 +61,9 @@ The verifier seals those encodings and layout choices as well as the original
 operand/type contracts. Pointer arithmetic and address formation now have
 selected target programs. Branches, returns and physical frames also own
 selected programs. Constants, value copies, floating sign changes, bulk memory
-and zero-emission markers also have selected roles. Argument/call and variadic
-target expansion still require complete selection. The frontend's owned typed HIR is
+and zero-emission markers also have selected roles. Argument/call, aggregate-return and variadic protocols now own complete byte
+programs and explicit value transfers. Their frame holes resolve through
+verified allocation. The frontend's owned typed HIR is
 documented in [HIR.md](HIR.md). Full acceptance is incomplete.
 
 `make test-mir` executes 43 independently specified typed integer/floating
@@ -185,3 +186,30 @@ compiler and LLVM-assembled code/relocations. GCC/Clang and IR runs check every
 source result; Linux additionally executes original Cinder objects and uses a
 Cinder-compiled API probe. See
 [ADR 0023](ADRs/0023-selected-storage-address-and-bitfield-roles.md).
+
+ABI protocols now use owned byte programs from `source/mir_program.c`. Seven
+roles cover integer/SSE/aggregate entry, aggregate return, variadic start/get
+and calls. Steps contain target bytes, GPR/SSE virtual-value transfers, frame
+patches and direct-call relocations. Selection decides staging, packing,
+register assignment, binary32 conversions and internal variadic branches.
+Encoding replays those steps and resolves physical locations. The raw IR
+instruction switch has been removed from the encoder.
+
+`--dump-mir` prints program roles, actual step bytes, frame patches, relocations
+and definition-normalization templates. `--dump-regalloc` additionally prints
+allocated object slots and alignments. `make test-mir-program` checks forty-five
+programs, all seven roles, five step kinds and four frame-patch kinds. A
+separate reader independently encodes allocated transfers, resolves selected
+frame holes and requires complete program sequences in actual function bytes
+at disassembler instruction boundaries. It checks call relocation targets and
+near-branch destinations. Zeroed code, wrong roles and changed call targets
+are negative controls.
+
+The API probe rejects altered headers, steps, bytes, frame patches and owned
+fixups before either verifier or encoder output can change. Restored plans
+match normal original objects. O0/O2 code and relocations match LLVM assembly;
+optional baseline checks compare complete objects. GCC/Clang and IR executions
+check source observations. Linux also executes original objects and compiles
+the API probe through Cinder with the actual compiler core. See
+[ADR 0024](ADRs/0024-selected-abi-byte-programs.md) and the
+[editable protocol diagram](diagrams/abi-programs.mmd).

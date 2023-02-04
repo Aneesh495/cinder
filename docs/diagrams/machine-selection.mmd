@@ -4,7 +4,7 @@ flowchart TD
   SELECT --> OWN[Own operands phi vectors and terminators]
   SELECT --> BANK[Build definition bank and type table]
   SELECT --> CONTRACT[Declare fixed operands and clobber masks]
-  SELECT --> ABI[Select incoming outgoing and variadic ABI layouts]
+  SELECT --> ABI[Select SysV layouts and complete ABI byte programs]
   SELECT --> STORAGE[Select memory address and value roles, byte forms and bitfield operations]
   SELECT --> CONVERT[Select integer floating and boolean conversions]
   SELECT --> ADDRESS[Select frame and RIP-relative addresses, scaled offsets and signed differences]
@@ -29,7 +29,7 @@ flowchart TD
   LIVE --> COPY[Own physical edge-copy schedules and register banks]
   LIVE --> FRAME[Select physical frame entry preservation and exit programs]
   COPY --> TOKENS[Independently simulate storage tokens and cycle temporaries]
-  TOKENS --> ENCODE[Encode selected scalar forms and expand target pseudos]
+  TOKENS --> ENCODE[Replay selected operations, ABI programs and physical frame patches]
   ABI --> ENCODE
   STORAGE --> ENCODE
   CONVERT --> ENCODE
