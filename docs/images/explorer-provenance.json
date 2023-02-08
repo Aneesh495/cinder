@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "fixture": "tests/explorer/pipeline.c",
+  "fixture_sha256": "09c576c1d7a5aea60bde3a98d8493f8c7d99b885c1ca640351f81cb3d8253f86",
+  "header_sha256": "0bbe65627b3296095c0acded8f9956c27e20e6ff5234da695c1b85bdbb738b2c",
+  "compiler_sha256": "6a40185d1754462926710fe691deda05fa6e6c6ace33680d119754121891f831",
+  "report_sha256": "004d89aeca2930648e121a1280895530687a0b6400fec537f91601fc7302acf4",
+  "command": [
+    "cindercc",
+    "-O2",
+    "-ffile-prefix-map=REPOSITORY=/project",
+    "--explorer",
+    "REPORT",
+    "tests/explorer/pipeline.c"
+  ],
+  "browser_checks": [
+    "CFG SVG block opens source-to-machine pane",
+    "logical source link opens physical source pane",
+    "search matches source and stages",
+    "ArrowRight and Home navigate tabs"
+  ],
+  "browser_console_errors": 0,
+  "images": {
+    "explorer-cfg.jpg": "52263ca25b3c02939e09d3279b3721895c47b06d4fb748ad4a41b0a029902216",
+    "explorer-passes.jpg": "87af6ea915efeaa89faa7ce8fc05abc66ec62d073061ab4c5688a168277e4946"
+  }
+}

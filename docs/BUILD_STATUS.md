@@ -2,6 +2,29 @@
 
 Updated: 2026-10-16
 
+## Offline compilation explorer
+
+`--explorer DIR` now publishes actual source/provenance, tokens, typed AST/HIR,
+verified IR, selected machine programs, physical allocation, CFG liveness,
+generated CFG diagrams, pass differences, assembly, relocations and diagnostics
+in one offline HTML file. Source and CFG links activate their destination
+panes. Pass snapshots are downloadable in full. The encoder tracks source PCs
+without requiring debug sections or changing ordinary object bytes.
+
+Strict GCC and ASan/UBSan builds pass eight report profiles plus owned-trace,
+failed-input and publication tests. Captured stages, complete pass snapshots
+and assembly match standalone artifacts. Independent ELF/disassembler checks
+validate every reported byte range. Both references execute twelve cases and
+the IR interpreter executes six. Browser checks verify SVG/source links,
+search, keyboard tabs and a clean console; actual screenshots and provenance
+are included in [EXPLORER.md](EXPLORER.md).
+
+Both frozen builds also pass driver/output/pass-pipeline checks, all six debug
+suites and selected control/ABI-program regressions. Every one of sixty-one
+production source files compiles through Cinder. The report implementation uses
+the existing atomic output boundary to reject non-directory destinations; it
+does not require an undeclared host-specific `struct stat` layout.
+
 ## Complete selected ABI programs
 
 Argument entry, calls, aggregate returns and variadic protocols now own
@@ -26,10 +49,15 @@ observations agree for every program.
 Both builds pass the eight preceding machine suites, all six debug suites and
 1,000 forced physical phi-cycle cases. The GCC build also passes all 1,239
 source cases and 2,478 CIR/backend comparisons plus 36 rejection mutations.
-All sixty-one actual production modules compile through Cinder. The
-Cinder-built emulated execution and native publication runs remain pending
-for this increment. The explorer, realistic application corpus and remaining
-acceptance campaigns are still incomplete.
+All sixty-one actual production modules compile through Cinder. The Cinder-built emulated Linux compiler passes all twelve machine/debug
+suites, forty actual GDB sessions and eighteen runtime probes. Independent
+audits bind all sixty-one original objects and fifty-nine core objects to the
+raw results. The ABI-program suite passes ninety original target executions,
+180 reference executions and 9,995 altered-plan rejections. Its initial outer
+harness deadline expired; the unchanged complete workload passed with a
+longer deadline, and both attempts remain recorded. Native ordinary validation
+and the complete deterministic bootstrap also passed. The explorer, realistic
+application corpus and remaining acceptance campaigns are still incomplete.
 
 ## Selected storage addresses and bitfield roles
 

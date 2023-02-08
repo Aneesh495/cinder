@@ -1,0 +1,17 @@
+flowchart TD
+  SOURCE[Source manager: physical files, logical names and origins] --> DRIVER[source/driver.c: normal translation-unit pipeline]
+  DRIVER --> FRONT[Tokens, typed AST and owned HIR]
+  DRIVER --> IR[Verified IR before and after optimization]
+  IR --> PASS[Actual optimizer CIR snapshots and pass records]
+  DRIVER --> ALLOC[Selected MIR, physical allocation and CFG liveness]
+  ALLOC --> GRAPH[CFG SVG from actual successor lists]
+  DRIVER --> MACHINE[Original encoder: byte ranges and relocation records]
+  FRONT --> CAPTURE[source/inspect.c: owned stage streams]
+  IR --> CAPTURE
+  PASS --> CAPTURE
+  ALLOC --> CAPTURE
+  GRAPH --> CAPTURE
+  MACHINE --> CAPTURE
+  SOURCE --> HTML[Atomic offline index.html]
+  CAPTURE --> HTML
+  HTML --> LINKS[Source, macro-origin and IR-to-machine fragment links]

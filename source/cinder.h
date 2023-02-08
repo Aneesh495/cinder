@@ -1295,6 +1295,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderDebugPoint) debug_points;
     CINDER_VEC_TYPE(CinderDebugLocalHome) debug_local_homes;
     bool debug_enabled;
+    bool track_source;
     unsigned literal_counter;
     size_t frame_size;
 } CinderMachineObject;
@@ -1405,6 +1406,16 @@ bool cinder_output_same_path(const char *left, const char *right);
 int cinder_driver_run(const CinderOptions *options);
 void cinder_print_help(FILE *out);
 void cinder_print_version(FILE *out);
-int cinder_write_explorer(const char *directory, const CinderTokenStream *tokens, const CinderAst *ast, const CinderIRModule *module, const CinderMachineObject *machine, CinderDiagnostics *diags);
+typedef struct CinderExplorer CinderExplorer;
+typedef enum { EXP_TOKENS, EXP_AST, EXP_HIR, EXP_IR_BEFORE, EXP_IR_AFTER, EXP_MIR, EXP_ALLOCATION, EXP_LIVENESS, EXP_CFG, EXP_LINKS, EXP_ASSEMBLY, EXP_RELOCATIONS, EXP_STAGE_COUNT } CinderExplorerStage;
+CinderExplorer *cinder_explorer_create(const char *directory);
+void cinder_explorer_destroy(CinderExplorer *explorer);
+FILE *cinder_explorer_stream(CinderExplorer *explorer, CinderExplorerStage stage, CinderDiagnostics *diags);
+const char *cinder_explorer_trace(CinderExplorer *explorer, const char *requested, CinderDiagnostics *diags);
+void cinder_explorer_passes(CinderExplorer *explorer, const CinderOptStats *stats);
+int cinder_explorer_snapshot(CinderExplorer *explorer, CinderExplorerStage stage, const void *object, CinderSourceManager *sources, CinderDiagnostics *diags);
+int cinder_explorer_allocation(CinderExplorer *explorer, const CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_explorer_machine(CinderExplorer *explorer, const CinderIRModule *module, const CinderMachineObject *machine, CinderSourceManager *sources, CinderDiagnostics *diags);
+int cinder_explorer_render(CinderExplorer *explorer, CinderSourceManager *sources, bool successful, CinderDiagnostics *diags);
 
 #endif

@@ -82,6 +82,8 @@ jobs:
         run: make test-mir-storage
       - name: Selected ABI programs, allocated transfer bytes and frame patches
         run: make test-mir-program
+      - name: Actual offline stage captures, pass diffs and source to machine maps
+        run: make test-explorer
       - name: Dependency rules, C17 profiles and structured diagnostics
         run: make test-driver
       - name: Repeated source instances, include traces and qualified pointer differences

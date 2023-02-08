@@ -23,7 +23,7 @@ for output naming and linking.
 | `--dump-mir`, `--dump-regalloc` | Selected machine plans and actual allocation |
 | `--dump-passes`, `--pass-stats PATH`, `--pass-trace DIR` | Verified pass records and before/after IR |
 | `--interpret` | Execute `main` in the independent IR interpreter |
-| `--explorer DIR` | Current offline stage summary |
+| `--explorer DIR` | [Offline source-linked pipeline report](EXPLORER.md) |
 | `-fverify-each` | IR verification at driver boundaries |
 | `--`, `--help`, `--version` | End options, print usage or print version |
 

@@ -33,7 +33,7 @@ static int value_offset(const CinderIRFunction *function, const CinderAllocation
 static int local_offset(const CinderAllocation *allocation, int slot) { return allocation->local_offsets.data[slot]; }
 
 static void debug_point(CinderMachineObject *object, size_t symbol, size_t block, size_t instruction, int scope) {
-    if (!object->debug_enabled) return;
+    if (!object->debug_enabled && !object->track_source) return;
     if (object->debug_points.len != 0U && object->debug_points.data[object->debug_points.len - 1U].symbol == symbol)
         object->debug_points.data[object->debug_points.len - 1U].end = object->text.len;
     CinderDebugPoint point = {symbol, block, instruction, object->text.len, object->text.len, scope};
@@ -545,8 +545,8 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     if (diags->errors != 0U) return 1;
     size_t function_size = object->text.len - start;
     cinder_vec_push((CinderVec *)&object->symbol_sizes, &function_size);
+    if (object->debug_enabled || object->track_source) object->debug_points.data[object->debug_points.len - 1U].end = object->text.len;
     if (object->debug_enabled) {
-        object->debug_points.data[object->debug_points.len - 1U].end = object->text.len;
         debug.end_point = object->debug_points.len; debug.end_row = object->debug_rows.len;
         cinder_vec_push((CinderVec *)&object->debug_functions, &debug);
     }
