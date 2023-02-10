@@ -97,14 +97,17 @@ only the six named error values needed by the supported interface are provided.
 The predefined target macros now include `__unix__` as well as `__linux__`, so
 actual compiler conditional includes retain their POSIX driver declarations.
 
-`inttypes.h` supplies the 64-bit, maximum and pointer printf spellings needed
-by the implementation. `float.h` describes binary32/binary64. `math.h` supplies
+`inttypes.h` supplies signed, unsigned, octal and hexadecimal printf spellings
+for the exact 8/16/32/64-bit, maximum and pointer integer types. Narrow values
+use their promoted printf argument conventions; 64-bit, maximum and pointer
+values use the declared LP64 target. A libc regression checks signed minima,
+unsigned maxima, mixed widths and hexadecimal/octal spellings. `float.h` describes binary32/binary64. `math.h` supplies
 `isfinite` using an authored inline byte inspection of the target binary64
 representation. Float inputs convert exactly to double for classification;
 there is no runtime host-compiler intrinsic. Complex and long-double inputs
 remain excluded. Other mathematical functions are not declared.
 
-`make test-runtime-headers` compiles 15 authored probes against both host
+`make test-runtime-headers` compiles 19 authored probes against both host
 system-header references and Cinder at both optimization levels. A prototype
 contract checks the declared standard/POSIX function types. Layout assertions
 check target scalar and `struct tm` layouts and SysV va_list state. macOS
@@ -120,14 +123,16 @@ Raw manifests bind all header/source/harness bytes, compiler/tool binaries,
 reference versions, argv, outcomes and objects. External libc calls remain
 classified as unavailable by the independent IR interpreter; these probes
 are separate from the source-interpreter corpus. They are never counted as
-interpreter successes. The Linux development VM passed 90 owned native
-executions and 60 GCC/Clang system-header reference executions. Final hosted
-runtime evidence and all required acceptance readers remain open.
+interpreter successes. Historical eighteen-probe emulated runs passed 108 original/assembled/CIR
+executions and 72 GCC/Clang reference executions. The added format probe passes
+GCC/Clang at both levels, independent assembly/CIR comparisons and both
+original emulated objects. These emulated results are functional checks; the
+full native acceptance registry remains open.
 
-The actual source syntax audit checks every CMake compiler module with these
-headers. It passed 41 of 42 modules. `source/arena.c` currently requires flexible
-array member support. This audit does not build stage 2 and is not self-hosting
-acceptance. No compiler module is substituted with a precompiled host object.
+Every one of the current sixty-one production modules compiles through
+Cinder with these headers. The deterministic native bootstrap separately
+compiles and executes all modules in stages 2 and 3; see
+[SELFHOSTING.md](SELFHOSTING.md). No module is replaced with a host object.
 
 Interface references: [Linux stdio](https://man7.org/linux/man-pages/man3/stdio.3.html)
 and [POSIX definitions](https://pubs.opengroup.org/onlinepubs/9799919799/).
