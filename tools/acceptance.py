@@ -95,6 +95,28 @@ def selfhost_campaign(root, evidence, compiler, source_sha256, retained=None):
     return name
 
 
+def application_campaign(root, evidence, compiler, source_sha256):
+    command = [sys.executable, '-B', str(root / 'tests/test_applications.py'), str(compiler)]
+    result = campaign_command(command, root, evidence / 'applications.command.json', 1800)
+    if result.returncode != 0:
+        raise EvidenceError('application campaign failed; original command and artifacts retained')
+    candidates = [path for path in (root / '.agent-local/applications').glob('*/run-*/report.json')
+                  if json.loads(path.read_text()).get('compiler_sha256') == digest(compiler)]
+    if not candidates:
+        raise EvidenceError('application campaign did not publish its proof')
+    raw = evidence / 'raw/applications' / uuid.uuid4().hex
+    shutil.copytree(max(candidates, key=lambda p: p.stat().st_mtime).parent, raw)
+    from application_evidence import verify_applications
+    proof = verify_applications(raw, root, compiler)
+    report = dict(schema=2, gate='applications', source_sha256=source_sha256,
+                  compiler_sha256=digest(compiler), status='pass', unit=GATES['applications']['unit'],
+                  observations=proof['applications'], raw_directory=str(raw.relative_to(evidence)))
+    read_gate_report('applications', report, root, evidence, compiler)
+    name = 'applications.json'
+    (evidence / name).write_text(json.dumps(report, indent=2) + '\n')
+    return name
+
+
 def census_campaign(root, evidence, compiler, source_sha256):
     raw = evidence / 'raw/private-size/census.json'
     command = [sys.executable, '-B', str(root / 'tools/source_census.py'), '--root', str(root), '--output', str(raw)]
@@ -171,6 +193,8 @@ def main():
                 report = pass_campaign(root, evidence, compiler, payload['source_sha256'])
             elif key == 'self-hosting':
                 report = selfhost_campaign(root, evidence, compiler, payload['source_sha256'], args.bootstrap_evidence)
+            elif key == 'applications':
+                report = application_campaign(root, evidence, compiler, payload['source_sha256'])
             elif key == 'private-size':
                 report = census_campaign(root, evidence, compiler, payload['source_sha256'])
             else:

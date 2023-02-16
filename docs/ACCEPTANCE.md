@@ -17,20 +17,23 @@ raw campaign artifacts. Those readers and full runners are still being connected
 the guard intentionally cannot report complete acceptance in their absence.
 
 `make acceptance` currently fails with an explicit incomplete manifest because
-the full compiler and campaigns are unfinished. It does not bless the existing
-smoke applications or reuse a generated workload summary as full acceptance.
+the full campaign registry is unfinished. Individual application, bootstrap
+or optimizer results cannot substitute for the other required gates.
 The completed runner must execute the complete expensive registry and retain
 raw progress before this command can succeed.
 
-Three dedicated readers are connected. The pass reader reconstructs ten
+Four dedicated readers are connected. The pass reader reconstructs ten
 positive/negative transformation pairs and their native original objects. The
 self-hosting reader checks strict stage-one compilation, every actual source
 module compiled by the preceding Cinder stage, stage-two/three object and
 executable identity, complete authored stage suites and the generated native
 subset. It binds the seed compiler and rejects emulated or incomplete packages.
-The private census reader reconstructs the exact inventory and exclusion rules
-from bound source bytes without writing the census. Seventeen full-campaign
-readers remain open.
+The application reader reconstructs all eight real integrations, three multi-TU
+builds, frozen input/output observations, reference and sanitizer executions,
+original unit objects and object-only normal linker invocations. It requires
+native Linux execution for acceptance. The private census reader reconstructs
+the exact inventory and exclusion rules from bound source bytes without
+writing the census. Sixteen full-campaign readers remain open.
 
 `tools/acceptance.py run COMPILER` runs all implemented campaign producers.
 Repeated `--gate` options select partial generation, whose manifest records

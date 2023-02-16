@@ -2,6 +2,31 @@
 
 Updated: 2026-10-16
 
+## Real application corpus and evidence reader
+
+Eight applications now implement JSON parsing, dynamic word frequency, graph
+algorithms, a bytecode VM, stable sort/search, binary checksums, blocked matrix
+multiplication and a CSV CLI. Three use multiple translation units. Forty
+frozen inputs separate twenty-five valid cases from fifteen expected input
+rejections; output files and preservation of prior output are checked as well
+as stdout, stderr and status.
+
+Both strict GCC and ASan/UBSan development compilers emit all twenty-two
+original unit/mode objects. Each host run passes 160 GCC/Clang O0/O2 reference
+executions and forty Clang ASan/UBSan reference executions. Independent Python
+oracles reproduce every frozen fixture. Twelve raw-proof corruption controls
+and five gate-envelope controls pass. Cross/emulated reports cannot satisfy
+the native application gate.
+
+The native workload compiles complete applications through the normal driver,
+retains object-only system linker argv and compares its objects with standalone
+original emission. The new gate reader reconstructs every command, input,
+object, executable, reference result and output file rather than trusting
+summary counters. This reader is connected to acceptance and both bootstrap
+stages. Native publication validation for this increment is pending. The full
+differential, fuzz, failure-recovery, performance and remaining acceptance
+campaigns remain incomplete.
+
 ## Offline compilation explorer
 
 `--explorer DIR` now publishes actual source/provenance, tokens, typed AST/HIR,
@@ -23,7 +48,12 @@ Both frozen builds also pass driver/output/pass-pipeline checks, all six debug
 suites and selected control/ABI-program regressions. Every one of sixty-one
 production source files compiles through Cinder. The report implementation uses
 the existing atomic output boundary to reject non-directory destinations; it
-does not require an undeclared host-specific `struct stat` layout.
+does not require an undeclared host-specific `struct stat` layout. The
+Cinder-built emulated compiler passes all six debug suites, forty actual GDB
+sessions, all Explorer profiles and driver/output/pass-pipeline checks. Its
+independent audit binds all sixty-one original source objects and the raw
+results. Native ordinary validation and deterministic bootstrap both passed
+for Explorer and for the subsequent integer-format header fix.
 
 ## Complete selected ABI programs
 
@@ -56,8 +86,8 @@ raw results. The ABI-program suite passes ninety original target executions,
 180 reference executions and 9,995 altered-plan rejections. Its initial outer
 harness deadline expired; the unchanged complete workload passed with a
 longer deadline, and both attempts remain recorded. Native ordinary validation
-and the complete deterministic bootstrap also passed. The explorer, realistic
-application corpus and remaining acceptance campaigns are still incomplete.
+and the complete deterministic bootstrap also passed. Explorer and the realistic application corpus were completed in the
+subsequent increments above. The remaining acceptance campaigns are open.
 
 ## Selected storage addresses and bitfield roles
 

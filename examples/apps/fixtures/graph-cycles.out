@@ -1,0 +1,8 @@
+nodes=7 edges=9 source=0
+0 distance=0 hops=0
+1 distance=3 hops=1
+2 distance=1 hops=1
+3 distance=6 hops=2
+4 distance=6 hops=3
+5 unreachable
+6 unreachable

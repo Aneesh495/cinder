@@ -15,3 +15,7 @@ flowchart TD
   GATE --> FULL{Every required reader connected and passed}
   FULL -->|yes| ACCEPT[Complete acceptance]
   FULL -->|no| OPEN[Incomplete manifest and nonzero outcome]
+
+  ApplicationCampaign[Normal-driver application campaign] --> ApplicationRaw[Objects, linker argv, reference runs and golden files]
+  ApplicationRaw --> ApplicationReader[Read-only coverage and observation reconstruction]
+  ApplicationReader --> Applications[Eight native applications with three multi-TU builds]

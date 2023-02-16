@@ -1,0 +1,5 @@
+count=1050 min=0 max=999 checksum=552133925925
+query=0 lower=0 upper=1
+query=32 lower=32 upper=83
+query=999 lower=1049 upper=1050
+query=1000 lower=1050 upper=1050

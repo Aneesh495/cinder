@@ -1,0 +1,21 @@
+push 1
+store 0
+push 1
+store 1
+load 1
+push 7
+lt
+jz 17
+load 0
+load 1
+mul
+store 0
+load 1
+push 1
+add
+store 1
+jmp 4
+load 0
+dup
+print
+halt

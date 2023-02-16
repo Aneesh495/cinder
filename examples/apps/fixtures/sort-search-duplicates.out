@@ -1,0 +1,6 @@
+count=10 min=-1000000 max=1000000 checksum=64000322
+query=-1000000 lower=0 upper=1
+query=-4 lower=1 upper=3
+query=8 lower=4 upper=7
+query=10 lower=9 upper=9
+query=1000000 lower=9 upper=10

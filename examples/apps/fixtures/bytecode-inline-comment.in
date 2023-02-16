@@ -1,0 +1,3 @@
+push 7 # operand
+print# output
+halt# stop

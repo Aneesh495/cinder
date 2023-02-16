@@ -159,6 +159,7 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
     if (source_root/'tests/test_mir_storage.py').is_file(): authored_commands = authored_commands | {'tests/test_mir_storage.py'}
     if (source_root/'tests/test_mir_program.py').is_file(): authored_commands = authored_commands | {'tests/test_mir_program.py'}
     if (source_root/'tests/test_explorer.py').is_file(): authored_commands = authored_commands | {'tests/test_explorer.py'}
+    if (source_root/'tests/test_application_evidence.py').is_file(): authored_commands = authored_commands | {'tests/test_application_evidence.py'}
     manifest=read(base,'manifest.json')
     require(manifest.get('schema')==2 and manifest.get('status')=='pass' and 'active_command' not in manifest, 'incomplete bootstrap')
     profile(manifest,'execution_profile')
@@ -227,6 +228,12 @@ def verify_bootstrap(base, source_root, seed_compiler=None):
         groups=[c for c in commands if c['role']==stage+'-authored-group']
         require({c['argv'][-1] for c in groups}==authored_groups and all(c['argv'][-2]==str(old_root/stage/'cindercc') for c in groups), 'missing full authored initializer group')
         verify_stage_control(base,stage,source_root,stages[stage]['executables']['cindercc'])
+        if (source_root/'tests/test_applications.py').is_file():
+            from application_evidence import verify_applications
+            reports=list((base/(stage+'-authored')/'.agent-local/applications').glob('*/run-*/report.json'))
+            require(len(reports)==1, 'missing or duplicated stage application evidence')
+            proof=verify_applications(reports[0].parent,source_root,base/stage/'cindercc')
+            require(proof['applications']==8 and proof['multi_translation_unit']==3, 'incomplete native stage applications')
     require(roles==collections.Counter(expected_roles), 'missing or extra bootstrap command roles')
     result=verify_generated(base/'generated',source_root,1000,{stage:stages[stage]['executables']['cindercc'] for stage in stages})
     require(result['summary_sha256']==manifest.get('generated_summary_sha256'), 'changed generated bootstrap subset')

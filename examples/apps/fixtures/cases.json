@@ -1,0 +1,537 @@
+{
+  "schema": 1,
+  "applications": [
+    {
+      "name": "word-frequency",
+      "units": [
+        "examples/apps/hash_words.c",
+        "examples/apps/wordfreq/table.c"
+      ],
+      "description": "Growing open-addressed FNV hash table, case folding, tokenization and callback sorting.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "prose",
+          "stdin": "word-frequency-prose.in",
+          "argv": [],
+          "stdout": "word-frequency-prose.out",
+          "stderr": "word-frequency-prose.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "rehash",
+          "stdin": "word-frequency-rehash.in",
+          "argv": [
+            "$FIXTURES/word-frequency-rehash.in"
+          ],
+          "stdout": "word-frequency-rehash.out",
+          "stderr": "word-frequency-rehash.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "empty",
+          "stdin": "word-frequency-empty.in",
+          "argv": [],
+          "stdout": "word-frequency-empty.out",
+          "stderr": "word-frequency-empty.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "long-token",
+          "stdin": "word-frequency-long-token.in",
+          "argv": [],
+          "stdout": "word-frequency-long-token.out",
+          "stderr": "word-frequency-long-token.err",
+          "exit": 2,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "graph",
+      "units": [
+        "examples/apps/graph.c",
+        "examples/apps/graph/algorithms.c"
+      ],
+      "description": "Directed adjacency lists, BFS hops and binary-heap Dijkstra distances.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "cycles",
+          "stdin": "graph-cycles.in",
+          "argv": [
+            "$FIXTURES/graph-cycles.in"
+          ],
+          "stdout": "graph-cycles.out",
+          "stderr": "graph-cycles.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "singleton",
+          "stdin": "graph-singleton.in",
+          "argv": [],
+          "stdout": "graph-singleton.out",
+          "stderr": "graph-singleton.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "pressure",
+          "stdin": "graph-pressure.in",
+          "argv": [],
+          "stdout": "graph-pressure.out",
+          "stderr": "graph-pressure.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "bad-edge",
+          "stdin": "graph-bad-edge.in",
+          "argv": [],
+          "stdout": "graph-bad-edge.out",
+          "stderr": "graph-bad-edge.err",
+          "exit": 2,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "json",
+      "units": [
+        "examples/apps/json.c"
+      ],
+      "description": "Bounded recursive ASCII JSON parser with Unicode escape and surrogate validation.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "nested",
+          "stdin": "json-nested.in",
+          "argv": [
+            "$FIXTURES/json-nested.in"
+          ],
+          "stdout": "json-nested.out",
+          "stderr": "json-nested.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "duplicate-keys",
+          "stdin": "json-duplicate-keys.in",
+          "argv": [],
+          "stdout": "json-duplicate-keys.out",
+          "stderr": "json-duplicate-keys.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "empty",
+          "stdin": "json-empty.in",
+          "argv": [],
+          "stdout": "json-empty.out",
+          "stderr": "json-empty.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "depth-boundary",
+          "stdin": "json-depth-boundary.in",
+          "argv": [],
+          "stdout": "json-depth-boundary.out",
+          "stderr": "json-depth-boundary.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "raw-nonascii",
+          "stdin": "json-raw-nonascii.in",
+          "argv": [],
+          "stdout": "json-raw-nonascii.out",
+          "stderr": "json-raw-nonascii.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "leading-zero",
+          "stdin": "json-leading-zero.in",
+          "argv": [],
+          "stdout": "json-leading-zero.out",
+          "stderr": "json-leading-zero.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "surrogate",
+          "stdin": "json-surrogate.in",
+          "argv": [],
+          "stdout": "json-surrogate.out",
+          "stderr": "json-surrogate.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "trailing-comma",
+          "stdin": "json-trailing-comma.in",
+          "argv": [],
+          "stdout": "json-trailing-comma.out",
+          "stderr": "json-trailing-comma.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "depth",
+          "stdin": "json-depth.in",
+          "argv": [],
+          "stdout": "json-depth.out",
+          "stderr": "json-depth.err",
+          "exit": 2,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "bytecode",
+      "units": [
+        "examples/apps/bytecode.c"
+      ],
+      "description": "Text bytecode loader and bounded stack VM with locals, branches, arithmetic and output.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "sum-loop",
+          "stdin": "bytecode-sum-loop.in",
+          "argv": [
+            "$FIXTURES/bytecode-sum-loop.in"
+          ],
+          "stdout": "bytecode-sum-loop.out",
+          "stderr": "bytecode-sum-loop.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "factorial",
+          "stdin": "bytecode-factorial.in",
+          "argv": [
+            "$FIXTURES/bytecode-factorial.in"
+          ],
+          "stdout": "bytecode-factorial.out",
+          "stderr": "bytecode-factorial.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "inline-comment",
+          "stdin": "bytecode-inline-comment.in",
+          "argv": [
+            "$FIXTURES/bytecode-inline-comment.in"
+          ],
+          "stdout": "bytecode-inline-comment.out",
+          "stderr": "bytecode-inline-comment.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "embedded-nul",
+          "stdin": "bytecode-embedded-nul.in",
+          "argv": [
+            "$FIXTURES/bytecode-embedded-nul.in"
+          ],
+          "stdout": "bytecode-embedded-nul.out",
+          "stderr": "bytecode-embedded-nul.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "underflow",
+          "stdin": "bytecode-underflow.in",
+          "argv": [
+            "$FIXTURES/bytecode-underflow.in"
+          ],
+          "stdout": "bytecode-underflow.out",
+          "stderr": "bytecode-underflow.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "loop",
+          "stdin": "bytecode-loop.in",
+          "argv": [
+            "$FIXTURES/bytecode-loop.in"
+          ],
+          "stdout": "bytecode-loop.out",
+          "stderr": "bytecode-loop.err",
+          "exit": 2,
+          "files": {}
+        },
+        {
+          "name": "bad-opcode",
+          "stdin": "bytecode-bad-opcode.in",
+          "argv": [
+            "$FIXTURES/bytecode-bad-opcode.in"
+          ],
+          "stdout": "bytecode-bad-opcode.out",
+          "stderr": "bytecode-bad-opcode.err",
+          "exit": 2,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "sort-search",
+      "units": [
+        "examples/apps/sort_search.c"
+      ],
+      "description": "Stable merge sort checked against callback qsort; lower/upper bound queries and dynamic input.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "duplicates",
+          "stdin": "sort-search-duplicates.in",
+          "argv": [
+            "-1000000",
+            "-4",
+            "8",
+            "10",
+            "1000000"
+          ],
+          "stdout": "sort-search-duplicates.out",
+          "stderr": "sort-search-duplicates.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "empty",
+          "stdin": "sort-search-empty.in",
+          "argv": [
+            "0"
+          ],
+          "stdout": "sort-search-empty.out",
+          "stderr": "sort-search-empty.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "reverse",
+          "stdin": "sort-search-reverse.in",
+          "argv": [
+            "0",
+            "32",
+            "999",
+            "1000"
+          ],
+          "stdout": "sort-search-reverse.out",
+          "stderr": "sort-search-reverse.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "invalid",
+          "stdin": "sort-search-invalid.in",
+          "argv": [],
+          "stdout": "sort-search-invalid.out",
+          "stderr": "sort-search-invalid.err",
+          "exit": 2,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "checksums",
+      "units": [
+        "examples/apps/crc.c"
+      ],
+      "description": "Streaming IEEE CRC32, checked bitwise implementation, Adler32 and FNV-1a over arbitrary bytes.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "standard",
+          "stdin": "checksums-standard.in",
+          "argv": [],
+          "stdout": "checksums-standard.out",
+          "stderr": "checksums-standard.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "empty",
+          "stdin": "checksums-empty.in",
+          "argv": [],
+          "stdout": "checksums-empty.out",
+          "stderr": "checksums-empty.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "binary",
+          "stdin": "checksums-binary.in",
+          "argv": [
+            "$FIXTURES/checksums-binary.in"
+          ],
+          "stdout": "checksums-binary.out",
+          "stderr": "checksums-binary.err",
+          "exit": 0,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "matrix",
+      "units": [
+        "examples/apps/matrix.c"
+      ],
+      "description": "Blocked dense binary64 multiplication with independent row/column checks and exact binary-fraction inputs.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "1x1",
+          "stdin": "matrix-1x1.in",
+          "argv": [
+            "1",
+            "1",
+            "0"
+          ],
+          "stdout": "matrix-1x1.out",
+          "stderr": "matrix-1x1.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "7x7",
+          "stdin": "matrix-7x7.in",
+          "argv": [
+            "7",
+            "2",
+            "42"
+          ],
+          "stdout": "matrix-7x7.out",
+          "stderr": "matrix-7x7.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "17x17",
+          "stdin": "matrix-17x17.in",
+          "argv": [
+            "17",
+            "3",
+            "123456"
+          ],
+          "stdout": "matrix-17x17.out",
+          "stderr": "matrix-17x17.err",
+          "exit": 0,
+          "files": {}
+        },
+        {
+          "name": "invalid",
+          "stdin": "matrix-invalid.in",
+          "argv": [
+            "0",
+            "1",
+            "0"
+          ],
+          "stdout": "matrix-invalid.out",
+          "stderr": "matrix-invalid.err",
+          "exit": 2,
+          "files": {}
+        }
+      ]
+    },
+    {
+      "name": "records-cli",
+      "units": [
+        "examples/apps/cli_multi.c",
+        "examples/apps/records/records.c"
+      ],
+      "description": "Multi-file CSV CLI: dynamic records, callback sorting, grouped aggregates and selected output files.",
+      "interpreter_exclusion": "External FILE/stdio, argv or libc calls are outside the interpreter profile.",
+      "cases": [
+        {
+          "name": "group",
+          "stdin": "records-cli-group.in",
+          "argv": [
+            "group",
+            "$FIXTURES/records-cli-group.in",
+            "$WORK/result.txt"
+          ],
+          "stdout": "records-cli-group.out",
+          "stderr": "records-cli-group.err",
+          "exit": 0,
+          "files": {
+            "result.txt": "records-cli-group.result"
+          }
+        },
+        {
+          "name": "select",
+          "stdin": "records-cli-select.in",
+          "argv": [
+            "select",
+            "$FIXTURES/records-cli-select.in",
+            "$WORK/result.txt",
+            "0",
+            "8"
+          ],
+          "stdout": "records-cli-select.out",
+          "stderr": "records-cli-select.err",
+          "exit": 0,
+          "files": {
+            "result.txt": "records-cli-select.result"
+          }
+        },
+        {
+          "name": "empty",
+          "stdin": "records-cli-empty.in",
+          "argv": [
+            "group",
+            "$FIXTURES/records-cli-empty.in",
+            "$WORK/result.txt"
+          ],
+          "stdout": "records-cli-empty.out",
+          "stderr": "records-cli-empty.err",
+          "exit": 0,
+          "files": {
+            "result.txt": "records-cli-empty.result"
+          }
+        },
+        {
+          "name": "bad-row",
+          "stdin": "records-cli-bad-row.in",
+          "argv": [
+            "group",
+            "$FIXTURES/records-cli-bad-row.in",
+            "$WORK/result.txt"
+          ],
+          "stdout": "records-cli-bad-row.out",
+          "stderr": "records-cli-bad-row.err",
+          "exit": 2,
+          "files": {
+            "result.txt": "records-cli-bad-row.result"
+          },
+          "previous_files": {
+            "result.txt": "records-cli-bad-row.previous"
+          }
+        },
+        {
+          "name": "embedded-nul",
+          "stdin": "records-cli-embedded-nul.in",
+          "argv": [
+            "group",
+            "$FIXTURES/records-cli-embedded-nul.in",
+            "$WORK/result.txt"
+          ],
+          "stdout": "records-cli-embedded-nul.out",
+          "stderr": "records-cli-embedded-nul.err",
+          "exit": 2,
+          "files": {
+            "result.txt": "records-cli-embedded-nul.result"
+          },
+          "previous_files": {
+            "result.txt": "records-cli-embedded-nul.previous"
+          }
+        }
+      ]
+    }
+  ]
+}

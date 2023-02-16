@@ -1,0 +1,4 @@
+records=6 groups=3
+alpha count=2 sum=12 min=4 max=8
+beta count=3 sum=15 min=-5 max=10
+gamma count=1 sum=0 min=0 max=0

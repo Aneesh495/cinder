@@ -24,7 +24,7 @@ GATES = {
 
 # Connect dedicated readers only after their complete campaign artifacts exist.
 # A threshold and a self-reported status are insufficient evidence.
-AUDITED_REPORT_READERS = frozenset(('nonvacuous-passes', 'self-hosting', 'private-size'))
+AUDITED_REPORT_READERS = frozenset(('nonvacuous-passes', 'self-hosting', 'private-size', 'applications'))
 
 
 def read_gate_report(key, report, source, base, compiler):
@@ -44,6 +44,11 @@ def read_gate_report(key, report, source, base, compiler):
         raw = artifact_path(base, report.get('raw_directory', ''))
         observed = verify_bootstrap(raw, source, compiler)
         count = observed['programs']
+    elif key == 'applications':
+        from application_evidence import verify_applications
+        raw = artifact_path(base, report.get('raw_directory', ''))
+        observed = verify_applications(raw, source, compiler)
+        count = observed['applications']
     elif key == 'private-size':
         import json
         from source_census import census

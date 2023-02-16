@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-mir-address test-mir-control test-mir-copies test-mir-material test-mir-storage test-mir-program test-explorer test-hir test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-unwind test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-mir-address test-mir-control test-mir-copies test-mir-material test-mir-storage test-mir-program test-explorer test-hir test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-application-evidence test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-unwind test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -243,6 +243,9 @@ test-varargs: build
 
 test-apps: build
 	@tests/run_apps.sh $(BUILD_DIR)/cindercc
+
+test-application-evidence:
+	@python3 tests/test_application_evidence.py $(BUILD_DIR)/cindercc
 
 test-generated: build
 	@python3 tools/run_defined_cases.py $(BUILD_DIR)/cindercc --count 1200 --output .agent-local/generated-summary.json
