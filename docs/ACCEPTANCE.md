@@ -1,84 +1,103 @@
 # Acceptance and artifact integrity
 
-`make verify` only reads existing evidence and bound source. It does not build
-or execute the compiler, launch campaign producers, generate reports or update
-gate values. Python bytecode writes
-are disabled in the wrapper. Source inventory includes tracked and untracked
-nonignored inputs, so an uncommitted edit or new configuration file invalidates
-the binding. Generated build configurations and the actual compiler binary have
-separate bindings. Referenced artifacts require exact byte sizes and hashes.
+`make acceptance` executes the complete native Linux x86-64 release contract.
+`make verify` only reads existing evidence and bound source. Verification never
+builds or executes the compiler, launches producers, changes reports or updates
+gate values. Python bytecode writes are disabled in the wrapper.
 
-`tools/gate_registry.py` records every required gate, command, unit, and minimum
-workload. The manifest must contain exactly that registry. Unknown/missing gates,
-incomplete status, wrong target profile, skipped commands, missing reports, stale
-source/configuration, substituted tools, and altered artifacts fail verification.
-Full gate results require dedicated readers that compute outcomes from actual
-raw campaign artifacts. Those readers and full runners are still being connected;
-the guard intentionally cannot report complete acceptance in their absence.
-
-`make acceptance` currently fails with an explicit incomplete manifest because
-the full campaign registry is unfinished. Individual application, bootstrap
-or optimizer results cannot substitute for the other required gates.
-The completed runner must execute the complete expensive registry and retain
-raw progress before this command can succeed.
-
-Four dedicated readers are connected. The pass reader reconstructs ten
-positive/negative transformation pairs and their native original objects. The
-self-hosting reader checks strict stage-one compilation, every actual source
-module compiled by the preceding Cinder stage, stage-two/three object and
-executable identity, complete authored stage suites and the generated native
-subset. It binds the seed compiler and rejects emulated or incomplete packages.
-The application reader reconstructs all eight real integrations, three multi-TU
-builds, frozen input/output observations, reference and sanitizer executions,
-original unit objects and object-only normal linker invocations. It requires
-native Linux execution for acceptance. The private census reader reconstructs
-the exact inventory and exclusion rules from bound source bytes without
-writing the census. Sixteen full-campaign readers remain open.
-
-`tools/acceptance.py run COMPILER` runs all implemented campaign producers.
-Repeated `--gate` options select partial generation, whose manifest records
-that choice and leaves other gates unverified. For example:
+The native environment needs CMake, GCC, Clang, LLVM inspection tools, binutils,
+GDB, Python 3 and authenticated GitHub CLI access. The publication gate checks
+`origin/main` and successful Linux validation and deterministic-bootstrap runs
+on the exact commit. The **Cinder complete acceptance** workflow provisions the
+declared environment and uploads the raw evidence as a tar.gz archive.
 
 ```sh
-python3 -B tools/acceptance.py run build/cindercc --gate nonvacuous-passes --gate private-size
+make build
+make acceptance
+make verify
 ```
 
-`--bootstrap-evidence PATH` imports a complete retained bootstrap after the
-same source/seed verification used for fresh generation. Fresh bootstrap runs
-use separate owned directories and retain failure artifacts. Commands preserve
-actual argv, output, exit or timeout, and elapsed time. Complete acceptance
-requires every required gate to pass its dedicated reader.
-See [the editable reader flow](diagrams/acceptance-readers.mmd).
+## Required campaigns
 
-Hosted artifacts contain a tar.gz transport archive. This preserves POSIX
-filenames exercised by dependency/recovery tests, including colon-containing
-header names, which the artifact service cannot upload as individual paths.
-Extract into a separate directory before invoking the readers. On Python 3.12
-or later, use the data extraction filter:
+| Gate | Minimum workload |
+| --- | --- |
+| Fresh builds | Four strict GCC/Clang profiles, including ASan/UBSan |
+| Original native pipeline | Original objects and normal driver linking, including multiple translation units |
+| Feature families | 48 source-linked language families with reference, interpreter, native and diagnostic observations |
+| Authored suite | All authored source cases, at least 1,200 |
+| Differential programs | 20,000 distinct bounded eligible programs, GCC/Clang/Cinder at O0/O2 and IR comparisons |
+| IR semantics | 100,000 archived typed IR cases, round trips and optimized comparisons |
+| Rewrite validation | At least 50,000 independently modeled defined inputs and invalid-precondition controls |
+| Nonvacuous passes | Ten positive/negative transformation pairs |
+| ABI | 512 scalar, 512 aggregate and 512 variadic signatures, both directions and both reference toolchains |
+| Allocation | 10,000 pressure graphs plus 1,000 rejected mutations |
+| Object output | 1,000 two-unit probes, O0/O2, original and independently assembled native objects |
+| Debugging | At least 25 actual GDB sessions plus independent DWARF and instruction checks |
+| Native fuzzing | One million executions per instrumented preprocessor, parser, IR and object target |
+| Failure recovery | 1,000 failed operations followed by successful compilation |
+| Applications | Eight real applications, including three multi-TU builds and forty frozen cases |
+| Self-hosting | Every compiler module compiled through Cinder; identical stage-two/three objects and executables; 1,000 native generated programs |
+| Performance | Frozen integer, floating and memory workloads; three compilers, O0/O2 and five execution samples per cell |
+| Documentation product | Actual CLI, driver and eight offline explorer profiles |
+| Publication | Exact published and hosted-tested tip |
+| Private census | Recomputed substantive production source inventory |
+
+`tools/gate_registry.py` owns the machine-readable registry. Its workload
+thresholds are unchanged. Every report dispatches to a dedicated reader that
+reconstructs the relevant raw artifacts. Missing, unknown, skipped, nonnative,
+truncated, altered or stale evidence fails. Status becomes `complete` only
+after every required reader passes.
+
+Source inventory includes tracked and untracked nonignored inputs. Generated
+build configurations and compiler bytes have separate bindings. Referenced
+artifacts require exact byte sizes and SHA-256 hashes. Readers check command
+roles, compiler boundaries, actual target ELF artifacts, source oracles,
+reference/native/interpreter outcomes and observed workload totals.
+
+## Individual campaigns
+
+Repeated `--gate` options generate selected evidence. A partial run remains
+incomplete and returns failure even when every selected campaign passes.
 
 ```sh
-python3 -c 'import tarfile; tarfile.open("cinder-bootstrap.tar.gz").extractall("extracted", filter="data")'
-python3 -B tests/test_native_evidence.py extracted/.agent-local/selfhost/RUN
+python3 -B tools/acceptance.py run build/cindercc --gate applications --gate private-size
+make test-source-buffers test-fuzz-regressions
+make fuzz
+make test-recovery
+make benchmark
+make demo
 ```
 
-Use the actual retained run directory for `RUN`. The archive does not rename,
-omit or regenerate raw evidence; existing source/tool/artifact bindings apply
-after extraction.
+For macOS fuzz development, use `make fuzz FUZZ_CC=/opt/homebrew/opt/llvm/bin/clang`
+with a Clang installation containing libFuzzer. Native acceptance still requires
+Linux x86-64. Fuzz reports retain initial source/CIR seeds, mutated corpora,
+instrumented targets, actual coverage logs and pipeline counters. Sanitizer
+failures, harness I/O errors, empty downstream coverage and unresolved crash or
+timeout artifacts fail the reader.
 
-Ordinary Linux CI runs incremental frontend/native/object checks, the typed IR
-campaign, sanitizer build, and integrity regression tests. It writes
-`INCREMENTAL.json`, whose status is partial and whose purpose is explicit.
-Incremental validation does not write a successful `ACCEPTANCE.json`.
-Environment flags cannot assert native execution or skip required workloads.
+`--bootstrap-evidence PATH` imports a complete retained bootstrap only after
+source and seed verification. Fresh campaigns use unique directories and retain
+failure artifacts. Performance reports record measurements without imposing an
+unsupported speed claim.
 
-`tests/test_evidence.py` checks deleted objects, changed reference output,
-substituted compiler bytes, uncommitted/new source inputs, generated configuration
-changes, corrupted bootstrap bindings, vacuous/incomplete manifests, and truncated
-reports. Its positive fixtures test hash-binding primitives only and cannot pass
-full acceptance. A subprocess verification also checks file hashes/timestamps
-before and after to detect writes.
+## Evidence transport and integrity tests
 
-The source census is ignored private state. Counting is quote-aware and excludes
-comments, blank/punctuation-only lines, directive continuations, and API prototype
-boilerplate. It does not print production counts to CI logs. Final private
-accounting still needs the reconstruction ledger and exclusion audit.
+Hosted artifacts use tar.gz transport to preserve original POSIX filenames,
+including colon-containing dependency-test names. Extract into a separate
+directory. On Python 3.12 or newer, use the data extraction filter:
+
+```sh
+python3 -c 'import tarfile; tarfile.open("cinder-complete-acceptance.tar.gz").extractall("extracted", filter="data")'
+```
+
+Run the readers against the matching source checkout and recorded compiler.
+The archive does not rename, regenerate or omit raw evidence. Source and tool
+bindings continue to apply after extraction.
+
+`tests/test_evidence.py` checks source, configuration, compiler and artifact
+substitution and verifies that failed verification is read-only.
+`tests/test_release_evidence.py` checks every successful full gate and rejects
+sixty altered gate envelopes without modifying artifacts. Existing application,
+pass, census, rewrite and bootstrap readers also retain their corruption controls.
+Ordinary Linux CI writes a separate partial `INCREMENTAL.json`; it cannot
+substitute for complete acceptance.

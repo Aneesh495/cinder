@@ -24,7 +24,7 @@ GATES = {
 
 # Connect dedicated readers only after their complete campaign artifacts exist.
 # A threshold and a self-reported status are insufficient evidence.
-AUDITED_REPORT_READERS = frozenset(('nonvacuous-passes', 'self-hosting', 'private-size', 'applications'))
+AUDITED_REPORT_READERS = frozenset(GATES)
 
 
 def read_gate_report(key, report, source, base, compiler):
@@ -58,8 +58,20 @@ def read_gate_report(key, report, source, base, compiler):
         if declared != observed:
             raise EvidenceError('private census does not match recomputed source inventory')
         count = observed['total_substantive_lines']
+    elif key == 'native-fuzzing':
+        import json
+        from release_evidence import verify_fuzz
+        raw = artifact_path(base, report.get('raw_directory', ''))
+        data = json.loads((raw / 'summary.json').read_text())
+        if data.get('machine', {}).get('system') != 'Linux' or data['machine'].get('machine') != 'x86_64':
+            raise EvidenceError('fuzz acceptance requires native Linux x86-64')
+        observed = verify_fuzz(raw, source, compiler)
+        count = observed['executions']
     else:
-        raise EvidenceError('no dispatch for audited reader: ' + key)
+        from release_evidence import verify_campaign
+        raw = artifact_path(base, report.get('raw_directory', ''))
+        count = verify_campaign(key, raw, source, compiler)
+        observed = dict(observations=count)
     if type(report.get('observations')) is not int or report['observations'] != count or count < GATES[key]['minimum']:
         raise EvidenceError('declared gate progress disagrees with raw observations: ' + key)
     return observed

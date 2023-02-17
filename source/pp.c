@@ -83,7 +83,12 @@ static char *join_path(const char *directory, size_t directory_length, const cha
     return path;
 }
 
-static bool readable(const char *path) {
+static bool readable(PP *pp, const char *path) {
+    if (pp->sources->buffered_only) {
+        for (size_t i = 0U; i < pp->sources->files.len; ++i)
+            if (strcmp(pp->sources->files.data[i].path, path) == 0) return pp->sources->files.data[i].valid;
+        return false;
+    }
     FILE *file = fopen(path, "rb");
     if (file == NULL) return false;
     fclose(file);
@@ -91,18 +96,18 @@ static bool readable(const char *path) {
 }
 
 static char *resolve_include(PP *pp, const char *current, const char *name, bool quoted) {
-    if (name[0] == '/') return readable(name) ? cinder_strndup(name, strlen(name)) : NULL;
+    if (name[0] == '/') return readable(pp, name) ? cinder_strndup(name, strlen(name)) : NULL;
     if (quoted) {
         const char *slash = strrchr(current, '/');
         size_t length = slash == NULL ? 0U : (size_t)(slash - current + 1U);
         char *candidate = join_path(current, length, name);
-        if (candidate != NULL && readable(candidate)) return candidate;
+        if (candidate != NULL && readable(pp, candidate)) return candidate;
         free(candidate);
     }
     for (size_t i = 0U; i < pp->include_dirs.len; ++i) {
         const char *directory = pp->include_dirs.data[i];
         char *candidate = join_path(directory, strlen(directory), name);
-        if (candidate != NULL && readable(candidate)) return candidate;
+        if (candidate != NULL && readable(pp, candidate)) return candidate;
         free(candidate);
     }
     return NULL;
@@ -182,7 +187,7 @@ int pp_process(PP *pp, const char *path, unsigned depth, CinderLoc included_from
         cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "include nesting limit exceeded");
         return 1;
     }
-    char *canonical = realpath(path, NULL);
+    char *canonical = pp->sources->buffered_only ? NULL : realpath(path, NULL);
     size_t first_diagnostic = pp->diags->items.len;
     CinderFileId id = cinder_source_load_diagnostic(pp->sources, canonical == NULL ? path : canonical, pp->diags);
     free(canonical);

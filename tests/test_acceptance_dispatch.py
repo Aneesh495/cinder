@@ -20,7 +20,7 @@ base = root / '.agent-local/evidence'
 manifest = base / 'ACCEPTANCE.json'
 data = json.loads(manifest.read_text())
 assert data['status'] == 'incomplete' and 'nonvacuous-passes' not in data['open_campaign_readers']
-assert data['open_campaign_readers'], 'this test requires remaining incomplete campaign readers'
+assert not data['open_campaign_readers'], 'all complete campaign readers must be connected'
 assert 'self-hosting' not in data['open_campaign_readers']
 assert data['gates']['self-hosting']['status'] == 'unverified'
 assert 'not selected' in data['gates']['self-hosting']['reason']

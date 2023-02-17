@@ -133,6 +133,43 @@ def census_campaign(root, evidence, compiler, source_sha256):
     return name
 
 
+def release_campaign(key, root, evidence, compiler, source_sha256):
+    raw = evidence / 'raw' / key / uuid.uuid4().hex
+    if key == 'native-fuzzing':
+        build = root / 'build-release-fuzz'
+        configure = ['cmake', '-S', str(root), '-B', str(build), '-DCMAKE_C_COMPILER=clang',
+                     '-DCINDER_SANITIZE=ON', '-DCINDER_FUZZING=ON', '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
+        result = campaign_command(configure, root, evidence / 'fuzz-configure.command.json', 300)
+        if result.returncode != 0:
+            raise EvidenceError('instrumented fuzz configuration failed')
+        result = campaign_command(['cmake', '--build', str(build), '--parallel', '4', '--target',
+                                   'cinder_fuzz_pp', 'cinder_fuzz_parser', 'cinder_fuzz_ir', 'cinder_fuzz_object'],
+                                  root, evidence / 'fuzz-build.command.json', 1800)
+        if result.returncode != 0:
+            raise EvidenceError('instrumented fuzz build failed')
+        command = [sys.executable, '-B', str(root / 'tools/fuzz_campaign.py'), str(build),
+                   '--compiler', str(compiler), '--output', str(raw)]
+    else:
+        command = [sys.executable, '-B', str(root / 'tools/release_campaigns.py'), key,
+                   str(compiler), '--output', str(raw)]
+    result = campaign_command(command, root, evidence / (key + '.command.json'), 28800)
+    if result.returncode != 0:
+        raise EvidenceError(key + ' campaign failed; raw commands and artifacts retained')
+    if key == 'native-fuzzing':
+        from release_evidence import verify_fuzz
+        count = verify_fuzz(raw, root, compiler)['executions']
+    else:
+        from release_evidence import verify_campaign
+        count = verify_campaign(key, raw, root, compiler)
+    report = dict(schema=2, gate=key, source_sha256=source_sha256, compiler_sha256=digest(compiler),
+                  status='pass', unit=GATES[key]['unit'], observations=count,
+                  raw_directory=str(raw.relative_to(evidence)))
+    read_gate_report(key, report, root, evidence, compiler)
+    name = key + '.json'
+    (evidence / name).write_text(json.dumps(report, indent=2) + '\n')
+    return name
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', choices=('snapshot', 'run'))
@@ -181,7 +218,7 @@ def main():
     missing = sorted(set(GATES) - AUDITED_REPORT_READERS)
     payload['open_campaign_readers'] = missing
     native = profile['system'] == 'Linux' and profile['machine'] == 'x86_64'
-    for key in sorted(AUDITED_REPORT_READERS):
+    for key in sorted(AUDITED_REPORT_READERS, key=lambda key: (key == 'publication', key)):
         if key not in requested:
             payload['gates'][key]['reason'] = 'campaign was not selected for this generation'
             continue
@@ -189,6 +226,7 @@ def main():
             payload['gates'][key]['reason'] = 'requires native Linux x86-64 execution'
             continue
         try:
+            print('Running acceptance gate: ' + key, flush=True)
             if key == 'nonvacuous-passes':
                 report = pass_campaign(root, evidence, compiler, payload['source_sha256'])
             elif key == 'self-hosting':
@@ -198,22 +236,26 @@ def main():
             elif key == 'private-size':
                 report = census_campaign(root, evidence, compiler, payload['source_sha256'])
             else:
-                raise EvidenceError('implemented reader has no campaign producer: ' + key)
+                report = release_campaign(key, root, evidence, compiler, payload['source_sha256'])
             payload['gates'][key].update(status='pass', report=report)
+            print('Passed acceptance gate: ' + key, flush=True)
         except (EvidenceError, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
             payload['gates'][key].update(status='failed', reason=str(error))
+            print('Failed acceptance gate: ' + key + ': ' + str(error), flush=True)
+        (evidence / 'progress.json').write_text(json.dumps(payload['gates'], indent=2) + '\n')
     payload['artifacts'] = {str(path.relative_to(evidence)): dict(bytes=path.stat().st_size, sha256=digest(path))
                             for path in sorted(evidence.rglob('*')) if path.is_file()
                             and path.name not in ('ACCEPTANCE.json', 'INCREMENTAL.json')}
     if source_inputs(root) != inputs:
         raise EvidenceError('source inputs changed during acceptance execution')
     complete = not missing and all(gate['status'] == 'pass' for gate in payload['gates'].values())
-    payload['status'] = 'pass' if complete else 'incomplete'
+    payload['status'] = 'complete' if complete else 'incomplete'
     (evidence / 'ACCEPTANCE.json').write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n')
     if complete:
         print('Full acceptance passed with independently verified campaign artifacts.')
         return 0
-    print('Full acceptance is incomplete: complete campaign runners/readers are not connected for ' + ', '.join(missing), file=sys.stderr)
+    failed = [key for key, value in payload['gates'].items() if value['status'] != 'pass']
+    print('Full acceptance is incomplete: ' + ', '.join(failed), file=sys.stderr)
     return 1
 
 if __name__ == '__main__':

@@ -125,6 +125,7 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
     if (type->complete) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate tag is already defined");
     if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
+        size_t member_start = ast->cursor;
         if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); continue; }
         DeclarationSpec spec = {0};
         CinderType *field_base = parse_declaration_specifiers(ast, &spec);
@@ -153,6 +154,9 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
             cinder_vec_push((CinderVec *)&type->fields, &field);
         } while (take(ast, ','));
         (void)expect(ast, ';', "';'");
+        /* A malformed member need not consume a declarator or semicolon.
+         * Keep recovery moving even when both parsers reject the same token. */
+        if (ast->cursor == member_start) ++ast->cursor;
     }
     (void)expect(ast, '}', "'}'");
     --ast->aggregate_depth;

@@ -103,12 +103,14 @@ typedef struct {
     CINDER_VEC_TYPE(CinderDisplayName) display_names;
     char *preprocessed;
     size_t preprocessed_size;
+    bool buffered_only;
 } CinderSourceManager;
 
 void cinder_sources_init(CinderSourceManager *sources);
 void cinder_sources_destroy(CinderSourceManager *sources);
 CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, FILE *err);
 CinderFileId cinder_source_load_diagnostic(CinderSourceManager *sources, const char *path, CinderDiagnostics *diags);
+CinderFileId cinder_source_buffer(CinderSourceManager *sources, const char *path, const char *text, size_t length, CinderDiagnostics *diags);
 CinderSourceFile *cinder_source_get(CinderSourceManager *sources, CinderFileId id);
 CinderLoc cinder_loc(CinderFileId file, size_t offset, size_t length);
 void cinder_loc_linecol(CinderSourceManager *sources, CinderLoc *loc);

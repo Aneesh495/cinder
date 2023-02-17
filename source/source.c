@@ -64,6 +64,7 @@ void cinder_sources_init(CinderSourceManager *sources) {
     sources->display_names.data = NULL; sources->display_names.len = 0U; sources->display_names.cap = 0U;
     sources->preprocessed = NULL;
     sources->preprocessed_size = 0U;
+    sources->buffered_only = false;
 }
 
 void cinder_sources_destroy(CinderSourceManager *sources) {
@@ -96,6 +97,10 @@ static CinderFileId load_source(CinderSourceManager *sources, const char *path, 
             return sources->files.data[i].valid ? sources->files.data[i].id : CINDER_NO_FILE;
         }
     }
+    if (sources->buffered_only) {
+        source_error(err, diags, path, "input is absent from the buffered source set");
+        return CINDER_NO_FILE;
+    }
     size_t size = 0U;
     char *bytes = read_file(path, &size, err, diags);
     if (bytes == NULL) {
@@ -120,6 +125,26 @@ static CinderFileId load_source(CinderSourceManager *sources, const char *path, 
 
 CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, FILE *err) { return load_source(sources, path, err, NULL); }
 CinderFileId cinder_source_load_diagnostic(CinderSourceManager *sources, const char *path, CinderDiagnostics *diags) { return load_source(sources, path, NULL, diags); }
+
+CinderFileId cinder_source_buffer(CinderSourceManager *sources, const char *path, const char *text, size_t length, CinderDiagnostics *diags) {
+    if (path == NULL || path[0] == '\0' || (text == NULL && length != 0U) || length > 16U * 1024U * 1024U || sources->files.len >= UINT32_MAX) {
+        cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "invalid buffered source name or extent");
+        return CINDER_NO_FILE;
+    }
+    for (size_t i = 0U; i < sources->files.len; ++i) if (strcmp(sources->files.data[i].path, path) == 0) {
+        cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "buffered source already exists: %s", path);
+        return CINDER_NO_FILE;
+    }
+    CinderSourceFile file; file.id = (CinderFileId)(sources->files.len + 1U);
+    file.path = cinder_strndup(path, strlen(path)); file.bytes = cinder_strndup(text == NULL ? "" : text, length); file.size = length;
+    size_t invalid = 0U; file.valid = cinder_utf8_validate(file.bytes, length, &invalid);
+    cinder_vec_push((CinderVec *)&sources->files, &file);
+    if (!file.valid) {
+        cinder_diag(diags, CINDER_ERROR, cinder_loc(file.id, invalid, 1U), "invalid UTF-8 or embedded NUL at byte %zu", invalid);
+        return CINDER_NO_FILE;
+    }
+    return file.id;
+}
 
 CinderSourceFile *cinder_source_get(CinderSourceManager *sources, CinderFileId id) {
     if (id == CINDER_NO_FILE || id > sources->files.len) {

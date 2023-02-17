@@ -72,7 +72,7 @@ The implementation separates source/diagnostics, tokens/preprocessing, types/par
 
 ## Current status
 
-See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for commands actually run, evidence paths, known limitations, and the next engineering increment. This is an engineering status document, not a claim of ISO C conformance or completed acceptance gates.
+See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for the finished profile and deliberate limits, and [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) for the twenty-gate native release contract. `make acceptance` executes every campaign; `make verify` checks the retained evidence against the exact source and compiler. The **Cinder complete acceptance** workflow publishes the raw completion record.
 
 ## References
 

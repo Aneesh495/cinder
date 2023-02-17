@@ -1,8 +1,9 @@
 BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
+FUZZ_CC ?= clang
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-mir-address test-mir-control test-mir-copies test-mir-material test-mir-storage test-mir-program test-explorer test-hir test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-application-evidence test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-unwind test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-interpreter-calls test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-optimizer test-passes test-pointer-words test-rewrites test-constraints test-numeric test-storage test-allocation test-mir test-mir-abi test-mir-scalar test-mir-address test-mir-control test-mir-copies test-mir-material test-mir-storage test-mir-program test-explorer test-hir test-driver test-source-instances test-prefix-maps test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-application-evidence test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-unwind test-debug test-output test-source-buffers test-fuzz-regressions test-recovery fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -286,19 +287,29 @@ test-debug: build
 	@$(CMAKE) --build $(BUILD_DIR) --target cinder_unwind_probe cinder_debug_line_probe cinder_debug_type_probe --parallel
 	@tests/run_debug.sh $(BUILD_DIR)/cindercc
 
+test-source-buffers: build
+	@$(CMAKE) --build $(BUILD_DIR) --target cinder_source_buffer_probe --parallel
+	@python3 -B tests/test_source_buffers.py $(BUILD_DIR)/cindercc
+
+test-fuzz-regressions: build
+	@python3 -B tests/test_fuzz_regressions.py $(BUILD_DIR)/cindercc
+
+test-recovery: build
+	@python3 -B tools/release_campaigns.py failure-recovery $(BUILD_DIR)/cindercc --output ".agent-local/recovery/$$(date -u +%Y%m%dT%H%M%SZ)-$$$$"
+
 fuzz: build
-	@echo 'Fuzz harnesses are built from tests/fuzz and require a sanitizer profile.'
-	@$(CMAKE) -S . -B $(BUILD_DIR)-asan -DCINDER_SANITIZE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-	@$(CMAKE) --build $(BUILD_DIR)-asan --parallel
+	@$(CMAKE) -S . -B $(BUILD_DIR)-fuzz -DCMAKE_C_COMPILER=$(FUZZ_CC) -DCINDER_SANITIZE=ON -DCINDER_FUZZING=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+	@$(CMAKE) --build $(BUILD_DIR)-fuzz --target cinder_fuzz_pp cinder_fuzz_parser cinder_fuzz_ir cinder_fuzz_object --parallel
+	@python3 -B tools/fuzz_campaign.py $(BUILD_DIR)-fuzz --compiler $(BUILD_DIR)/cindercc --output ".agent-local/fuzz/$$(date -u +%Y%m%dT%H%M%SZ)-$$$$"
 
 selfhost: build
 	@tests/selfhost.sh $(BUILD_DIR)/cindercc
 
 benchmark: build
-	@tests/benchmark.sh $(BUILD_DIR)/cindercc
+	@python3 -B tools/release_campaigns.py performance $(BUILD_DIR)/cindercc --output ".agent-local/performance/$$(date -u +%Y%m%dT%H%M%SZ)-$$$$"
 
 demo: build
-	@tests/demo.sh $(BUILD_DIR)/cindercc
+	@python3 -B tools/release_campaigns.py documentation-product $(BUILD_DIR)/cindercc --output ".agent-local/product/$$(date -u +%Y%m%dT%H%M%SZ)-$$$$"
 
 acceptance: build
 	@tests/acceptance.sh $(BUILD_DIR)/cindercc
