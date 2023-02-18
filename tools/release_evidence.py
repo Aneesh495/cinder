@@ -7,7 +7,7 @@ import shlex
 import statistics
 import sys
 
-from evidence_integrity import EvidenceError, artifact_path, digest, inventory_digest, source_inputs
+from evidence_integrity import EvidenceError, artifact_path, digest, inventory_digest, revision, source_inputs
 from native_evidence import elf, hashed, read, require, verify_generated
 
 
@@ -25,6 +25,11 @@ def verify_fuzz(base, source, compiler, minimum=1000000):
     require(summary.get('schema')==1 and summary.get('status')=='pass', 'incomplete fuzz campaign')
     require(summary.get('inputs')==source_inputs(source) and summary.get('source_sha256')==inventory_digest(source_inputs(source)), 'fuzz source changed')
     require(summary.get('compiler_sha256')==digest(compiler), 'fuzz seed compiler changed')
+    require(set(summary.get('build_profile',{}))=={'CMakeCache.txt','core-flags.make'}, 'missing instrumented build configuration')
+    for name,value in summary['build_profile'].items():hashed(base,'build-profile/'+name,value)
+    cache=(base/'build-profile/CMakeCache.txt').read_text()
+    flags=(base/'build-profile/core-flags.make').read_text()
+    require('CINDER_FUZZING:BOOL=ON' in cache and 'CINDER_SANITIZE:BOOL=ON' in cache and '-fsanitize=fuzzer-no-link' in flags and '-fsanitize=address,undefined' in flags,'compiler core lacks coverage or sanitizers')
     require(all(summary.get(k)==v for k,v in configuration.items() if k!='stages'), 'changed fuzz configuration')
     require(set(summary.get('stages',{}))=={'pp','parser','ir','object'}, 'missing fuzz target')
     require(len(summary.get('source_seeds',{}))>=32 and len(summary.get('ir_seeds',{}))>=16, 'vacuous fuzz seed corpus')
@@ -66,6 +71,7 @@ def common(gate,base,source,compiler):
     inputs=source_inputs(source)
     require(data.get('schema')==1 and data.get('status')=='pass' and data.get('gate')==gate, 'incomplete release campaign')
     require(data.get('inputs')==inputs and data.get('source_sha256')==inventory_digest(inputs), 'release campaign source mismatch')
+    require(data.get('source_revision')==revision(source), 'release campaign revision mismatch')
     require(data.get('compiler_sha256')==digest(compiler), 'release compiler mismatch')
     hashed(base,'compiler',digest(compiler))
     require(data.get('native') is True and data.get('machine',{}).get('system')=='Linux' and data['machine'].get('machine')=='x86_64', 'native Linux evidence required')
@@ -94,12 +100,16 @@ def verify_campaign(gate,base,source,compiler):
         modules={str(p.relative_to(source)) for p in (source/'source').glob('*.c')}
         for name,host,kind,sanitize in BUILD_PROFILES:
             for action in ('version','configure','build','smoke','regressions','buffers'):command(name+'-'+action)
+            host_path=Path(command(name+'-version')['argv'][0])
+            host_record=data.get('host_compilers',{}).get(name,{})
+            require(host_record.get('path')==str(host_path),'substituted host compiler path')
+            elf(hashed(base,name+'-host-compiler',host_record.get('sha256')),(2,3))
             rows=read(base,name+'/compile_commands.json');observed=set()
             for row in rows:
                 path=Path(row['file']);relative='source/'+path.name
                 if relative not in modules:continue
                 argv=shlex.split(row['command'])
-                require('-std=c17' in argv and '-Werror' in argv and '-c' in argv, 'non-strict host profile')
+                require(argv[0]==str(host_path) and '-std=c17' in argv and '-Werror' in argv and '-c' in argv, 'non-strict host profile')
                 if sanitize:require('-fsanitize=address,undefined' in argv, 'missing host sanitizers')
                 observed.add(relative)
             require(observed==modules, 'host profile omitted a compiler source')
@@ -127,6 +137,8 @@ def verify_campaign(gate,base,source,compiler):
             for result in roles(name+'-reference'):require(result['exit']==expected and result['stdout']==result['stderr']=='','feature reference disagreement')
             require(len(roles(name+'-compile'))==len(roles(name+'-link'))==len(roles(name+'-native'))==len(roles(name+'-interpret'))==2,'incomplete feature levels')
             for result in roles(name+'-compile'):owned(result,['-c','-fverify-each'])
+            require({r['argv'][1] for r in roles(name+'-compile')}=={'-O0','-O2'}, 'missing feature optimization level')
+            require({r['argv'][0] for r in roles(name+'-reference-compile')}=={'gcc','clang'}, 'missing independent feature toolchain')
             for result in roles(name+'-native'):require(result['exit']==expected and not result['stdout'] and not result['stderr'],'feature native discrepancy')
             for result in roles(name+'-interpret'):require(result['stdout']==f'interpret main => {expected}\n','feature interpreter discrepancy')
             require(len(roles(name+'-negative'))==len(spec['negative']),'missing family rejection')
@@ -181,12 +193,16 @@ def verify_campaign(gate,base,source,compiler):
             failed=command(str(index)+'-failure',1);recovered=command(str(index)+'-recovered')
             owned(failed,[]);owned(recovered,['-c'])
             require(failed['stderr'] and 'error' in failed['stderr'].lower(),'failure produced no diagnostic')
+            require((base/f'case-{index:04d}/after-failure.bin').read_text()==f'previous complete artifact {index}\n', 'failed operation replaced the previous artifact')
             elf(hashed(base,f'case-{index:04d}/result',row.get('object_sha256')),(1,))
         require(len(commands)==2*len(rows),'missing recovery command');return len(rows)
     if gate=='performance':
         from release_campaigns import BENCHMARKS
         measurements=data.get('measurements',[])
         require(len(measurements)==18,'incomplete native benchmark matrix')
+        require({(r['workload'],r['tool'],r['level']) for r in measurements}=={(n,t,l) for n in BENCHMARKS for t in ('gcc','clang','cinder') for l in ('-O0','-O2')}, 'missing or duplicate benchmark cell')
+        for name in BENCHMARKS:
+            require(len({r['expected'] for r in measurements if r['workload']==name})==1, 'benchmark reference disagreement')
         for name,text in BENCHMARKS.items():require((base/(name+'.c')).read_text()==text,'changed frozen benchmark source')
         for row in measurements:
             name,tool,level=row['workload'],row['tool'],row['level'];prefix=name+'-'+tool+level
@@ -207,7 +223,7 @@ def verify_campaign(gate,base,source,compiler):
         return 1
     if gate=='publication':
         remote=command('remote');require(remote['argv']==['git','ls-remote','origin','refs/heads/main'],'wrong publication query')
-        require(remote['stdout'].strip()==data.get('revision','')+'\trefs/heads/main','published tip differs from tested source')
+        require(data.get('revision')==revision(source) and remote['stdout'].strip()==data['revision']+'\trefs/heads/main','published tip differs from tested source')
         rows=json.loads(command('hosted')['stdout']).get('workflow_runs',[])
         verified={row['name'] for row in rows if row.get('head_sha')==data['revision'] and row.get('conclusion')=='success' and row.get('status')=='completed'}
         require({'Cinder Linux validation','Cinder deterministic bootstrap'}<=verified,'tested tip lacks successful hosted validation and bootstrap')
@@ -284,6 +300,10 @@ def verify_abi(base,source,compiler):
             references=8 if module is aggregate else 4
             native=16 if module is aggregate else 8
             require(observed['native']==native and observed['reference']==references and row.get('native_executions')==native and row.get('reference_executions')==references,'missing bidirectional ABI comparisons')
+            expected_native={f'{mode}{level}-{host}'+(host_level if module is aggregate else '') for mode in ('provider','caller') for level in ('-O0','-O2') for host in (0,1) for host_level in (('-O0','-O2') if module is aggregate else ('',))}
+            expected_reference={f'reference-{mode}-{host}'+(level if module is aggregate else '') for mode in ('provider','caller') for host in (0,1) for level in (('-O0','-O2') if module is aggregate else ('',))}
+            require({Path(r['argv'][0]).name for r in record['commands'] if r['role']=='native'}==expected_native, 'missing mixed-toolchain ABI execution')
+            require({Path(r['argv'][0]).name for r in record['commands'] if r['role']=='reference'}==expected_reference, 'missing ABI reference level')
         count+=len(rows)
     return count
 

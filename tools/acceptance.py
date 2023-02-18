@@ -154,7 +154,7 @@ def release_campaign(key, root, evidence, compiler, source_sha256):
                    str(compiler), '--output', str(raw)]
     result = campaign_command(command, root, evidence / (key + '.command.json'), 28800)
     if result.returncode != 0:
-        raise EvidenceError(key + ' campaign failed; raw commands and artifacts retained')
+        raise EvidenceError(key + ' campaign failed; raw commands and artifacts retained\n' + result.stderr[-2500:])
     if key == 'native-fuzzing':
         from release_evidence import verify_fuzz
         count = verify_fuzz(raw, root, compiler)['executions']
@@ -239,7 +239,7 @@ def main():
                 report = release_campaign(key, root, evidence, compiler, payload['source_sha256'])
             payload['gates'][key].update(status='pass', report=report)
             print('Passed acceptance gate: ' + key, flush=True)
-        except (EvidenceError, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
+        except (EvidenceError, OSError, ValueError, KeyError, AssertionError, StopIteration, subprocess.TimeoutExpired) as error:
             payload['gates'][key].update(status='failed', reason=str(error))
             print('Failed acceptance gate: ' + key + ': ' + str(error), flush=True)
         (evidence / 'progress.json').write_text(json.dumps(payload['gates'], indent=2) + '\n')

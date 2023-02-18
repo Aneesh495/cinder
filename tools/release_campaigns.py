@@ -122,6 +122,8 @@ def fresh(c):
     for name, host, kind, sanitize in BUILD_PROFILES:
         directory = c.output/name
         cc = str(Path(shutil.which(host)).resolve())
+        c.retain(cc, name+'-host-compiler')
+        c.data.setdefault('host_compilers', {})[name] = dict(path=cc, sha256=digest(Path(cc)))
         c.run([cc,'--version'],name+'-version')
         c.run(['cmake','-S',c.source,'-B',directory,'-DCMAKE_C_COMPILER='+cc,'-DCMAKE_BUILD_TYPE='+kind,
                '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','-DCINDER_SANITIZE='+('ON' if sanitize else 'OFF')],name+'-configure')
@@ -162,6 +164,7 @@ def recovery(c, count):
         if kind=='directory':target=directory/'destination';target.mkdir()
         c.run([c.compiler,*mode,source,'-o',target],f'{index}-failure',1,timeout=15)
         assert destination.read_bytes()==sentinel and not list(directory.rglob('*.cinder-*'))
+        shutil.copy2(destination, directory/'after-failure.bin')
         source.write_text('int main(void){return 7;}\n')
         c.run([c.compiler,'-c',source,'-o',destination],f'{index}-recovered',timeout=15)
         assert destination.read_bytes().startswith(b'\x7fELF') and not list(directory.rglob('*.cinder-*'))
@@ -193,7 +196,18 @@ def performance(c):
 def publication(c):
     sha=revision(c.source)
     c.run(['git','ls-remote','origin','refs/heads/main'],'remote')
-    c.run(['gh','api','repos/Aneesh495/cinder/actions/runs?head_sha='+sha+'&per_page=100'],'hosted')
+    deadline=time.monotonic()+7200
+    query=['gh','api','repos/Aneesh495/cinder/actions/runs?head_sha='+sha+'&per_page=100']
+    required={'Cinder Linux validation','Cinder deterministic bootstrap'}
+    while True:
+        observed=subprocess.run(query,capture_output=True,text=True,timeout=60,env=c.env)
+        if observed.returncode==0:
+            runs=json.loads(observed.stdout).get('workflow_runs',[])
+            successful={r['name'] for r in runs if r.get('head_sha')==sha and r.get('status')=='completed' and r.get('conclusion')=='success'}
+            if required<=successful:break
+        assert time.monotonic()<deadline, 'hosted validation did not finish successfully on the published tip'
+        time.sleep(15)
+    c.run(query,'hosted')
     c.data['revision']=sha
 
 

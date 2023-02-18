@@ -9,7 +9,10 @@ The native environment needs CMake, GCC, Clang, LLVM inspection tools, binutils,
 GDB, Python 3 and authenticated GitHub CLI access. The publication gate checks
 `origin/main` and successful Linux validation and deterministic-bootstrap runs
 on the exact commit. The **Cinder complete acceptance** workflow provisions the
-declared environment and uploads the raw evidence as a tar.gz archive.
+declared environment and uploads the raw evidence as a tar.gz archive. Its
+parallel jobs use one shared compiler binary. The assembly job verifies every
+partial package, requires all nineteen computation gates, then checks publication
+and writes the complete twenty-gate manifest.
 
 ```sh
 make build

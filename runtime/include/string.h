@@ -13,6 +13,7 @@ int strcmp(const char *left, const char *right);
 int strncmp(const char *left, const char *right, size_t size);
 char *strchr(const char *text, int character);
 char *strrchr(const char *text, int character);
+char *strstr(const char *text, const char *pattern);
 char *strcat(char *restrict destination, const char *restrict source);
 char *strcpy(char *restrict destination, const char *restrict source);
 char *strerror(int code);

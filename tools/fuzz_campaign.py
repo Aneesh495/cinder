@@ -28,6 +28,10 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     build, compiler = args.build.resolve(), args.compiler.resolve()
+    profile = output/'build-profile'
+    profile.mkdir()
+    shutil.copy2(build/'CMakeCache.txt', profile/'CMakeCache.txt')
+    shutil.copy2(build/'CMakeFiles/cinder_core.dir/flags.make', profile/'core-flags.make')
     candidates = [root/'examples/hello.c', root/'examples/macro_args.c']
     candidates += sorted((root/'tests/explorer').glob('*.c'))
     candidates += sorted((root/'tests/control').glob('*.c'))[:64]
@@ -48,7 +52,8 @@ def main():
     assert len(source_seeds) >= 32 and len(ir_seeds) >= 16
     configuration = dict(schema=1, source_sha256=inventory_digest(inputs), inputs=inputs,
                          compiler_sha256=digest(compiler), machine=platform.uname()._asdict(),
-                         requested=args.runs, source_seeds=source_seeds, ir_seeds=ir_seeds, stages={})
+                         requested=args.runs, source_seeds=source_seeds, ir_seeds=ir_seeds, stages={},
+                         build_profile={p.name:digest(p) for p in profile.iterdir()})
     (output/'configuration.json').write_text(json.dumps(configuration, indent=2)+'\n')
     # Darwin's libFuzzer leaves its detached RSS monitor allocated at exit.
     # Suppress that runtime-owned thread only; compiler allocations remain checked.

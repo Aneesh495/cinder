@@ -7,43 +7,134 @@ permissions:
   contents: read
   actions: read
 
+env:
+  GH_TOKEN: ${{ github.token }}
+  PYTHONDONTWRITEBYTECODE: '1'
+  SOURCE_DATE_EPOCH: '0'
+
 jobs:
-  native-release:
+  seed:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    env:
-      GH_TOKEN: ${{ github.token }}
-      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
-      - name: Install native tools
+      - uses: ./.github/actions/native-tools
+      - name: Build the shared bound compiler and probes
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake binutils python3 curl gnupg gdb
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key -o "$RUNNER_TEMP/llvm.asc"
-          test "$(gpg --show-keys --with-colons "$RUNNER_TEMP/llvm.asc" | awk -F: '$1 == "fpr" { print $10; exit }')" = 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
-          sudo install -m 644 "$RUNNER_TEMP/llvm.asc" /usr/share/keyrings/cinder-llvm.asc
-          printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cinder-llvm.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main' | sudo tee /etc/apt/sources.list.d/cinder-llvm.list
-          sudo apt-get update
-          sudo apt-get install -y clang-22 llvm-22 libclang-rt-22-dev
-          echo /usr/lib/llvm-22/bin >> "$GITHUB_PATH"
-      - name: Build bound seed compiler
-        run: make build
-      - name: Execute every full acceptance gate
-        run: make acceptance
-      - name: Verify existing evidence without execution
+          make build
+          cmake --build build --parallel 4 --target cinder_ir_campaign cinder_unwind_probe cinder_debug_line_probe cinder_debug_type_probe cinder_source_buffer_probe
+          tar -czf "$RUNNER_TEMP/cinder-seed.tar.gz" build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cinder-release-seed
+          path: ${{ runner.temp }}/cinder-seed.tar.gz
+
+  campaign:
+    needs: seed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        gate:
+          - abi
+          - allocation
+          - applications
+          - authored-suite
+          - debugging
+          - differential-programs
+          - documentation-product
+          - failure-recovery
+          - feature-families
+          - fresh-build
+          - ir-semantics
+          - native-fuzzing
+          - nonvacuous-passes
+          - object-output
+          - original-pipeline
+          - performance
+          - private-size
+          - rewrite-validation
+          - self-hosting
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/native-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinder-release-seed
+          path: ${{ runner.temp }}/seed
+      - name: Restore exact shared seed bytes
+        run: tar -xzf "$RUNNER_TEMP/seed/cinder-seed.tar.gz"
+      - name: Execute and verify the selected complete campaign
+        env:
+          CINDER_RELEASE_GATE: ${{ matrix.gate }}
         run: |
+          python3 -B - <<'PY'
+          import json, os, pathlib, subprocess, sys
+          sys.path.insert(0,'tools')
+          from gate_registry import read_gate_report
+          key=os.environ['CINDER_RELEASE_GATE']
+          result=subprocess.run([sys.executable,'-B','tools/acceptance.py','run','build/cindercc','--gate',key])
+          assert result.returncode==1, 'a selected subset must remain incomplete'
+          root=pathlib.Path('.').resolve();base=root/'.agent-local/evidence'
+          manifest=json.loads((base/'ACCEPTANCE.json').read_text())
+          gate=manifest['gates'][key]
+          assert gate['status']=='pass', gate
+          read_gate_report(key,json.loads((base/gate['report']).read_text()),root,base,root/'build/cindercc')
+          PY
+      - name: Archive the complete raw campaign
+        if: always()
+        run: |
+          if test -d .agent-local/evidence; then
+            tar -czf "$RUNNER_TEMP/cinder-gate.tar.gz" .agent-local/evidence
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cinder-gate-${{ matrix.gate }}
+          path: ${{ runner.temp }}/cinder-gate.tar.gz
+          compression-level: 1
+          if-no-files-found: error
+
+  verify:
+    needs: campaign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/native-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinder-release-seed
+          path: ${{ runner.temp }}/seed
+      - run: tar -xzf "$RUNNER_TEMP/seed/cinder-seed.tar.gz"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cinder-gate-*
+          path: ${{ runner.temp }}/campaigns
+      - name: Extract original POSIX evidence packages
+        run: |
+          python3 -B - <<'PY'
+          import os, pathlib, tarfile
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'campaigns'
+          for archive in root.glob('*/cinder-gate.tar.gz'):
+              with tarfile.open(archive) as stream:
+                  stream.extractall(archive.parent,filter='data')
+              archive.unlink()
+          PY
+      - name: Verify every raw campaign and the hosted published tip
+        run: |
+          python3 -B tools/assemble_acceptance.py build/cindercc "$RUNNER_TEMP/campaigns"
           make verify
           python3 -B tests/test_release_evidence.py build/cindercc
-      - name: Archive all raw acceptance evidence
+      - name: Archive all verified release evidence
         if: always()
         run: |
-          if test -d .agent-local; then
-            tar -czf "$RUNNER_TEMP/cinder-complete-acceptance.tar.gz" .agent-local build
+          if test -d .agent-local/evidence; then
+            tar -czf "$RUNNER_TEMP/cinder-complete-acceptance.tar.gz" .agent-local/evidence build
           fi
-      - name: Upload full evidence
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: cinder-complete-acceptance
           path: ${{ runner.temp }}/cinder-complete-acceptance.tar.gz
