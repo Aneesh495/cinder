@@ -260,7 +260,8 @@ static size_t type_align_up(size_t value, size_t align) {
 }
 
 static bool contains_flexible(const CinderType *type, unsigned depth) {
-    if (type == NULL || depth >= 256U) return false;
+    /* Recovery can leave self-references in unfinished aggregate fields. */
+    if (type == NULL || !type->complete || depth >= 256U) return false;
     if (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION) return false;
     for (size_t i = 0U; i < type->fields.len; ++i) {
         const CinderType *member = type->fields.data[i].type;

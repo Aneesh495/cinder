@@ -10,4 +10,4 @@ for path in sorted(pathlib.Path('tests/fuzz/regressions').glob('*.c')):
                             capture_output=True, timeout=5)
     assert result.returncode == 1 and b'error:' in result.stderr, (path, result)
     assert b'Sanitizer' not in result.stderr and b'runtime error:' not in result.stderr
-print('Fuzz regressions: malformed members terminate with diagnostics')
+print('Fuzz regressions: malformed inputs terminate with diagnostics')

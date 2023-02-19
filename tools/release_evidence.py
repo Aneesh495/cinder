@@ -218,7 +218,7 @@ def verify_campaign(gate,base,source,compiler):
         owned(command('help'),['--help']);owned(command('version'),['--version']);command('driver');command('explorer')
         report=verify_stage_report(base/'explorer',source,compiler)
         require(len(report.get('observations',[]))==8 and report.get('rejected_publications')==2,'incomplete explorer profiles')
-        for row in report['observations']:require(row.get('mappings',0)>0 and row.get('html_sha256') in report['artifacts'].values(),'missing source-to-code mapping')
+        verify_explorer_mappings(base/'explorer', source, report)
         require('Cinder' in command('help')['stdout'] or '--explorer' in command('help')['stdout'],'empty CLI documentation')
         return 1
     if gate=='publication':
@@ -245,8 +245,39 @@ def verify_stage_report(base,source,compiler):
     for name,value in artifacts.items():hashed(base,name,value);hashes.add(value)
     for row in report.get('commands',[]):
         require(type(row.get('exit')) is int and row.get('stdout') in hashes and row.get('stderr') in hashes,'missing raw stage command output')
-        if row['exit']==0 and Path(row['argv'][0]).name=='gdb':require('-batch' in row['argv'],'nonbatch debugger session')
+        if Path(row['argv'][0]).name == 'gdb':
+            args = row['argv'][1:]
+            require(row['exit'] == 0 and (args == ['--version'] or ('-batch' in args and '-ex' in args)), 'invalid debugger invocation')
     return report
+
+
+def verify_explorer_mappings(base, source, report):
+    sys.path.insert(0, str(source/'tests'))
+    from test_explorer import Page
+    from test_unwind import elf as read_elf
+
+    expected = [
+        (name, level, debug)
+        for name in ('pipeline', 'quoted', 'empty')
+        for debug in ((False, True) if name == 'pipeline' else (False,))
+        for level in ('-O0', '-O2')
+    ]
+    for row, (name, level, debug) in zip(report['observations'], expected):
+        label = name + level + ('-debug' if debug else '')
+        html = label + '/index.html'
+        obj = label + '.o'
+        artifacts = report['artifacts']
+        require(row.get('source') == 'tests/explorer/' + name + '.c' and row.get('level') == level,
+                'unexpected explorer profile')
+        require(html in artifacts and obj in artifacts and artifacts[html] == row.get('html_sha256'),
+                'missing explorer page or object')
+        page = Page((base/html).read_text())
+        code = read_elf(base/obj)[0]['.text']
+        require(row.get('mappings') == len(page.mappings) and bool(page.mappings) == bool(code),
+                'missing source-to-code mapping')
+        for start, end, encoded in page.mappings:
+            require(0 <= start <= end <= len(code) and bytes.fromhex(encoded) == code[start:end],
+                    'explorer mapping does not match object bytes')
 
 
 def verify_ir(base,source):
