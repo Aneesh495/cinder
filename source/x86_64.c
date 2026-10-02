@@ -33,14 +33,51 @@ static void emit_prologue(CinderMachineObject *object, size_t frame) { emit8(obj
 static void emit_epilogue(CinderMachineObject *object) { emit8(object, 0xC9U); emit8(object, 0xC3U); }
 static int value_offset(const CinderIRFunction *function, CinderValueId value) { return -(int)((function->local_count + (size_t)value + 1U) * 8U); }
 static int local_offset(int slot) { return -(slot + 1) * 8; }
-static void load_value(CinderMachineObject *object, const CinderIRFunction *function, CinderValueId value) { emit_mov_rax_mem(object, value_offset(function, value)); }
-static void store_value(CinderMachineObject *object, const CinderIRFunction *function, CinderValueId value) { emit_mov_mem_rax(object, value_offset(function, value)); }
+static unsigned register_code(CinderRegister reg) {
+    switch (reg) { case REG_RAX: return 0U; case REG_RCX: return 1U; case REG_RDX: return 2U; case REG_RSI: return 6U; case REG_RDI: return 7U; case REG_R8: return 8U; case REG_R9: return 9U; case REG_R10: return 10U; case REG_R11: return 11U; case REG_R12: return 12U; case REG_R13: return 13U; case REG_R14: return 14U; case REG_R15: return 15U; default: return 0U; }
+}
+
+static void emit_mov_reg_reg(CinderMachineObject *object, unsigned destination, unsigned source) {
+    uint8_t rex = 0x48U;
+    if (source >= 8U) rex |= 0x04U;
+    if (destination >= 8U) rex |= 0x01U;
+    emit8(object, rex); emit8(object, 0x89U); emit8(object, (uint8_t)(0xC0U | ((source & 7U) << 3U) | (destination & 7U)));
+}
+
+static const CinderLocation *location_for(const CinderAllocation *allocation, CinderValueId value) {
+    for (size_t i = 0U; i < allocation->intervals.len; ++i) if (allocation->intervals.data[i].value == value) return &allocation->intervals.data[i].location;
+    return NULL;
+}
+
+static void load_value_alloc(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
+    const CinderLocation *location = location_for(allocation, value);
+    if (location != NULL && location->kind == LOC_REGISTER) emit_mov_reg_reg(object, 0U, register_code(location->reg));
+    else emit_mov_rax_mem(object, location != NULL ? location->stack_offset : value_offset(function, value));
+}
+
+static void store_value_alloc(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
+    const CinderLocation *location = location_for(allocation, value);
+    if (location != NULL && location->kind == LOC_REGISTER) emit_mov_reg_reg(object, register_code(location->reg), 0U);
+    else emit_mov_mem_rax(object, location != NULL ? location->stack_offset : value_offset(function, value));
+}
+
+static void load_value_to_r10(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
+    const CinderLocation *location = location_for(allocation, value);
+    if (location != NULL && location->kind == LOC_REGISTER) emit_mov_reg_reg(object, 10U, register_code(location->reg));
+    else emit_mov_r10_mem(object, location != NULL ? location->stack_offset : value_offset(function, value));
+}
+
+static void load_value_to_rcx(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
+    const CinderLocation *location = location_for(allocation, value);
+    if (location != NULL && location->kind == LOC_REGISTER) emit_mov_reg_reg(object, 1U, register_code(location->reg));
+    else emit_mov_rcx_mem(object, location != NULL ? location->stack_offset : value_offset(function, value));
+}
 
 static void emit_arg_from_stack(CinderMachineObject *object, unsigned index) { emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x85U); emit32(object, (uint32_t)(16U + (index - 6U) * 8U)); }
 
-static void emit_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderIRInst *inst) {
-    load_value(object, function, inst->left);
-    emit_mov_r10_mem(object, value_offset(function, inst->right));
+static void emit_binary(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+    load_value_alloc(object, function, allocation, inst->left);
+    load_value_to_r10(object, function, allocation, inst->right);
     switch (inst->op) {
         case IR_ADD: emit8(object, 0x4CU); emit8(object, 0x01U); emit8(object, 0xD0U); break;
         case IR_SUB: emit8(object, 0x4CU); emit8(object, 0x29U); emit8(object, 0xD0U); break;
@@ -50,9 +87,9 @@ static void emit_binary(CinderMachineObject *object, const CinderIRFunction *fun
         case IR_BIT_AND: emit8(object, 0x4CU); emit8(object, 0x21U); emit8(object, 0xD0U); break;
         case IR_BIT_OR: emit8(object, 0x4CU); emit8(object, 0x09U); emit8(object, 0xD0U); break;
         case IR_BIT_XOR: emit8(object, 0x4CU); emit8(object, 0x31U); emit8(object, 0xD0U); break;
-        case IR_SHL: emit_mov_rcx_mem(object, value_offset(function, inst->right)); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xE0U); break;
-        case IR_SHR_S: emit_mov_rcx_mem(object, value_offset(function, inst->right)); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xF8U); break;
-        case IR_SHR_U: emit_mov_rcx_mem(object, value_offset(function, inst->right)); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xE8U); break;
+        case IR_SHL: load_value_to_rcx(object, function, allocation, inst->right); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xE0U); break;
+        case IR_SHR_S: load_value_to_rcx(object, function, allocation, inst->right); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xF8U); break;
+        case IR_SHR_U: load_value_to_rcx(object, function, allocation, inst->right); emit8(object, 0x48U); emit8(object, 0xD3U); emit8(object, 0xE8U); break;
         case IR_CMP_EQ: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, 0x94U); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
         case IR_CMP_NE: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, 0x95U); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
         case IR_CMP_LT_S: case IR_CMP_LT_U: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, inst->op == IR_CMP_LT_U ? 0x92U : 0x9CU); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
@@ -61,7 +98,7 @@ static void emit_binary(CinderMachineObject *object, const CinderIRFunction *fun
         case IR_CMP_GE_S: case IR_CMP_GE_U: emit8(object, 0x4CU); emit8(object, 0x39U); emit8(object, 0xD0U); emit8(object, 0x0FU); emit8(object, inst->op == IR_CMP_GE_U ? 0x93U : 0x9DU); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); break;
         default: break;
     }
-    store_value(object, function, inst->dst);
+    store_value_alloc(object, function, allocation, inst->dst);
 }
 
 static unsigned abi_register(unsigned index) { static const unsigned regs[] = {7U, 6U, 2U, 1U, 8U, 9U}; return index < CINDER_ARRAY_LEN(regs) ? regs[index] : 0U; }
@@ -94,31 +131,31 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderIRInst *inst = &block->instructions.data[i];
             switch (inst->op) {
-                case IR_CONST: emit_mov_rax_imm(object, inst->integer); store_value(object, function, inst->dst); break;
-                case IR_GLOBAL_LOAD: emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } store_value(object, function, inst->dst); break;
-                case IR_GLOBAL_STORE: load_value(object, function, inst->left); emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } break;
+                case IR_CONST: emit_mov_rax_imm(object, inst->integer); store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_GLOBAL_LOAD: emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_GLOBAL_STORE: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } break;
                 case IR_ARG:
                     if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->slot)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
-                    store_value(object, function, inst->dst); break;
-                case IR_LOCAL_LOAD: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value(object, function, inst->dst); break;
-                case IR_PHI: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value(object, function, inst->dst); break;
-                case IR_LOCAL_STORE: load_value(object, function, inst->left); emit_mov_mem_rax(object, local_offset(inst->slot)); break;
-                case IR_COPY: load_value(object, function, inst->left); store_value(object, function, inst->dst); break;
-                case IR_NEG: load_value(object, function, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value(object, function, inst->dst); break;
-                case IR_BIT_NOT: load_value(object, function, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD0U); store_value(object, function, inst->dst); break;
+                    store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_LOCAL_LOAD: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_PHI: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_LOCAL_STORE: load_value_alloc(object, function, allocation, inst->left); emit_mov_mem_rax(object, local_offset(inst->slot)); break;
+                case IR_COPY: load_value_alloc(object, function, allocation, inst->left); store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_NEG: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_BIT_NOT: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD0U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_CALL:
-                    for (size_t a = 0U; a < inst->args.len && a < 6U; ++a) { load_value(object, function, inst->args.data[a]); emit_mov_reg_from_rax(object, abi_register((unsigned)a)); }
-                    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); store_value(object, function, inst->dst); break;
-                default: emit_binary(object, function, inst); break;
+                    for (size_t a = 0U; a < inst->args.len && a < 6U; ++a) { load_value_alloc(object, function, allocation, inst->args.data[a]); emit_mov_reg_from_rax(object, abi_register((unsigned)a)); }
+                    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); store_value_alloc(object, function, allocation, inst->dst); break;
+                default: emit_binary(object, function, allocation, inst); break;
             }
         }
         switch (block->terminator.kind) {
             case TERM_RETURN:
-                if (block->terminator.value != CINDER_INVALID_VALUE) load_value(object, function, block->terminator.value);
+                if (block->terminator.value != CINDER_INVALID_VALUE) load_value_alloc(object, function, allocation, block->terminator.value);
                 emit_epilogue(object); break;
             case TERM_JUMP: emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
             case TERM_BRANCH:
-                load_value(object, function, block->terminator.condition); emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xF8U); emit8(object, 0U); emit8(object, 0x0FU); emit8(object, 0x85U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup yes = {offset, block->terminator.yes}; cinder_vec_push((CinderVec *)&branches, &yes); } emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup no = {offset, block->terminator.no}; cinder_vec_push((CinderVec *)&branches, &no); } break;
+                load_value_alloc(object, function, allocation, block->terminator.condition); emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xF8U); emit8(object, 0U); emit8(object, 0x0FU); emit8(object, 0x85U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup yes = {offset, block->terminator.yes}; cinder_vec_push((CinderVec *)&branches, &yes); } emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup no = {offset, block->terminator.no}; cinder_vec_push((CinderVec *)&branches, &no); } break;
             case TERM_UNREACHABLE: emit_epilogue(object); break;
         }
     }
