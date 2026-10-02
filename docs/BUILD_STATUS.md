@@ -8,7 +8,7 @@ Updated: 2026-10-02
 - Authenticated GitHub account: `Aneesh495`.
 - Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 - The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published implementation checkpoint before this final validation update: `36ac688`.
+- Latest published implementation checkpoint before this final validation update: `490888c`.
 
 ## Implemented behavior
 
@@ -47,13 +47,13 @@ The current native implementation is still a correctness-oriented scalar slice. 
 | `make demo` | pass, object/IR/token artifacts generated | `.agent-local/demo/` |
 | `make acceptance` | pass, raw smoke evidence and incomplete gate registry generated | `.agent-local/evidence/ACCEPTANCE.json` |
 | `make verify` | expected nonzero, incomplete required gates are rejected | terminal output |
-| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, 25 source files and 3,804 substantive production lines | `.agent-local/source-census.json` |
+| `python3 tools/source_census.py --root . --output .agent-local/source-census.json` | pass, 25 source files and 3,825 substantive production lines | `.agent-local/source-census.json` |
 | deterministic object check | pass, repeated `phi.c` objects had identical SHA-256 bytes | terminal output |
 | altered evidence check | pass, verifier rejected appended evidence bytes | terminal output |
 
 ## Acceptance status
 
-Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+The latest manifest reused the previously executed generated workload only across tooling/documentation-only commits with an unchanged compiler binary hash; the copied summary is itself included and hashed as evidence. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
 
 ## Next action
 
