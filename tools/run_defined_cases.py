@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import random
 import re
@@ -33,53 +34,64 @@ def make_case(rng: random.Random) -> tuple[str, int]:
     return source, expected
 
 
+def run_case(item: tuple[int, Path, int], compiler: str, root: Path) -> tuple[bool, bool, bool, bool]:
+    index, path, expected = item
+    result = subprocess.run([compiler, "--interpret", "-O2", str(path)], text=True, capture_output=True, check=False)
+    match = RESULT.search(result.stdout)
+    interpreted_ok = match is not None and int(match.group(1)) == expected
+    reference_attempted = index < 100
+    reference_ok = True
+    if reference_attempted:
+        native = root / f"reference-{index:04d}"
+        build = subprocess.run(["cc", "-std=c17", "-O0", str(path), "-o", str(native)], text=True, capture_output=True, check=False)
+        if build.returncode != 0:
+            reference_ok = False
+        else:
+            run = subprocess.run([str(native)], check=False)
+            reference_ok = (run.returncode & 255) == expected
+    return match is not None, interpreted_ok, reference_attempted and build.returncode == 0 if reference_attempted else False, reference_ok
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("compiler", type=Path)
     parser.add_argument("--count", type=int, default=1200)
     parser.add_argument("--seed", type=int, default=0xC1D3)
+    parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     rng = random.Random(args.seed)
-    attempts = accepted = interpreted = mismatches = 0
-    reference_attempts = reference_runs = reference_mismatches = 0
     compiler = str(args.compiler.resolve())
     with tempfile.TemporaryDirectory(prefix="cinder-cases-") as directory:
         root = Path(directory)
+        cases: list[tuple[int, Path, int]] = []
         for index in range(args.count):
-            attempts += 1
             source, expected = make_case(rng)
             path = root / f"case-{index:04d}.c"
             path.write_text(source, encoding="utf-8")
-            accepted += 1
-            result = subprocess.run([compiler, "--interpret", "-O2", str(path)], text=True, capture_output=True, check=False)
-            match = RESULT.search(result.stdout)
-            if match is None:
-                mismatches += 1
-                continue
-            interpreted += 1
-            if int(match.group(1)) != expected:
-                mismatches += 1
-            if index < min(100, args.count):
-                reference_attempts += 1
-                native = root / f"reference-{index:04d}"
-                build = subprocess.run(["cc", "-std=c17", "-O0", str(path), "-o", str(native)], text=True, capture_output=True, check=False)
-                if build.returncode == 0:
-                    reference_runs += 1
-                    run = subprocess.run([str(native)], check=False)
-                    if (run.returncode & 255) != expected:
-                        reference_mismatches += 1
+            cases.append((index, path, expected))
+        interpreted_runs = interpreted_mismatches = reference_attempts = reference_runs = reference_mismatches = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as executor:
+            futures = [executor.submit(run_case, item, compiler, root) for item in cases]
+            for future in concurrent.futures.as_completed(futures):
+                found, interpreter_ok, reference_ran, reference_ok = future.result()
+                interpreted_runs += int(found)
+                interpreted_mismatches += int(not interpreter_ok)
+                reference_attempts += int(reference_ran or not reference_ran and False)
+                reference_runs += int(reference_ran)
+                reference_mismatches += int(reference_ran and not reference_ok)
     summary = {
         "schema": 1,
         "seed": args.seed,
-        "attempts": attempts,
-        "accepted_defined_programs": accepted,
-        "interpreter_runs": interpreted,
-        "interpreter_mismatches": mismatches,
-        "reference_attempts": reference_attempts,
+        "jobs": args.jobs,
+        "attempts": args.count,
+        "accepted_defined_programs": args.count,
+        "interpreter_runs": interpreted_runs,
+        "interpreter_mismatches": interpreted_mismatches,
+        "reference_attempts": min(100, args.count),
         "reference_runs": reference_runs,
         "reference_mismatches": reference_mismatches,
-        "status": "pass" if mismatches == 0 and reference_mismatches == 0 and interpreted == accepted else "fail",
+        "status": "pass" if interpreted_mismatches == 0 and reference_mismatches == 0 and interpreted_runs == args.count else "fail",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
