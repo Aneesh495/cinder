@@ -136,7 +136,11 @@ int cinder_sema_run(CinderSema *sema) {
     }
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
-        if (decl->initializer != NULL) (void)sema_expr(sema, decl->initializer, &sema->globals);
+        if (decl->initializer != NULL) {
+            CinderType *initializer_type = sema_expr(sema, decl->initializer, &sema->globals);
+            bool string_array = decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY && decl->type->base->kind == TYPE_CHAR;
+            if (!string_array && !cinder_type_compatible(decl->type, initializer_type)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "global initializer for '%s' has incompatible type", decl->name);
+        }
         if (decl->body != NULL) {
             CinderScope scope = { {NULL, 0U, 0U}, &sema->globals };
             for (size_t p = 0U; p < decl->params.len; ++p) scope_add(&scope, decl->params.data[p]->name, decl->params.data[p]->type, decl->params.data[p], false);
