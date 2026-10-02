@@ -53,7 +53,7 @@ The current native implementation is still a correctness-oriented scalar slice. 
 
 ## Acceptance status
 
-Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, float argument/callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
 
 ## Next action
 
