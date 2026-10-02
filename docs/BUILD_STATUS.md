@@ -8,7 +8,7 @@ Updated: 2026-10-02
 - Authenticated GitHub account: `Aneesh495`.
 - Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 - The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published implementation checkpoint before this final validation update: `e37b019`.
+- Latest published implementation checkpoint before this final validation update: `de80a69`.
 
 ## Implemented behavior
 
@@ -53,8 +53,8 @@ The current native implementation is still a correctness-oriented scalar slice. 
 
 ## Acceptance status
 
-Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, float argument/callback ABI, variadic support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, float argument/callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
 
 ## Next action
 
-A Linux x86-64 environment is required for native execution, mixed-toolchain ABI checks, and self-hosting. The next implementation increment is variadic ABI support or broader aggregate expression lowering, with native or explicitly unavailable evidence.
+A Linux x86-64 environment is required for native execution, mixed-toolchain ABI checks, and self-hosting. The next implementation increment is full hosted `va_list` cursor/save-area behavior or broader aggregate expression lowering, with native or explicitly unavailable evidence.
