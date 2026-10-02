@@ -4,29 +4,43 @@ Updated: 2026-10-02
 
 ## Repository and publication
 
-- Workspace was empty at initialization.
-- Intended GitHub account: `Aneesh495`.
-- Safe publication target: `Aneesh495/cinder`; the requested `cinder` owner namespace was not writable from the authenticated account during inspection.
-- Branch contract: `main`.
-- Hosted tip: not yet created or verified.
+- Workspace was empty at initialization and was initialized as Git branch `main`.
+- Authenticated GitHub account: `Aneesh495`.
+- Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
+- The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
+- Last published checkpoint before this documentation update: `f10b05ef1edcd6bbc19be759c7cb007f130a09a2`.
 
-## Implemented in the current increment
+## Implemented behavior
 
-This document is updated with each coherent source increment. The foundation currently contains the C17/CMake build contract, command surface, ignored private evidence directory, and documentation skeleton. Compiler source is the next increment.
+- Checked arena/vector storage, source-file identities, source ranges, and structured diagnostics.
+- Original preprocessing for object/function macros, `-D`, conditional branches, relative includes, `#error`, and bounded rescanning.
+- Longest-match lexer for the implemented C token families with integer literal validation.
+- Recursive-descent declarations/statements, precedence expressions, scalar target types, nested scopes, lvalue checks, call/return checks, and loop-context diagnostics.
+- Typed CFG-like IR with local memory operations, terminators, verifier, independent bounded interpreter, constant folding, allocation traces, direct x86-64 scalar encoding, ELF64 relocatable output, CLI inspection paths, and a local HTML explorer summary.
+
+The current native implementation is a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, final register allocation, aggregate/SSE/variadic ABI support, DWARF, PIC, full object data sections, or self-hosting.
 
 ## Commands and results
 
 | Command | Result | Evidence |
 |---|---|---|
-| workspace inspection | empty directory, no ancestor repository | session inspection |
-| toolchain inspection | CMake, Make, C17 host compiler, GitHub CLI available | session inspection |
-| `make build` | pending implementation | pending |
-| `make test` | pending implementation | pending |
+| `make build` | pass on macOS arm64 with Apple Clang/CMake | `build/cindercc` |
+| `make test` | pass, CTest smoke | CTest output |
+| `make test-frontend` | pass, include/macro/`-D`/interpreter/negative diagnostics | `tests/run_frontend.sh` |
+| `make test-preprocessor` | pass | `tests/run_preprocessor.sh` |
+| `make test-ir` | pass, verifier and allocation dump | `tests/run_ir.sh` |
+| `make test-object` | pass, output recognized as ELF64 relocatable x86-64 | `tests/run_object.sh` |
+| `make test-debug` | pass for accepted source/debug flag path; debugger gate unverified | `tests/run_debug.sh` |
+| `make fuzz` | pass, ASan/UBSan build completed; campaign not run | `build-asan/cindercc` |
+| `make acceptance` | pass, generated raw smoke evidence and incomplete gate registry | `.agent-local/evidence/ACCEPTANCE.json` |
+| `make verify` | expected nonzero, incomplete required gates are rejected | terminal output |
+| `build/cindercc --interpret examples/hello.c` | pass, independent result `42` | terminal output |
+| `build/cindercc --explorer /tmp/cinder-explorer examples/hello.c` | pass, local HTML report | `/tmp/cinder-explorer/index.html` |
 
-## Acceptance gates
+## Acceptance status
 
-Required gates remain unverified until the corresponding source, test, and raw evidence artifacts exist. Missing evidence is an explicit failure, not a pass. The full campaign is intentionally not represented as complete by this foundation increment.
+`make acceptance` records pass, unverified, and unmet outcomes from actual raw artifacts. The current manifest intentionally reports the following unverified or unmet gates: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full differential/IR/rewrite/ABI/allocation/object/debug/fuzz/failure campaigns, and the private 10,000-line production threshold. `make verify` rejects this manifest rather than converting missing workloads into passes.
 
 ## Next action
 
-Implement the source manager, diagnostics, token model, lexer, and a token-dump path, then add focused preprocessor and frontend smoke cases.
+Extend the type/layout and IR boundaries with arrays, aggregates, float classification, richer CFG analyses, and multi-file driver behavior. Each addition must include a native or explicit unverified gate, then refresh acceptance evidence.

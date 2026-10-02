@@ -29,6 +29,8 @@ int main(int argc, char **argv) {
         if (strcmp(arg, "--emit-ir") == 0) { options.dump_ir = true; continue; }
         if (strcmp(arg, "--dump-mir") == 0) { options.dump_mir = true; continue; }
         if (strcmp(arg, "--dump-regalloc") == 0) { options.dump_regalloc = true; continue; }
+        if (strcmp(arg, "--interpret") == 0) { options.interpret = true; continue; }
+        if (strcmp(arg, "--explorer") == 0) { if (i + 1 >= argc) { fprintf(stderr, "cindercc: --explorer requires a directory\n"); free(includes.data); free(defines.data); return 2; } options.explorer = argv[++i]; continue; }
         if (strncmp(arg, "-I", 2U) == 0) {
             const char *dir = arg[2] == '\0' && i + 1 < argc ? argv[++i] : arg + 2;
             if (*dir == '\0') { fprintf(stderr, "cindercc: -I requires a directory\n"); free(includes.data); free(defines.data); return 2; }

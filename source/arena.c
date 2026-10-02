@@ -90,17 +90,19 @@ const void *cinder_vec_cat_impl(const CinderVec *v, size_t index, size_t elem_si
     return v->data + checked_mul(index, elem_size);
 }
 
-static size_t align_up(size_t value, size_t align) {
+static size_t align_offset(const unsigned char *base, size_t used, size_t align) {
     if (align == 0U || (align & (align - 1U)) != 0U) {
         fprintf(stderr, "cinder: invalid arena alignment\n");
         abort();
     }
-    size_t mask = align - 1U;
-    if (value > SIZE_MAX - mask) {
+    uintptr_t current = (uintptr_t)base + used;
+    uintptr_t mask = (uintptr_t)align - 1U;
+    if (current > UINTPTR_MAX - mask) {
         fprintf(stderr, "cinder: arena alignment overflow\n");
         abort();
     }
-    return (value + mask) & ~mask;
+    uintptr_t aligned = (current + mask) & ~mask;
+    return (size_t)(aligned - (uintptr_t)base);
 }
 
 void cinder_arena_init(CinderArena *arena, size_t block_size) {
@@ -124,7 +126,7 @@ void *cinder_arena_alloc(CinderArena *arena, size_t size, size_t align) {
     size_t actual = size == 0U ? 1U : size;
     CinderArenaBlock *block = arena->last;
     if (block != NULL) {
-        size_t aligned = align_up(block->used, align);
+        size_t aligned = align_offset(block->data, block->used, align);
         if (aligned <= block->capacity && actual <= block->capacity - aligned) {
             void *result = block->data + aligned;
             block->used = aligned + actual;
@@ -143,7 +145,7 @@ void *cinder_arena_alloc(CinderArena *arena, size_t size, size_t align) {
         arena->last->next = block;
     }
     arena->last = block;
-    size_t aligned = align_up(block->used, align);
+    size_t aligned = align_offset(block->data, block->used, align);
     void *result = block->data + aligned;
     block->used = aligned + actual;
     return result;

@@ -10,6 +10,7 @@ The first target contract is Linux x86-64, little-endian LP64, System V AMD64, n
 make bootstrap
 make build
 make test
+make test-frontend
 ```
 
 Compile a small translation unit to an ELF object without invoking an assembler:

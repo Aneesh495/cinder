@@ -17,6 +17,9 @@ build: bootstrap
 test: build
 	@ctest --test-dir $(BUILD_DIR) --output-on-failure
 
+test-frontend: build
+	@tests/run_frontend.sh $(BUILD_DIR)/cindercc
+
 test-preprocessor: build
 	@tests/run_preprocessor.sh $(BUILD_DIR)/cindercc
 
@@ -50,6 +53,7 @@ acceptance: build
 	@tests/acceptance.sh $(BUILD_DIR)/cindercc
 
 verify: build
+	@python3 tools/source_census.py --root . --output .agent-local/source-census.json
 	@tests/verify_evidence.sh $(BUILD_DIR)/cindercc
 
 clean:
