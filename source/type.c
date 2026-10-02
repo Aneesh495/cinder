@@ -92,7 +92,7 @@ bool cinder_type_equal(const CinderType *a, const CinderType *b) {
     if (a->kind == TYPE_POINTER) return cinder_type_equal(a->base, b->base);
     if (a->kind == TYPE_ARRAY) return a->array_len == b->array_len && cinder_type_equal(a->base, b->base);
     if (a->kind == TYPE_FUNCTION) {
-        if (!cinder_type_equal(a->return_type, b->return_type) || a->params.len != b->params.len) return false;
+        if (!cinder_type_equal(a->return_type, b->return_type) || a->variadic != b->variadic || a->params.len != b->params.len) return false;
         for (size_t i = 0U; i < a->params.len; ++i) if (!cinder_type_equal(a->params.data[i].type, b->params.data[i].type)) return false;
         return true;
     }

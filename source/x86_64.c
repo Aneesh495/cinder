@@ -174,6 +174,9 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_ARG:
                     if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->slot)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
                     store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_VA_ARG:
+                    if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->slot)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
+                    store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_LOCAL_LOAD: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_PHI: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_LOCAL_STORE: load_value_alloc(object, function, allocation, inst->left); emit_mov_mem_rax(object, local_offset(inst->slot)); break;
@@ -183,9 +186,16 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE: emit_float_compare(object, function, allocation, inst); break;
                 case IR_NEG: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_BIT_NOT: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD0U); store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_CALL:
+                case IR_CALL: {
+                    size_t extra = inst->args.len > 6U ? inst->args.len - 6U : 0U;
+                    size_t padding = extra & 1U;
+                    if (padding != 0U) { emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xECU); emit8(object, 8U); }
+                    for (size_t a = inst->args.len; a > 6U; --a) { load_value_alloc(object, function, allocation, inst->args.data[a - 1U]); emit8(object, 0x50U); }
                     for (size_t a = 0U; a < inst->args.len && a < 6U; ++a) { load_value_alloc(object, function, allocation, inst->args.data[a]); emit_mov_reg_from_rax(object, abi_register((unsigned)a)); }
-                    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); store_value_alloc(object, function, allocation, inst->dst); break;
+                    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix);
+                    if (extra + padding != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xC4U); emit32(object, (uint32_t)((extra + padding) * 8U)); }
+                    store_value_alloc(object, function, allocation, inst->dst); break;
+                }
                 default: emit_binary(object, function, allocation, inst); break;
             }
         }

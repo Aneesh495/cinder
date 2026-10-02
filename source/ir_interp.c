@@ -64,6 +64,7 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
                 case IR_GLOBAL_LOAD: { const CinderIRGlobal *global = find_global(module, inst->callee); if (global == NULL) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter cannot find global '%s'", inst->callee); free(values); free(float_values); free(locals); return failure; } values[inst->dst] = global->integer; break; }
                 case IR_GLOBAL_STORE: cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter does not mutate global '%s'", inst->callee); free(values); free(float_values); free(locals); return failure;
                 case IR_ARG: values[inst->dst] = inst->slot >= 0 && (size_t)inst->slot < arg_count ? args[inst->slot] : 0; break;
+                case IR_VA_ARG: if (inst->slot < 0 || (size_t)inst->slot >= arg_count) { cinder_diag(diags, CINDER_ERROR, inst->loc, "variadic argument index is unavailable"); free(values); free(float_values); free(locals); return failure; } values[inst->dst] = args[inst->slot]; break;
                 case IR_LOCAL_LOAD: values[inst->dst] = locals[inst->slot]; break;
                 case IR_LOCAL_STORE: locals[inst->slot] = values[inst->left]; break;
                 case IR_COPY: values[inst->dst] = values[inst->left]; break;

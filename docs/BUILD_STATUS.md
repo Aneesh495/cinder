@@ -36,6 +36,7 @@ The current native implementation is still a correctness-oriented scalar slice. 
 | `make test-ir` | pass, dominators, loop headers, nonvacuous forwarding/dead-code/phi counters, verifier and allocation dump | `tests/run_ir.sh` |
 | `make test-parallel-copy` | pass, standalone cycle and phi plan checks | `tests/run_parallel_copy.sh` |
 | `make test-float` | pass, decimal literals, float IR/interpreter, SSE2 byte oracle, and ELF output | `tests/run_float.sh` |
+| `make test-varargs` | pass, integer variadic fixed-ordinal reads and stack arguments; full `va_list` ABI remains incomplete | `tests/run_varargs.sh` |
 | `make test-apps` | pass, eight authored applications | `tests/run_apps.sh` |
 | `make test-generated` | pass, 1,200 defined interpreter cases and 100 host-reference executions | `.agent-local/generated-summary.json` |
 | `make test-abi` | pass for the declared scalar encoder/stack-frame smoke; cross-toolchain ABI gate unverified | `tests/run_abi.sh` |

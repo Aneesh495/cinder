@@ -247,6 +247,7 @@ struct CinderType {
     size_t array_len;
     CinderParamVec params;
     CinderType *return_type;
+    bool variadic;
     CINDER_VEC_TYPE(CinderField) fields;
     char *tag;
 };
@@ -293,6 +294,7 @@ typedef enum {
     EX_UNARY,
     EX_ASSIGN,
     EX_CALL,
+    EX_VA_ARG,
     EX_CONDITIONAL,
     EX_CAST,
     EX_SIZEOF,
@@ -332,6 +334,7 @@ struct CinderExpr {
         struct { int op; CinderExpr *value; } unary;
         struct { CinderExpr *target; CinderExpr *value; int op; } assign;
         struct { CinderExpr *callee; CINDER_VEC_TYPE(CinderExpr *) args; } call;
+        struct { CinderExpr *list; CinderType *type; } va_arg;
         struct { CinderExpr *condition; CinderExpr *yes; CinderExpr *no; } conditional;
         struct { CinderType *cast_type; CinderExpr *value; } cast;
     } as;
@@ -419,6 +422,7 @@ typedef enum {
     IR_LOCAL_LOAD,
     IR_LOCAL_STORE,
     IR_ARG,
+    IR_VA_ARG,
     IR_COPY,
     IR_ADD,
     IR_SUB,
