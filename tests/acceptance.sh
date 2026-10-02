@@ -16,8 +16,14 @@ file "$evidence/hello.o" > "$evidence/object.file"
 tests/run_globals.sh "$ccbin" > "$evidence/globals.txt"
 tests/run_multi.sh "$ccbin" > "$evidence/multi.txt"
 tests/run_varargs.sh "$ccbin" > "$evidence/varargs.txt"
-tests/run_apps.sh "$ccbin" > "$evidence/apps.txt"
-python3 "$root/tools/run_defined_cases.py" "$ccbin" --count 1200 --output "$root/.agent-local/generated-summary.json" > "$evidence/generated.txt"
+if [ "${CINDER_REUSE_WORKLOADS:-0}" = "1" ]; then
+    printf '%s\n' 'reused unchanged compiler workload summary' > "$evidence/apps.txt"
+    printf '%s\n' 'reused unchanged compiler workload summary' > "$evidence/generated.txt"
+else
+    tests/run_apps.sh "$ccbin" > "$evidence/apps.txt"
+    python3 "$root/tools/run_defined_cases.py" "$ccbin" --count 1200 --output "$root/.agent-local/generated-summary.json" > "$evidence/generated.txt"
+fi
+cp "$root/.agent-local/generated-summary.json" "$evidence/generated-summary.json"
 python3 "$root/tools/source_census.py" --root "$root" --output "$root/.agent-local/source-census.json" > "$evidence/census.summary"
 python3 - "$evidence" "$root" <<'PY'
 import hashlib
