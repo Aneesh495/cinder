@@ -56,3 +56,21 @@ void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out) {
         else fprintf(out, "  %%v%u [%zu,%zu] -> stack %d(%%rbp)\n", interval->value, interval->start, interval->end, interval->location.stack_offset);
     }
 }
+
+int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags) {
+    if ((allocation->frame_size & 15U) != 0U) {
+        cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation frame for '%s' is not 16-byte aligned", allocation->ir->name);
+        return 1;
+    }
+    for (size_t i = 0U; i < allocation->intervals.len; ++i) {
+        const CinderInterval *left = &allocation->intervals.data[i];
+        if (left->start > left->end) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation interval for value %u is inverted", left->value); continue; }
+        for (size_t j = i + 1U; j < allocation->intervals.len; ++j) {
+            const CinderInterval *right = &allocation->intervals.data[j];
+            bool overlap = left->start <= right->end && right->start <= left->end;
+            if (overlap && left->location.kind == LOC_REGISTER && right->location.kind == LOC_REGISTER && left->location.reg == right->location.reg) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "overlapping values %u and %u share register %u", left->value, right->value, left->location.reg);
+            if (overlap && left->location.kind == LOC_STACK && right->location.kind == LOC_STACK && left->location.stack_offset == right->location.stack_offset) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "overlapping values %u and %u share stack slot", left->value, right->value);
+        }
+    }
+    return diags->errors == 0U ? 0 : 1;
+}

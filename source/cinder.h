@@ -459,6 +459,7 @@ typedef struct {
     int operator_code;
     char *callee;
     CINDER_VEC_TYPE(CinderValueId) args;
+    CINDER_VEC_TYPE(CinderBlockId) phi_blocks;
     CinderLoc loc;
 } CinderIRInst;
 
@@ -517,6 +518,7 @@ void cinder_cfg_init(CinderCFGAnalysis *analysis);
 void cinder_cfg_destroy(CinderCFGAnalysis *analysis);
 int cinder_analyze_cfg(const CinderIRFunction *function, CinderCFGAnalysis *analysis, CinderDiagnostics *diags);
 void cinder_dump_cfg(const CinderIRFunction *function, const CinderCFGAnalysis *analysis, FILE *out);
+int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags);
 unsigned cinder_forward_local_memory(CinderIRFunction *function);
 unsigned cinder_remove_dead_ir(CinderIRFunction *function);
 /* ---------- interpreter and optimization ---------- */
@@ -562,6 +564,7 @@ typedef struct {
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function);
 void cinder_alloc_destroy(CinderAllocation *allocation);
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags);
+int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
 void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out);
 
 /* ---------- x86-64 machine output ---------- */

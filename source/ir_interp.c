@@ -41,6 +41,7 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
     int64_t *locals = cinder_alloc(function->local_count == 0U ? 1U : function->local_count * sizeof(*locals));
     memset(locals, 0, function->local_count * sizeof(*locals));
     CinderBlockId block_id = 0U;
+    CinderBlockId previous_block = CINDER_INVALID_BLOCK;
     while (true) {
         if (++*steps > limit) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR interpreter step limit exceeded in '%s'", function->name); free(values); free(locals); return failure; }
         const CinderIRBlock *block = &function->blocks.data[block_id];
@@ -53,6 +54,13 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
                 case IR_LOCAL_LOAD: values[inst->dst] = locals[inst->slot]; break;
                 case IR_LOCAL_STORE: locals[inst->slot] = values[inst->left]; break;
                 case IR_COPY: values[inst->dst] = values[inst->left]; break;
+                case IR_PHI: {
+                    size_t incoming = SIZE_MAX;
+                    for (size_t p = 0U; p < inst->phi_blocks.len; ++p) if (inst->phi_blocks.data[p] == previous_block) incoming = p;
+                    if (incoming == SIZE_MAX || incoming >= inst->args.len) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter reached a phi without a matching predecessor"); free(values); free(locals); return failure; }
+                    values[inst->dst] = values[inst->args.data[incoming]];
+                    break;
+                }
                 case IR_NEG: values[inst->dst] = -values[inst->left]; break;
                 case IR_BIT_NOT: values[inst->dst] = ~values[inst->left]; break;
                 case IR_CALL: {
@@ -70,8 +78,8 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
         }
         const CinderTerminator *term = &block->terminator;
         if (term->kind == TERM_RETURN) { int64_t result = term->value == CINDER_INVALID_VALUE ? 0 : values[term->value]; free(values); free(locals); CinderInterpResult success = {true, result}; return success; }
-        if (term->kind == TERM_JUMP) { block_id = term->target; continue; }
-        if (term->kind == TERM_BRANCH) { block_id = values[term->condition] != 0 ? term->yes : term->no; continue; }
+        if (term->kind == TERM_JUMP) { previous_block = block_id; block_id = term->target; continue; }
+        if (term->kind == TERM_BRANCH) { previous_block = block_id; block_id = values[term->condition] != 0 ? term->yes : term->no; continue; }
         cinder_diag(diags, CINDER_ERROR, term->loc, "IR interpreter reached an unterminated block"); free(values); free(locals); return failure;
     }
 }

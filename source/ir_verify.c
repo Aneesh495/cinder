@@ -15,7 +15,17 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRInst *inst = &block->instructions.data[i];
                 if (!valid_value(inst->dst, function->value_count) || !valid_value(inst->left, function->value_count) || !valid_value(inst->right, function->value_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR value out of range in '%s'", function->name);
                 for (size_t a = 0U; a < inst->args.len; ++a) if (!valid_value(inst->args.data[a], function->value_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR call argument out of range in '%s'", function->name);
-                if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot out of range in '%s'", function->name);
+                if (inst->op == IR_PHI) {
+                    if (inst->phi_blocks.len != inst->args.len) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi incoming edge/value count differs in '%s'", function->name);
+                    for (size_t p = 0U; p < inst->phi_blocks.len; ++p) {
+                        if (!valid_value(inst->args.data[p], function->value_count) || inst->phi_blocks.data[p] >= function->blocks.len) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi incoming value or block out of range in '%s'", function->name);
+                        else {
+                            bool predecessor = false;
+                            for (size_t q = 0U; q < block->predecessors.len; ++q) if (block->predecessors.data[q] == inst->phi_blocks.data[p]) predecessor = true;
+                            if (!predecessor) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi names a non-predecessor block in '%s'", function->name);
+                        }
+                    }
+                }
             }
             const CinderTerminator *term = &block->terminator;
             if (!valid_value(term->value, function->value_count) || !valid_value(term->condition, function->value_count)) cinder_diag(diags, CINDER_FATAL, term->loc, "IR terminator value out of range in '%s'", function->name);
