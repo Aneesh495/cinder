@@ -15,6 +15,7 @@ out/
 
 # Tool and editor state
 .DS_Store
+__pycache__/
 .vscode/
 .idea/
 compile_commands.json

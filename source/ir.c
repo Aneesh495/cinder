@@ -140,8 +140,9 @@ static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
         int op = expr->as.unary.op;
         if (op == TOK_PLUSPLUS || op == TOK_MINUSMINUS) {
             CinderValueId old = lower_expr(context, expr->as.unary.value);
-            CinderIRInst *one = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); one->dst = new_value(context->function); one->integer = 1;
-            CinderIRInst *add = add_inst_ptr(context->function, context->current, op == TOK_PLUSPLUS ? IR_ADD : IR_SUB, expr->loc); add->dst = new_value(context->function); add->left = old; add->right = one->dst; add->loc = expr->loc;
+            CinderValueId one_value = new_value(context->function);
+            CinderIRInst *one = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); one->dst = one_value; one->integer = 1;
+            CinderIRInst *add = add_inst_ptr(context->function, context->current, op == TOK_PLUSPLUS ? IR_ADD : IR_SUB, expr->loc); add->dst = new_value(context->function); add->left = old; add->right = one_value; add->loc = expr->loc;
             if (expr->as.unary.value->kind == EX_NAME) {
                 int slot = find_local(context, expr->as.unary.value->as.name);
                 if (slot >= 0) { CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, expr->loc); store->left = add->dst; store->slot = slot; }
