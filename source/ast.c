@@ -91,6 +91,7 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
     indent(out, depth);
     switch (expr->kind) {
         case EX_INT: fprintf(out, "int %lld\n", (long long)expr->as.integer); break;
+        case EX_FLOAT: fprintf(out, "double %.17g\n", expr->as.floating); break;
         case EX_CHAR: fprintf(out, "char %lld\n", (long long)expr->as.integer); break;
         case EX_STRING: fprintf(out, "string %s\n", expr->as.string); break;
         case EX_NAME: fprintf(out, "name %s : %s%s\n", expr->as.name, cinder_type_name(expr->type), expr->is_lvalue ? " lvalue" : ""); break;

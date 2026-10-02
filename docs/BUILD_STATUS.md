@@ -20,7 +20,7 @@ Updated: 2026-10-02
 - CFG analysis computes reachable reverse postorder, iterative immediate dominators, and conservative back-edge loop headers. `-O1/-O2` forwards same-block local loads, removes unused pure integer instructions, and reports transformation counters while retaining effectful operations.
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 
-The current native implementation is still a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate expression/ABI classification, float/SSE/variadic ABI support, DWARF, PIC, or self-hosting.
+The current native implementation is still a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate expression/ABI classification, float argument/callback ABI support, variadics, DWARF, PIC, or self-hosting.
 
 ## Commands and results
 
@@ -35,7 +35,7 @@ The current native implementation is still a correctness-oriented scalar slice. 
 | `make test-ir` | pass, dominators, loop headers, nonvacuous forwarding/dead-code/phi counters, verifier and allocation dump | `tests/run_ir.sh` |
 | `make test-abi` | pass for the declared scalar encoder/stack-frame smoke; cross-toolchain ABI gate unverified | `tests/run_abi.sh` |
 | `make test-object` | pass, output recognized as ELF64 relocatable x86-64 | `tests/run_object.sh` |
-| `make test-debug` | pass for accepted source/debug flag path; debugger gate unverified | `tests/run_debug.sh` |
+| `make test-float` | pass, decimal literals, float IR/interpreter, SSE2 byte oracle, and ELF output | `tests/run_float.sh` |
 | `make fuzz` | pass, ASan/UBSan build completed; coverage-guided campaign not run | `build-asan/cindercc` |
 | `make selfhost` | pass as a declared unavailable-host placeholder; no self-hosting execution claimed | `tests/selfhost.sh` |
 | `make benchmark` | pass, two local compile timing samples recorded; performance campaign not claimed | `.agent-local/benchmarks/` |
@@ -50,7 +50,7 @@ The current native implementation is still a correctness-oriented scalar slice. 
 
 ## Acceptance status
 
-Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full differential/IR/rewrite/ABI/allocation/object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, float/variadic support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+Every acceptance manifest records the checked-out source revision, host profile, compiler binary hash, command artifacts, and per-file evidence digests. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full differential/IR/rewrite/ABI/allocation/object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, float/variadic support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes. The current manifest also leaves complete float argument/callback ABI, variadic support, and the private 10,000-line production threshold unresolved.
 
 ## Next action
 

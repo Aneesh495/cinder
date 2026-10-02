@@ -14,6 +14,11 @@ void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function)
 
 void cinder_alloc_destroy(CinderAllocation *allocation) { free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; }
 
+static bool value_is_float(const CinderIRFunction *function, CinderValueId value) {
+    for (size_t b = 0U; b < function->blocks.len; ++b) for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) { const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i]; if (inst->dst == value) return inst->op == IR_FCONST || inst->op == IR_FADD || inst->op == IR_FSUB || inst->op == IR_FMUL || inst->op == IR_FDIV || inst->op == IR_FNEG; }
+    return false;
+}
+
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     (void)diags;
     size_t count = allocation->ir->value_count;
@@ -42,7 +47,8 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
         CinderInterval interval = intervals[i];
         bool live_across_call = false;
         for (size_t c = 0U; c < call_positions.len; ++c) if (interval.start < call_positions.data[c] && interval.end > call_positions.data[c]) live_across_call = true;
-        if (!live_across_call && i < CINDER_ARRAY_LEN(registers)) { interval.location.kind = LOC_REGISTER; interval.location.reg = (CinderRegister)registers[i]; interval.location.stack_offset = 0; }
+        bool float_value = value_is_float(allocation->ir, interval.value);
+        if (!float_value && !live_across_call && i < CINDER_ARRAY_LEN(registers)) { interval.location.kind = LOC_REGISTER; interval.location.reg = (CinderRegister)registers[i]; interval.location.stack_offset = 0; }
         else { interval.location.kind = LOC_STACK; interval.location.reg = REG_NONE; interval.location.stack_offset = -((int)(allocation->ir->local_count + spill_index + 1U) * 8); allocation->spills++; spill_index++; }
         cinder_vec_push((CinderVec *)&allocation->intervals, &interval);
     }

@@ -32,6 +32,10 @@ static bool integer_type(const CinderType *type) {
     return type != NULL && (type->kind == TYPE_BOOL || type->kind == TYPE_CHAR || type->kind == TYPE_SHORT || type->kind == TYPE_INT || type->kind == TYPE_LONG || type->kind == TYPE_LLONG || type->kind == TYPE_ENUM);
 }
 
+static bool floating_type(const CinderType *type) { return type != NULL && (type->kind == TYPE_FLOAT || type->kind == TYPE_DOUBLE); }
+static bool numeric_type(const CinderType *type) { return integer_type(type) || floating_type(type); }
+static bool value_compatible(const CinderType *target, const CinderType *value) { return cinder_type_compatible(target, value) || (numeric_type(target) && numeric_type(value)); }
+
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope);
 
 static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, CinderType *return_type, unsigned loop_depth) {
@@ -40,7 +44,7 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
         case ST_EXPR: if (stmt->as.expr != NULL) (void)sema_expr(sema, stmt->as.expr, scope); break;
         case ST_RETURN:
             if (stmt->as.ret.value == NULL) { if (return_type->kind != TYPE_VOID) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "non-void function must return a value"); }
-            else if (!cinder_type_compatible(return_type, sema_expr(sema, stmt->as.ret.value, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "return expression is incompatible with %s", cinder_type_name(return_type));
+            else if (!value_compatible(return_type, sema_expr(sema, stmt->as.ret.value, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "return expression is incompatible with %s", cinder_type_name(return_type));
             break;
         case ST_BLOCK: {
             CinderScope child = { {NULL, 0U, 0U}, scope };
@@ -50,7 +54,7 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
                     CinderDecl *decl = item->as.decl;
                     if (cinder_scope_lookup(&child, decl->name) != NULL) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
                     else scope_add(&child, decl->name, decl->type, decl, false);
-                    if (decl->initializer != NULL && !cinder_type_compatible(decl->type, sema_expr(sema, decl->initializer, &child))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "initializer for '%s' has incompatible type", decl->name);
+                    if (decl->initializer != NULL && !(decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY && decl->type->base->kind == TYPE_CHAR) && !value_compatible(decl->type, sema_expr(sema, decl->initializer, &child))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "initializer for '%s' has incompatible type", decl->name);
                 } else sema_stmt(sema, item, &child, return_type, loop_depth);
             }
             for (size_t i = 0U; i < child.symbols.len; ++i) free(child.symbols.data[i].name);
@@ -58,15 +62,15 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
             break;
         }
         case ST_IF:
-            if (!integer_type(sema_expr(sema, stmt->as.if_stmt.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "if condition must be scalar");
+            if (!numeric_type(sema_expr(sema, stmt->as.if_stmt.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "if condition must be scalar");
             sema_stmt(sema, stmt->as.if_stmt.then_branch, scope, return_type, loop_depth); sema_stmt(sema, stmt->as.if_stmt.else_branch, scope, return_type, loop_depth); break;
         case ST_WHILE:
         case ST_DO:
-            if (!integer_type(sema_expr(sema, stmt->as.loop.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "loop condition must be scalar");
+            if (!numeric_type(sema_expr(sema, stmt->as.loop.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "loop condition must be scalar");
             sema_stmt(sema, stmt->as.loop.body, scope, return_type, loop_depth + 1U); break;
         case ST_FOR:
             if (stmt->as.for_stmt.init != NULL) sema_stmt(sema, stmt->as.for_stmt.init, scope, return_type, loop_depth);
-            if (stmt->as.for_stmt.condition != NULL && !integer_type(sema_expr(sema, stmt->as.for_stmt.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "for condition must be scalar");
+            if (stmt->as.for_stmt.condition != NULL && !numeric_type(sema_expr(sema, stmt->as.for_stmt.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, stmt->loc, "for condition must be scalar");
             if (stmt->as.for_stmt.step != NULL) (void)sema_expr(sema, stmt->as.for_stmt.step, scope);
             sema_stmt(sema, stmt->as.for_stmt.body, scope, return_type, loop_depth + 1U); break;
         case ST_BREAK:
@@ -82,6 +86,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
     if (expr == NULL) return sema->types->void_type;
     switch (expr->kind) {
         case EX_INT: case EX_CHAR: expr->type = sema->types->int_type; expr->is_lvalue = false; return expr->type;
+        case EX_FLOAT: expr->type = sema->types->double_type; expr->is_lvalue = false; return expr->type;
         case EX_STRING: expr->type = cinder_type_pointer(sema->types, sema->types->char_type); return expr->type;
         case EX_NAME: {
             CinderSymbol *symbol = cinder_scope_lookup(scope, expr->as.name);
@@ -90,8 +95,8 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         }
         case EX_BINARY: {
             CinderType *left = sema_expr(sema, expr->as.binary.left, scope); CinderType *right = sema_expr(sema, expr->as.binary.right, scope);
-            if (!integer_type(left) || !integer_type(right)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "operator requires integer operands");
-            expr->type = cinder_type_compatible(left, right) ? left : sema->types->int_type; return expr->type;
+            if (!numeric_type(left) || !numeric_type(right)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "operator requires arithmetic operands");
+            expr->type = floating_type(left) || floating_type(right) ? sema->types->double_type : (cinder_type_compatible(left, right) ? left : sema->types->int_type); return expr->type;
         }
         case EX_UNARY: {
             CinderType *value = sema_expr(sema, expr->as.unary.value, scope);
@@ -102,7 +107,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         case EX_ASSIGN: {
             CinderType *target = sema_expr(sema, expr->as.assign.target, scope); CinderType *value = sema_expr(sema, expr->as.assign.value, scope);
             if (!expr->as.assign.target->is_lvalue) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment target is not an lvalue");
-            if (!cinder_type_compatible(target, value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment types are incompatible");
+            if (!value_compatible(target, value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment types are incompatible");
             expr->type = target; return target;
         }
         case EX_CALL: {
@@ -111,15 +116,15 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             if (callee->kind == TYPE_FUNCTION) {
                 for (size_t i = 0U; i < expr->as.call.args.len; ++i) {
                     CinderType *arg = sema_expr(sema, expr->as.call.args.data[i], scope);
-                    if (i < callee->params.len && !cinder_type_compatible(arg, callee->params.data[i].type)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "argument %zu has incompatible type", i + 1U);
+                    if (i < callee->params.len && !value_compatible(callee->params.data[i].type, arg)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "argument %zu has incompatible type", i + 1U);
                 }
                 expr->type = callee->return_type;
             } else expr->type = sema->types->error_type;
             return expr->type;
         }
         case EX_CONDITIONAL: {
-            if (!integer_type(sema_expr(sema, expr->as.conditional.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "conditional condition must be scalar");
-            CinderType *yes = sema_expr(sema, expr->as.conditional.yes, scope); CinderType *no = sema_expr(sema, expr->as.conditional.no, scope); expr->type = cinder_type_compatible(yes, no) ? yes : sema->types->int_type; return expr->type;
+            if (!numeric_type(sema_expr(sema, expr->as.conditional.condition, scope))) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "conditional condition must be scalar");
+            CinderType *yes = sema_expr(sema, expr->as.conditional.yes, scope); CinderType *no = sema_expr(sema, expr->as.conditional.no, scope); expr->type = floating_type(yes) || floating_type(no) ? sema->types->double_type : (cinder_type_compatible(yes, no) ? yes : sema->types->int_type); return expr->type;
         }
         case EX_CAST: expr->as.cast.value->type = sema_expr(sema, expr->as.cast.value, scope); expr->type = expr->as.cast.cast_type; return expr->type;
         case EX_SIZEOF: (void)sema_expr(sema, expr->as.unary.value, scope); expr->type = sema->types->ulong_type; return expr->type;

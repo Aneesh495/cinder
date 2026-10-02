@@ -180,6 +180,8 @@ typedef struct {
     size_t length;
     CinderLoc loc;
     int64_t integer;
+    bool is_floating;
+    double floating;
 } CinderToken;
 
 typedef struct {
@@ -283,6 +285,7 @@ typedef struct CinderDecl CinderDecl;
 
 typedef enum {
     EX_INT,
+    EX_FLOAT,
     EX_CHAR,
     EX_STRING,
     EX_NAME,
@@ -322,6 +325,7 @@ struct CinderExpr {
     bool is_lvalue;
     union {
         int64_t integer;
+        double floating;
         char *string;
         char *name;
         struct { int op; CinderExpr *left; CinderExpr *right; } binary;
@@ -409,6 +413,7 @@ typedef uint32_t CinderBlockId;
 typedef enum {
     IR_NOP,
     IR_CONST,
+    IR_FCONST,
     IR_GLOBAL_LOAD,
     IR_GLOBAL_STORE,
     IR_LOCAL_LOAD,
@@ -418,6 +423,17 @@ typedef enum {
     IR_ADD,
     IR_SUB,
     IR_MUL,
+    IR_FADD,
+    IR_FSUB,
+    IR_FMUL,
+    IR_FDIV,
+    IR_FNEG,
+    IR_FCMP_EQ,
+    IR_FCMP_NE,
+    IR_FCMP_LT,
+    IR_FCMP_LE,
+    IR_FCMP_GT,
+    IR_FCMP_GE,
     IR_DIV_S,
     IR_DIV_U,
     IR_MOD_S,
@@ -457,6 +473,7 @@ typedef struct {
     CinderValueId left;
     CinderValueId right;
     int64_t integer;
+    double floating;
     int slot;
     int operator_code;
     char *callee;
@@ -539,7 +556,9 @@ unsigned cinder_remove_dead_ir(CinderIRFunction *function);
 /* ---------- interpreter and optimization ---------- */
 typedef struct {
     bool valid;
+    bool floating_result;
     int64_t value;
+    double floating;
 } CinderInterpResult;
 CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *function_name, const int64_t *args, size_t arg_count, unsigned step_limit, CinderDiagnostics *diags);
 
@@ -624,6 +643,7 @@ typedef struct {
     CINDER_VEC_TYPE(char *) defined_symbols;
     CINDER_VEC_TYPE(size_t) symbol_offsets;
     CINDER_VEC_TYPE(CinderDataSymbol) data_symbols;
+    unsigned literal_counter;
     size_t frame_size;
 } CinderMachineObject;
 
