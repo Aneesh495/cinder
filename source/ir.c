@@ -84,6 +84,13 @@ bool cinder_ir_floating(const CinderType *type) {
     return type != NULL && (type->kind == TYPE_FLOAT || type->kind == TYPE_DOUBLE);
 }
 
+CinderType *cinder_ir_value_type(const CinderIRFunction *function, CinderValueId value) {
+    for (size_t b = 0U; b < function->blocks.len; ++b)
+        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i)
+            if (function->blocks.data[b].instructions.data[i].dst == value) return function->blocks.data[b].instructions.data[i].type;
+    return NULL;
+}
+
 static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr) {
     CinderValueId value = lower_expr_impl(context, expr);
     if (value != CINDER_INVALID_VALUE && expr != NULL) {
@@ -144,6 +151,14 @@ static CinderValueId emit_operation(LowerContext *context, CinderIROp op, Cinder
     inst->dst = new_value(context->function);
     inst->left = left;
     inst->right = right;
+    return inst->dst;
+}
+
+static CinderValueId convert_value(LowerContext *context, CinderValueId value, CinderType *from, CinderType *to, CinderLoc loc) {
+    if (cinder_type_equal(from, to)) return value;
+    if (to->kind == TYPE_VOID) return CINDER_INVALID_VALUE;
+    CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONVERT, loc);
+    inst->dst = new_value(context->function); inst->left = value; inst->type = to; inst->source_type = from;
     return inst->dst;
 }
 
@@ -262,9 +277,14 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         if (expr->as.assign.op != '=') previous = lower_expr(context, expr->as.assign.target);
         CinderValueId value = lower_expr(context, expr->as.assign.value);
         if (expr->as.assign.op != '=') {
-            bool floating = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE);
-            bool unsig = expr->type != NULL && expr->type->is_unsigned;
+            CinderType *operation_type = expr->as.assign.operation_type;
+            previous = convert_value(context, previous, expr->as.assign.target->type, operation_type, expr->loc);
+            bool floating = cinder_ir_floating(operation_type);
+            bool unsig = operation_type->is_unsigned;
             value = emit_operation(context, compound_operation(expr->as.assign.op, floating, unsig), previous, value, expr->loc);
+            CinderIRInst *operation = &block_at(context->function, context->current)->instructions.data[block_at(context->function, context->current)->instructions.len - 1U];
+            operation->type = operation_type; operation->source_type = operation_type;
+            value = convert_value(context, value, operation_type, expr->type, expr->loc);
         }
         store_name(context, expr->as.assign.target, value, expr->loc);
         return value;
@@ -273,10 +293,16 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         int op = expr->as.unary.op;
         if (op == TOK_PLUSPLUS || op == TOK_MINUSMINUS) {
             CinderValueId old = lower_expr(context, expr->as.unary.value);
+            CinderType *target_type = expr->as.unary.value->type;
+            CinderType *operation_type = cinder_ir_floating(target_type) ? target_type : cinder_integer_promote(context->function->types, target_type);
+            CinderValueId operand = convert_value(context, old, target_type, operation_type, expr->loc);
             CinderValueId one_value = new_value(context->function);
-            CinderIRInst *one = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); one->dst = one_value; one->integer = 1;
-            CinderIRInst *add = add_inst_ptr(context->function, context->current, op == TOK_PLUSPLUS ? IR_ADD : IR_SUB, expr->loc); add->dst = new_value(context->function); add->left = old; add->right = one_value; add->loc = expr->loc;
+            bool floating = cinder_ir_floating(operation_type);
+            CinderIRInst *one = add_inst_ptr(context->function, context->current, floating ? IR_FCONST : IR_CONST, expr->loc); one->dst = one_value; one->integer = 1; one->floating = 1.0; one->type = operation_type;
+            CinderIROp add_op = floating ? (op == TOK_PLUSPLUS ? IR_FADD : IR_FSUB) : (op == TOK_PLUSPLUS ? IR_ADD : IR_SUB);
+            CinderIRInst *add = add_inst_ptr(context->function, context->current, add_op, expr->loc); add->dst = new_value(context->function); add->left = operand; add->right = one_value; add->loc = expr->loc; add->type = operation_type; add->source_type = operation_type;
             CinderValueId updated = add->dst;
+            updated = convert_value(context, updated, operation_type, target_type, expr->loc);
             store_name(context, expr->as.unary.value, updated, expr->loc);
             return expr->as.unary.postfix ? old : updated;
         }
@@ -291,7 +317,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         }
         CinderValueId value = lower_expr(context, expr->as.unary.value);
         CinderIROp ir_op = expr->type != NULL && (expr->type->kind == TYPE_FLOAT || expr->type->kind == TYPE_DOUBLE) && op == '-' ? IR_FNEG : (op == '-' ? IR_NEG : (op == '~' ? IR_BIT_NOT : IR_COPY));
-        CinderIRInst *inst = add_inst_ptr(context->function, context->current, ir_op, expr->loc); inst->dst = new_value(context->function); inst->left = value; return inst->dst;
+        CinderIRInst *inst = add_inst_ptr(context->function, context->current, ir_op, expr->loc); inst->dst = new_value(context->function); inst->left = value; inst->source_type = expr->as.unary.value->type; return inst->dst;
     }
     if (expr->kind == EX_BINARY) {
         int operator_code = expr->as.binary.op;
@@ -302,7 +328,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
         if (cinder_ir_floating(expr->as.binary.left->type) || cinder_ir_floating(expr->as.binary.right->type)) {
             CinderIROp fp_op = IR_FADD;
             switch (expr->as.binary.op) { case '+': fp_op = IR_FADD; break; case '-': fp_op = IR_FSUB; break; case '*': fp_op = IR_FMUL; break; case '/': fp_op = IR_FDIV; break; case TOK_EQEQ: fp_op = IR_FCMP_EQ; break; case TOK_NEQ: fp_op = IR_FCMP_NE; break; case '<': fp_op = IR_FCMP_LT; break; case TOK_LE: fp_op = IR_FCMP_LE; break; case '>': fp_op = IR_FCMP_GT; break; case TOK_GE: fp_op = IR_FCMP_GE; break; default: break; }
-            CinderIRInst *inst = add_inst_ptr(context->function, context->current, fp_op, expr->loc); inst->dst = new_value(context->function); inst->left = left; inst->right = right; return inst->dst;
+            CinderIRInst *inst = add_inst_ptr(context->function, context->current, fp_op, expr->loc); inst->dst = new_value(context->function); inst->left = left; inst->right = right; inst->source_type = expr->as.binary.left->type; return inst->dst;
         }
         CinderIROp op = IR_ADD;
         switch (expr->as.binary.op) {
@@ -311,10 +337,22 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
             case TOK_EQEQ: op = IR_CMP_EQ; break; case TOK_NEQ: op = IR_CMP_NE; break; case '<': op = IR_CMP_LT_S; break; case TOK_LE: op = IR_CMP_LE_S; break; case '>': op = IR_CMP_GT_S; break; case TOK_GE: op = IR_CMP_GE_S; break;
             case TOK_ANDAND: op = IR_BIT_AND; break; case TOK_OROR: op = IR_BIT_OR; break; default: break;
         }
-        CinderIRInst *inst = add_inst_ptr(context->function, context->current, op, expr->loc); inst->dst = new_value(context->function); inst->left = left; inst->right = right; return inst->dst;
+        bool unsig = expr->as.binary.left->type->is_unsigned;
+        if (unsig) {
+            switch (op) {
+                case IR_DIV_S: op = IR_DIV_U; break; case IR_MOD_S: op = IR_MOD_U; break; case IR_SHR_S: op = IR_SHR_U; break;
+                case IR_CMP_LT_S: op = IR_CMP_LT_U; break; case IR_CMP_LE_S: op = IR_CMP_LE_U; break; case IR_CMP_GT_S: op = IR_CMP_GT_U; break; case IR_CMP_GE_S: op = IR_CMP_GE_U; break;
+                default: break;
+            }
+        }
+        CinderIRInst *inst = add_inst_ptr(context->function, context->current, op, expr->loc); inst->dst = new_value(context->function); inst->left = left; inst->right = right; inst->source_type = expr->as.binary.left->type; return inst->dst;
     }
-    if (expr->kind == EX_SIZEOF) {
-        CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); inst->dst = new_value(context->function); inst->integer = expr->as.unary.value->type == NULL ? 0 : (int64_t)expr->as.unary.value->type->size; return inst->dst;
+    if (expr->kind == EX_SIZEOF || expr->kind == EX_ALIGNOF) {
+        CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc); inst->dst = new_value(context->function); inst->integer = expr->kind == EX_SIZEOF ? (int64_t)expr->queried_type->size : (int64_t)expr->queried_type->align; return inst->dst;
+    }
+    if (expr->kind == EX_CAST) {
+        CinderValueId value = lower_expr(context, expr->as.cast.value);
+        return convert_value(context, value, expr->as.cast.value->type, expr->type, expr->loc);
     }
     cinder_diag(context->diags, CINDER_ERROR, expr->loc, "expression lowering is not implemented for this source construct");
     return CINDER_INVALID_VALUE;
@@ -469,7 +507,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
 }
 
 static const char *op_name(CinderIROp op) {
-    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi"};
+    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert"};
     return op < CINDER_ARRAY_LEN(names) ? names[op] : "unknown";
 }
 

@@ -8,7 +8,7 @@ Updated: 2026-10-03
 - Authenticated GitHub account: `Aneesh495`.
 - Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 - The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published implementation checkpoint before this final Linux validation update: `82a82f1`.
+- Continuation checkpoints are pushed to `main`; current commit and native run are recorded below.
 
 ## Implemented behavior
 
@@ -21,7 +21,7 @@ Updated: 2026-10-03
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 - Eight authored application fixtures and a deterministic defined-program generator are now part of the local workload suite.
 
-The current native implementation is still a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate expression/ABI classification, mixed integer/SSE or callback ABI support, full hosted variadic behavior, DWARF, PIC, or self-hosting.
+The current native implementation covers scalar integer/float operations and mixed scalar SysV argument lists. Complete C01-C48 coverage, full SSA renaming/out-of-SSA, aggregate expression/ABI classification, callbacks, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
 
 ## Commands and results
 
@@ -177,3 +177,15 @@ Validate the numeric increment on Linux, then implement explicit scalar
 conversions and addressable storage. Full SSA construction/edge copies, the
 remaining language features, true bootstrap, debugging, acceptance integrity,
 and required full campaigns remain open.
+
+## Scalar conversion continuation
+
+The numeric checkpoint `c8ecb2a` passed [Linux validation](https://github.com/Aneesh495/cinder/actions/runs/37096716174), including the 1,000-case native object/assembly campaign and sanitizer build.
+
+Current changes add scalar specifier/qualifier handling, explicit casts, integer
+promotions and usual arithmetic conversions, typed `IR_CONVERT`, narrow and bool
+normalization, unsigned division/comparison/shift selection, float32 arithmetic
+and argument/return boundaries, and unevaluated size/alignment queries. Targeted
+conversion cases and invalid-constraint cases are being checked on strict GCC
+release and Clang sanitizer builds. Native validation of this new checkpoint
+is pending publication. See `CONVERSIONS.md`.

@@ -62,6 +62,10 @@ static void check_types(const CinderIRInst *inst, CinderType *const *types, Cind
     if (inst->op == IR_FNEG && !cinder_ir_floating(types[inst->left])) cinder_diag(diags, CINDER_FATAL, inst->loc, "floating negation has a non-floating operand");
     if ((inst->op == IR_NEG || inst->op == IR_BIT_NOT) && !integer(types[inst->left])) cinder_diag(diags, CINDER_FATAL, inst->loc, "integer unary operation has a non-integer operand");
     if (inst->op == IR_COPY && result_fp != cinder_ir_floating(types[inst->left])) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR copy changes scalar register class without a conversion");
+    if (inst->op == IR_CONVERT) {
+        if (inst->source_type == NULL || !cinder_type_equal(inst->source_type, types[inst->left])) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR conversion source type disagrees with its operand");
+        if (!(integer(inst->type) || result_fp) || !(integer(types[inst->left]) || cinder_ir_floating(types[inst->left]))) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR conversion does not have scalar types");
+    }
     if (inst->op == IR_PHI)
         for (size_t a = 0U; a < inst->args.len; ++a)
             if (result_fp != cinder_ir_floating(types[inst->args.data[a]])) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi mixes scalar register classes");
@@ -109,7 +113,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
             bool ordinary = false;
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 const CinderIRInst *inst = &block->instructions.data[i];
-                if (inst->op < IR_NOP || inst->op > IR_PHI) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid IR opcode");
+                if (inst->op < IR_NOP || inst->op > IR_CONVERT) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid IR opcode");
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_GLOBAL_STORE && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
@@ -129,7 +133,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRBlock *block = &function->blocks.data[b];
                 for (size_t i = 0U; i < block->instructions.len && diags->errors == 0U; ++i) {
                     const CinderIRInst *inst = &block->instructions.data[i];
-                    bool needs_left = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_GLOBAL_STORE;
+                    bool needs_left = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_GLOBAL_STORE;
                     bool needs_right = binary_integer(inst->op) || binary_float(inst->op);
                     if (needs_left) check_use(inst->left, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);
                     else if (inst->left != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has an unexpected left operand");

@@ -277,6 +277,7 @@ struct CinderType {
     unsigned qualifiers;
     bool complete;
     bool is_unsigned;
+    bool plain_char;
     size_t size;
     size_t align;
     CinderType *base;
@@ -290,11 +291,15 @@ struct CinderType {
 
 typedef struct {
     CinderArena arena;
+    CINDER_VEC_TYPE(CinderType *) all_types;
     CinderType *error_type;
     CinderType *void_type;
     CinderType *bool_type;
     CinderType *char_type;
+    CinderType *schar_type;
+    CinderType *uchar_type;
     CinderType *short_type;
+    CinderType *ushort_type;
     CinderType *int_type;
     CinderType *uint_type;
     CinderType *long_type;
@@ -311,6 +316,9 @@ CinderType *cinder_type_new(CinderTypeContext *types, CinderTypeKind kind);
 CinderType *cinder_type_pointer(CinderTypeContext *types, CinderType *base);
 CinderType *cinder_type_array(CinderTypeContext *types, CinderType *base, size_t length);
 CinderType *cinder_type_function(CinderTypeContext *types, CinderType *ret, const CinderParamVec *params);
+CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, unsigned qualifiers);
+CinderType *cinder_integer_promote(CinderTypeContext *types, CinderType *type);
+CinderType *cinder_arithmetic_type(CinderTypeContext *types, CinderType *left, CinderType *right);
 bool cinder_type_equal(const CinderType *a, const CinderType *b);
 bool cinder_type_compatible(const CinderType *a, const CinderType *b);
 const char *cinder_type_name(const CinderType *type);
@@ -334,6 +342,7 @@ typedef enum {
     EX_CONDITIONAL,
     EX_CAST,
     EX_SIZEOF,
+    EX_ALIGNOF,
 } CinderExprKind;
 
 typedef enum {
@@ -361,6 +370,7 @@ struct CinderExpr {
     CinderLoc loc;
     CinderType *type;
     bool is_lvalue;
+    CinderType *queried_type;
     union {
         int64_t integer;
         double floating;
@@ -368,7 +378,7 @@ struct CinderExpr {
         char *name;
         struct { int op; CinderExpr *left; CinderExpr *right; } binary;
         struct { int op; CinderExpr *value; bool postfix; } unary;
-        struct { CinderExpr *target; CinderExpr *value; int op; } assign;
+        struct { CinderExpr *target; CinderExpr *value; int op; CinderType *operation_type; } assign;
         struct { CinderExpr *callee; CINDER_VEC_TYPE(CinderExpr *) args; } call;
         struct { CinderExpr *list; CinderType *type; } va_arg;
         struct { CinderExpr *condition; CinderExpr *yes; CinderExpr *no; } conditional;
@@ -436,6 +446,7 @@ typedef struct {
     CinderTypeContext *types;
     CinderDiagnostics *diags;
     CinderScope globals;
+    CinderStmt *function_body;
 } CinderSema;
 
 void cinder_sema_init(CinderSema *sema, CinderAst *ast, CinderTypeContext *types, CinderDiagnostics *diags);
@@ -499,6 +510,7 @@ typedef enum {
     IR_CMP_GE_U,
     IR_CALL,
     IR_PHI,
+    IR_CONVERT,
 } CinderIROp;
 
 typedef enum {
@@ -511,6 +523,7 @@ typedef enum {
 typedef struct {
     CinderIROp op;
     CinderType *type;
+    CinderType *source_type;
     CinderValueId dst;
     CinderValueId left;
     CinderValueId right;
@@ -651,6 +664,7 @@ void cinder_alloc_destroy(CinderAllocation *allocation);
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
 bool cinder_ir_floating(const CinderType *type);
+CinderType *cinder_ir_value_type(const CinderIRFunction *function, CinderValueId value);
 typedef struct {
     CinderValueId source;
     CinderValueId destination;

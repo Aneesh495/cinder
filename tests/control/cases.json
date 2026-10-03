@@ -258,5 +258,261 @@
   {
     "source": "literal_float_direct_round.c",
     "exit": 0
+  },
+  {
+    "source": "convert_uint_wrap.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_uint_multiply.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_uint_subtract.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_uint_negate.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_ulong_negate.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_uint_divide.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_uint_compare.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_uint_shift.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_signed_shift.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_mixed_unsigned.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_mixed_long.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_mixed_llong_ulong.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_char_truncate.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_short_truncate.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_signed_char.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_signed_short.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_char_promote.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_short_promote.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_unsigned_narrow_return.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_signed_narrow_return.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_narrow_argument.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_bool_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_bool_float.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_bool_nan.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_bool_update.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_narrow_compound.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_narrow_postfix.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_narrow_prefix.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_shift_compound.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_bit_compound.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_mixed_float_add.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_mixed_double.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_assignment.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_arithmetic.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_subtract.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_compound.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_negate.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_increment.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_multiply.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_divide.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_to_int.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_to_uint.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_to_ulong.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_to_long_min.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_ulong_to_double.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_ulong_to_float.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_long_to_float.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_conditional_float.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_conditional_unsigned.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_sizeof_type.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_alignof_type.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_sizeof_array_type.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_sizeof_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_cast_precedence.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_void_cast.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_const_value.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_const_parameter.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_nested_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float32_return.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float32_ten_args.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float32_mixed_args.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_call_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_integer_return_float.c",
+    "exit": 0
+  },
+  {
+    "source": "convert_float_return_integer.c",
+    "exit": 0
   }
 ]
