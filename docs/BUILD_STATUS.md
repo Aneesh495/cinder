@@ -8,7 +8,7 @@ Updated: 2026-10-02
 - Authenticated GitHub account: `Aneesh495`.
 - Published repository: [Aneesh495/cinder](https://github.com/Aneesh495/cinder), public, branch `main`.
 - The requested `cinder` owner namespace was not writable from the authenticated account, so no unrelated namespace was modified.
-- Latest published implementation checkpoint before this final validation update: `490888c`.
+- Latest published implementation checkpoint before this Linux validation update: `12832be`.
 
 ## Implemented behavior
 
@@ -21,7 +21,7 @@ Updated: 2026-10-02
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 - Eight authored application fixtures and a deterministic defined-program generator are now part of the local workload suite.
 
-The current native implementation is still a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate expression/ABI classification, float argument/callback ABI support, variadics, DWARF, PIC, or self-hosting.
+The current native implementation is still a correctness-oriented scalar slice. It does not claim complete C17 conformance, complete C01-C48 coverage, full SSA renaming/out-of-SSA, final register allocation, aggregate expression/ABI classification, mixed integer/SSE or callback ABI support, full hosted variadic behavior, DWARF, PIC, or self-hosting.
 
 ## Commands and results
 
@@ -31,7 +31,8 @@ The current native implementation is still a correctness-oriented scalar slice. 
 | `make test` | pass, CTest smoke | CTest output |
 | `make test-frontend` | pass, include/macro/`-D`/interpreter/negative diagnostics | `tests/run_frontend.sh` |
 | `make test-globals` | pass, aggregate layout, global data, ELF sections, interpreter | `tests/run_globals.sh` |
-| `make test-multi` | pass, separate multi-input ELF objects and unavailable-host link diagnostic | `tests/run_multi.sh` |
+| `make test-multi` | pass, separate multi-input ELF objects and unavailable-host link diagnostic on macOS | `tests/run_multi.sh` |
+| `make test-native-linux` | pass on GitHub Ubuntu x86-64 workflow: native hello/globals execution, ELF inspection, multi-TU link, and result checks | [workflow run](https://github.com/Aneesh495/cinder/actions/runs/37086281799) |
 | `make test-preprocessor` | pass | `tests/run_preprocessor.sh` |
 | `make test-ir` | pass, dominators, loop headers, nonvacuous forwarding/dead-code/phi counters, verifier and allocation dump | `tests/run_ir.sh` |
 | `make test-parallel-copy` | pass, standalone cycle and phi plan checks | `tests/run_parallel_copy.sh` |
@@ -53,7 +54,7 @@ The current native implementation is still a correctness-oriented scalar slice. 
 
 ## Acceptance status
 
-The latest manifest reused the previously executed generated workload only across tooling/documentation-only commits with an unchanged compiler binary hash; the copied summary is itself included and hashed as evidence. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
+The Linux workflow has now independently passed native x86-64 hello/globals execution and multi-TU linking for `12832be`; the local macOS manifest still records Linux execution as unverified because its host cannot execute the target. The verifier checks those bindings before evaluating gate outcomes. The current manifest intentionally reports these required gates as unverified or unmet: Linux-native execution on this macOS arm64 host, complete stage 1/2/3 self-hosting, full 20,000-program differential/100,000-IR/50,000-rewrite/500-ABI/10,000-allocation/1,000-object/debug/fuzz/failure campaigns, complete SSA renaming/parallel-copy lowering, aggregate expression and ABI classification, mixed integer/SSE and callback ABI, full hosted `va_list`/`va_copy` support, and the private 10,000-line production threshold. `make verify` rejects the manifest rather than converting missing workloads into passes.
 
 ## Next action
 

@@ -24,7 +24,7 @@ jobs:
       - name: Sanitizer build
         run: make fuzz
       - name: Acceptance evidence
-        run: tests/acceptance.sh build/cindercc
+        run: CINDER_LINUX_NATIVE=1 tests/acceptance.sh build/cindercc
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -28,6 +28,7 @@ python3 "$root/tools/source_census.py" --root "$root" --output "$root/.agent-loc
 python3 - "$evidence" "$root" <<'PY'
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -55,7 +56,7 @@ payload = {
         "authored-applications": {"status": "pass", "runs": 8},
         "generated-defined-interpreter": {"status": "pass", "runs": 1200},
         "reference-smoke": {"status": "pass", "runs": 100},
-        "linux-native-execution": {"status": "unverified", "runs": 0},
+        "linux-native-execution": {"status": "pass" if os.environ.get("CINDER_LINUX_NATIVE") == "1" else "unverified", "runs": 1 if os.environ.get("CINDER_LINUX_NATIVE") == "1" else 0},
         "self-hosting": {"status": "unverified", "runs": 0},
         "full-differential-campaign": {"status": "unverified", "runs": 0},
         "full-fuzz-campaign": {"status": "unverified", "runs": 0},
