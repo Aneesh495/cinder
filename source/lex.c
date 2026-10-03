@@ -97,7 +97,6 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
     const char *text = sources->preprocessed;
     size_t length = sources->preprocessed_size;
     size_t i = 0U;
-    CinderFileId file = sources->files.len > 0U ? sources->files.data[0].id : CINDER_NO_FILE;
     while (i < length) {
         unsigned char c = (unsigned char)text[i];
         if (isspace(c) != 0) {
@@ -105,12 +104,12 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
             continue;
         }
         size_t start = i;
-        CinderLoc loc = cinder_loc(file, start, 1U);
+        CinderLoc loc = cinder_preprocessed_loc(sources, start, 1U);
         if (is_ident_start(c)) {
             ++i;
             while (i < length && is_ident_continue((unsigned char)text[i])) ++i;
             CinderTokenKind kind = keyword_kind(text + start, i - start);
-            push_token(tokens, kind, text + start, i - start, cinder_loc(file, start, i - start), 0);
+            push_token(tokens, kind, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), 0);
             continue;
         }
         if (isdigit(c) != 0) {
@@ -125,16 +124,16 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
                 double value = strtod(copy, &end);
                 bool ok = errno == 0 && end != copy;
                 if (ok && end != NULL && (*end == 'f' || *end == 'F')) ++end;
-                if (!ok || end == NULL || *end != '\0') cinder_diag(diags, CINDER_ERROR, cinder_loc(file, start, i - start), "invalid floating constant");
-                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_loc(file, start, i - start), 0);
+                if (!ok || end == NULL || *end != '\0') cinder_diag(diags, CINDER_ERROR, cinder_preprocessed_loc(sources, start, i - start), "invalid floating constant");
+                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), 0);
                 tokens->tokens.data[tokens->tokens.len - 1U].is_floating = true;
                 tokens->tokens.data[tokens->tokens.len - 1U].floating = value;
                 free(copy);
             } else {
                 bool ok = false;
                 int64_t value = parse_integer(text + start, i - start, &ok);
-                if (!ok) cinder_diag(diags, CINDER_ERROR, cinder_loc(file, start, i - start), "invalid integer constant");
-                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_loc(file, start, i - start), value);
+                if (!ok) cinder_diag(diags, CINDER_ERROR, cinder_preprocessed_loc(sources, start, i - start), "invalid integer constant");
+                push_token(tokens, TOK_NUMBER, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), value);
             }
             continue;
         }
@@ -158,23 +157,23 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
             if (!closed) {
                 cinder_diag(diags, CINDER_ERROR, loc, "unterminated %s literal", quote == '"' ? "string" : "character");
             }
-            push_token(tokens, quote == '"' ? TOK_STRING : TOK_CHAR, text + start, i - start, cinder_loc(file, start, i - start), 0);
+            push_token(tokens, quote == '"' ? TOK_STRING : TOK_CHAR, text + start, i - start, cinder_preprocessed_loc(sources, start, i - start), 0);
             continue;
         }
         if (i + 2U < length && text[i] == '.' && text[i + 1U] == '.' && text[i + 2U] == '.') {
-            push_token(tokens, TOK_ELLIPSIS, text + i, 3U, cinder_loc(file, i, 3U), 0);
+            push_token(tokens, TOK_ELLIPSIS, text + i, 3U, cinder_preprocessed_loc(sources, i, 3U), 0);
             i += 3U;
             continue;
         }
         if (i + 2U < length && ((text[i] == '<' && text[i + 1U] == '<' && text[i + 2U] == '=') || (text[i] == '>' && text[i + 1U] == '>' && text[i + 2U] == '='))) {
-            push_token(tokens, text[i] == '<' ? TOK_LSHIFT_EQ : TOK_RSHIFT_EQ, text + i, 3U, cinder_loc(file, i, 3U), 0);
+            push_token(tokens, text[i] == '<' ? TOK_LSHIFT_EQ : TOK_RSHIFT_EQ, text + i, 3U, cinder_preprocessed_loc(sources, i, 3U), 0);
             i += 3U;
             continue;
         }
         if (i + 1U < length) {
             CinderTokenKind pair = two_char_kind(text[i], text[i + 1U]);
             if (pair != 0) {
-                push_token(tokens, pair, text + i, 2U, cinder_loc(file, i, 2U), 0);
+                push_token(tokens, pair, text + i, 2U, cinder_preprocessed_loc(sources, i, 2U), 0);
                 i += 2U;
                 continue;
             }
@@ -187,6 +186,6 @@ int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDi
         cinder_diag(diags, CINDER_ERROR, loc, "unexpected character '%c'", c);
         ++i;
     }
-    push_token(tokens, TOK_EOF, text + length, 0U, cinder_loc(file, length, 0U), 0);
+    push_token(tokens, TOK_EOF, text + length, 0U, cinder_preprocessed_loc(sources, length, 0U), 0);
     return diags->errors == 0U ? 0 : 1;
 }

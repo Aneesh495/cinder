@@ -147,7 +147,7 @@ done_sema:
 done_ast:
     cinder_ast_destroy(&ast);
 done:
-    if (diags.errors != 0U) cinder_diag_print(&diags, &sources, stderr);
+    if (diags.items.len != 0U) cinder_diag_print(&diags, &sources, stderr);
     bool ok = result == 0 && diags.errors == 0U;
     cinder_tokens_destroy(&tokens); cinder_types_destroy(&types); cinder_diags_destroy(&diags); cinder_sources_destroy(&sources); return ok ? 0 : 1;
 }

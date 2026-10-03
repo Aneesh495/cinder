@@ -64,8 +64,26 @@ typedef struct {
 } CinderSourceFile;
 
 typedef struct {
+    size_t begin;
+    size_t end;
+    CinderLoc expansion;
+    CinderLoc spelling;
+    CinderLoc definition;
+} CinderSourceSpan;
+
+typedef struct {
+    CinderFileId file;
+    size_t offset;
+    unsigned physical_line;
+    unsigned logical_line;
+    const char *path;
+} CinderLineDirective;
+
+typedef struct {
     CinderArena arena;
     CINDER_VEC_TYPE(CinderSourceFile) files;
+    CINDER_VEC_TYPE(CinderSourceSpan) spans;
+    CINDER_VEC_TYPE(CinderLineDirective) line_directives;
     char *preprocessed;
     size_t preprocessed_size;
 } CinderSourceManager;
@@ -76,6 +94,10 @@ CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, 
 CinderSourceFile *cinder_source_get(CinderSourceManager *sources, CinderFileId id);
 CinderLoc cinder_loc(CinderFileId file, size_t offset, size_t length);
 void cinder_loc_linecol(CinderSourceManager *sources, CinderLoc *loc);
+void cinder_loc_physical_linecol(CinderSourceManager *sources, CinderLoc *loc);
+const char *cinder_loc_name(CinderSourceManager *sources, CinderLoc loc);
+CinderLoc cinder_preprocessed_loc(CinderSourceManager *sources, size_t offset, size_t length);
+const CinderSourceSpan *cinder_preprocessed_span(CinderSourceManager *sources, size_t offset);
 const char *cinder_source_name(CinderSourceManager *sources, CinderFileId id);
 
 typedef enum {

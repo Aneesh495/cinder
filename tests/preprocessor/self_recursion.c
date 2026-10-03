@@ -1,0 +1,2 @@
+#define SELF SELF
+SELF SELF

@@ -28,6 +28,7 @@ test-multi: build
 
 test-preprocessor: build
 	@tests/run_preprocessor.sh $(BUILD_DIR)/cindercc
+	@python3 tests/test_preprocessor.py $(BUILD_DIR)/cindercc
 
 test-ir: build
 	@tests/run_ir.sh $(BUILD_DIR)/cindercc

@@ -1,390 +1,360 @@
-#include "cinder.h"
+#define _XOPEN_SOURCE 700
+#include "pp_private.h"
 
-#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-/* Token-aware enough for ordinary object-like and function-like macros. The
- * preprocessor keeps directive state and rescans replacement identifiers; it
- * never performs a blind global text replacement. */
+/* Directive state is per included file; macros are shared by one TU only. */
 typedef struct {
-    char *name;
-    char *replacement;
-    CINDER_VEC_TYPE(char *) parameters;
-    bool function_like;
-    bool variadic;
-} CinderMacro;
+    bool parent;
+    bool active;
+    bool taken;
+    bool seen_else;
+    CinderLoc opening;
+} PPConditional;
 
-typedef struct {
-    CINDER_VEC_TYPE(CinderMacro) macros;
-    CINDER_VEC_TYPE(char *) include_dirs;
-    CinderSourceManager *sources;
-    CinderDiagnostics *diags;
-    unsigned depth;
-} CinderPP;
-
-static void string_append(char **buffer, size_t *length, size_t *capacity, const char *text, size_t text_len) {
-    if (text_len > SIZE_MAX - *length - 1U) abort();
-    size_t required = *length + text_len + 1U;
-    if (required > *capacity) {
-        size_t next = *capacity == 0U ? 256U : *capacity;
-        while (next < required) next *= 2U;
-        *buffer = cinder_realloc(*buffer, next);
-        *capacity = next;
-    }
-    memcpy(*buffer + *length, text, text_len);
-    *length += text_len;
-    (*buffer)[*length] = '\0';
+static void define_text(PP *pp, const char *text, bool predefined) {
+    PPTokens tokens = {0};
+    pp_scan(pp, text, strlen(text), CINDER_NO_FILE, 0U, &tokens);
+    pp_define(pp, &tokens, predefined);
+    pp_destroy_tokens(&tokens);
 }
 
-static CinderMacro *macro_find(CinderPP *pp, const char *name, size_t length) {
-    for (size_t i = pp->macros.len; i > 0U; --i) {
-        CinderMacro *macro = &pp->macros.data[i - 1U];
-        if (strlen(macro->name) == length && memcmp(macro->name, name, length) == 0) return macro;
+static PPFile *file_state(PP *pp, CinderFileId file) {
+    for (size_t i = 0U; i < pp->files.len; ++i) if (pp->files.data[i].file == file) return &pp->files.data[i];
+    PPFile state = {file, false, false};
+    cinder_vec_push((CinderVec *)&pp->files, &state);
+    return &pp->files.data[pp->files.len - 1U];
+}
+
+static char *decode_header(PP *pp, PPToken token) {
+    if (token.kind != PP_LITERAL || token.length < 2U || token.text[0] != '"' || token.text[token.length - 1U] != '"') {
+        cinder_diag(pp->diags, CINDER_ERROR, token.loc, "expected ordinary string literal");
+        return NULL;
+    }
+    char *result = cinder_alloc(token.length);
+    size_t length = 0U;
+    for (size_t i = 1U; i + 1U < token.length; ++i) {
+        char c = token.text[i];
+        if (c == '\\' && i + 2U < token.length) {
+            char escaped = token.text[++i];
+            if (escaped != '\\' && escaped != '"') {
+                cinder_diag(pp->diags, CINDER_ERROR, token.loc, "unsupported escape in directive string");
+                free(result);
+                return NULL;
+            }
+            c = escaped;
+        }
+        result[length++] = c;
+    }
+    result[length] = '\0';
+    return result;
+}
+
+void pp_pragma(PP *pp, const PPTokens *line, CinderLoc loc) {
+    if (line->len == 1U && pp_is(line->data[0], "once")) {
+        if (loc.file != CINDER_NO_FILE) file_state(pp, loc.file)->once = true;
+        return;
+    }
+    if (line->len > 0U && pp_is(line->data[0], "pack")) {
+        cinder_diag(pp->diags, CINDER_ERROR, loc, "packing pragmas are unsupported by the target layout profile");
+        return;
+    }
+    if (line->len == 3U && pp_is(line->data[0], "STDC")) {
+        PPToken kind = line->data[1], value = line->data[2];
+        bool valid_value = pp_is(value, "ON") || pp_is(value, "OFF") || pp_is(value, "DEFAULT");
+        if (pp_is(kind, "FP_CONTRACT") && valid_value) return;
+        if ((pp_is(kind, "FENV_ACCESS") || pp_is(kind, "CX_LIMITED_RANGE")) && (pp_is(value, "OFF") || pp_is(value, "DEFAULT"))) return;
+        cinder_diag(pp->diags, CINDER_ERROR, loc, "unsupported STDC pragma configuration");
+        return;
+    }
+    cinder_diag(pp->diags, CINDER_WARNING, loc, "unknown pragma ignored");
+}
+
+static char *join_path(const char *directory, size_t directory_length, const char *name) {
+    size_t length = strlen(name);
+    if (directory_length > SIZE_MAX - length - 2U) return NULL;
+    char *path = cinder_alloc(directory_length + length + 2U);
+    memcpy(path, directory, directory_length);
+    if (directory_length != 0U && directory[directory_length - 1U] != '/') path[directory_length++] = '/';
+    memcpy(path + directory_length, name, length + 1U);
+    return path;
+}
+
+static bool readable(const char *path) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) return false;
+    fclose(file);
+    return true;
+}
+
+static char *resolve_include(PP *pp, const char *current, const char *name, bool quoted) {
+    if (name[0] == '/') return readable(name) ? cinder_strndup(name, strlen(name)) : NULL;
+    if (quoted) {
+        const char *slash = strrchr(current, '/');
+        size_t length = slash == NULL ? 0U : (size_t)(slash - current + 1U);
+        char *candidate = join_path(current, length, name);
+        if (candidate != NULL && readable(candidate)) return candidate;
+        free(candidate);
+    }
+    for (size_t i = 0U; i < pp->include_dirs.len; ++i) {
+        const char *directory = pp->include_dirs.data[i];
+        char *candidate = join_path(directory, strlen(directory), name);
+        if (candidate != NULL && readable(candidate)) return candidate;
+        free(candidate);
     }
     return NULL;
 }
 
-static void macro_free(CinderMacro *macro) {
-    free(macro->name);
-    free(macro->replacement);
-    for (size_t i = 0U; i < macro->parameters.len; ++i) free(macro->parameters.data[i]);
-    free(macro->parameters.data);
-}
-
-static const char *skip_space(const char *p) {
-    while (*p == ' ' || *p == '\t' || *p == '\r') ++p;
-    return p;
-}
-
-static bool identifier_at(const char *p, const char **end) {
-    if (!(isalpha((unsigned char)*p) != 0 || *p == '_')) return false;
-    const char *q = p + 1;
-    while (isalnum((unsigned char)*q) != 0 || *q == '_') ++q;
-    *end = q;
-    return true;
-}
-
-static int macro_parameter(CinderMacro *macro, const char *name, size_t length) {
-    for (size_t i = 0U; i < macro->parameters.len; ++i) {
-        if (strlen(macro->parameters.data[i]) == length && memcmp(macro->parameters.data[i], name, length) == 0) return (int)i;
+static void include_file(PP *pp, const char *current, const PPTokens *line, CinderLoc loc, unsigned depth) {
+    PPTokens expanded = {0};
+    const PPTokens *tokens = line;
+    if (line->len == 0U || (line->data[0].kind != PP_LITERAL && !pp_is(line->data[0], "<"))) {
+        pp_expand(pp, line, &expanded, 0U);
+        tokens = &expanded;
     }
-    return -1;
-}
-
-static void expand_text(CinderPP *pp, const char *line, size_t line_len, char **out, size_t *out_len, size_t *out_cap, unsigned depth);
-
-static void expand_macro(CinderPP *pp, CinderMacro *macro, const char **after, const char *p, char **out, size_t *out_len, size_t *out_cap, unsigned depth) {
-    if (!macro->function_like) {
-        expand_text(pp, macro->replacement, strlen(macro->replacement), out, out_len, out_cap, depth + 1U);
-        *after = p;
-        return;
-    }
-    const char *open = skip_space(p);
-    if (*open != '(') {
-        string_append(out, out_len, out_cap, macro->name, strlen(macro->name));
-        *after = p;
-        return;
-    }
-    open++;
-    CINDER_VEC_TYPE(char *) args = {NULL, 0U, 0U};
-    const char *cursor = open;
-    const char *arg_start = cursor;
-    unsigned nesting = 0U;
-    while (*cursor != '\0') {
-        if (*cursor == '(') nesting++;
-        if (*cursor == ')') {
-            if (nesting == 0U) {
-                size_t n = (size_t)(cursor - arg_start);
-                char *arg = cinder_strndup(arg_start, n);
-                cinder_vec_push((CinderVec *)&args, &arg);
-                ++cursor;
-                break;
-            }
-            nesting--;
+    char *name = NULL;
+    bool quoted = false;
+    if (tokens->len == 1U && tokens->data[0].kind == PP_LITERAL) {
+        name = decode_header(pp, tokens->data[0]);
+        quoted = true;
+    } else if (tokens->len >= 3U && pp_is(tokens->data[0], "<") && pp_is(tokens->data[tokens->len - 1U], ">")) {
+        CinderBytes bytes = {0};
+        for (size_t i = 1U; i + 1U < tokens->len; ++i) {
+            if (tokens->data[i].space && i > 1U) cinder_bytes_put8(&bytes, ' ');
+            cinder_bytes_append(&bytes, (const unsigned char *)tokens->data[i].text, tokens->data[i].length);
         }
-        if (*cursor == ',' && nesting == 0U) {
-            size_t n = (size_t)(cursor - arg_start);
-            char *arg = cinder_strndup(arg_start, n);
-            cinder_vec_push((CinderVec *)&args, &arg);
-            arg_start = cursor + 1;
-        }
-        ++cursor;
+        cinder_bytes_put8(&bytes, 0U);
+        name = (char *)bytes.data;
+    } else cinder_diag(pp->diags, CINDER_ERROR, loc, "expected one quoted or angle header name");
+    if (name != NULL) {
+        char *path = *name == '\0' ? NULL : resolve_include(pp, current, name, quoted);
+        if (path == NULL) cinder_diag(pp->diags, CINDER_ERROR, loc, "cannot resolve include '%s'", name);
+        else { pp_process(pp, path, depth + 1U); free(path); }
+        free(name);
     }
-    if (cursor == open || args.len == 0U) {
-        string_append(out, out_len, out_cap, macro->name, strlen(macro->name));
-        for (size_t i = 0U; i < args.len; ++i) free(args.data[i]);
-        free(args.data);
-        *after = p;
-        return;
-    }
-    const char *r = macro->replacement;
-    while (*r != '\0') {
-        const char *end = NULL;
-        if (identifier_at(r, &end)) {
-            int index = macro_parameter(macro, r, (size_t)(end - r));
-            if (index >= 0 && (size_t)index < args.len) {
-                expand_text(pp, args.data[index], strlen(args.data[index]), out, out_len, out_cap, depth + 1U);
-            } else if (index >= 0 && macro->variadic && (size_t)index >= macro->parameters.len - 1U) {
-                for (size_t i = (size_t)index; i < args.len; ++i) {
-                    if (i != (size_t)index) string_append(out, out_len, out_cap, ",", 1U);
-                    expand_text(pp, args.data[i], strlen(args.data[i]), out, out_len, out_cap, depth + 1U);
-                }
-            } else {
-                string_append(out, out_len, out_cap, r, (size_t)(end - r));
-            }
-            r = end;
-        } else {
-            string_append(out, out_len, out_cap, r, 1U);
-            ++r;
-        }
-    }
-    for (size_t i = 0U; i < args.len; ++i) free(args.data[i]);
-    free(args.data);
-    *after = cursor;
+    pp_destroy_tokens(&expanded);
 }
 
-static void expand_text(CinderPP *pp, const char *line, size_t line_len, char **out, size_t *out_len, size_t *out_cap, unsigned depth) {
-    if (depth > 64U) {
-        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(CINDER_NO_FILE, 0U, 0U), "macro expansion exceeded the recursion limit");
+static void line_control(PP *pp, const PPTokens *line, CinderFileId file, size_t next_offset, CinderLoc loc) {
+    PPTokens expanded = {0};
+    pp_expand(pp, line, &expanded, 0U);
+    if (expanded.len == 0U || expanded.len > 2U || expanded.data[0].kind != PP_NUMBER) {
+        cinder_diag(pp->diags, CINDER_ERROR, loc, "#line requires a decimal line number and optional filename");
+        pp_destroy_tokens(&expanded);
         return;
     }
-    size_t i = 0U;
-    while (i < line_len) {
-        const char *end = NULL;
-        if (identifier_at(line + i, &end)) {
-            CinderMacro *macro = macro_find(pp, line + i, (size_t)(end - (line + i)));
-            if (macro != NULL) {
-                const char *after = end;
-                expand_macro(pp, macro, &after, end, out, out_len, out_cap, depth);
-                i = (size_t)(after - line);
-                continue;
+    const char *text = expanded.data[0].text;
+    uint64_t number = 0U;
+    bool valid = *text != '\0';
+    for (size_t i = 0U; text[i] != '\0'; ++i) {
+        if (text[i] < '0' || text[i] > '9') { valid = false; break; }
+        number = number * 10U + (unsigned)(text[i] - '0');
+        if (number > 2147483647U) { valid = false; break; }
+    }
+    if (!valid || number == 0U) cinder_diag(pp->diags, CINDER_ERROR, loc, "#line number must be between 1 and 2147483647");
+    else {
+        CinderLoc physical = cinder_loc(file, next_offset, 0U);
+        cinder_loc_physical_linecol(pp->sources, &physical);
+        const char *path = cinder_loc_name(pp->sources, loc);
+        char *decoded = expanded.len == 2U ? decode_header(pp, expanded.data[1]) : NULL;
+        if (decoded != NULL) path = cinder_arena_strndup(&pp->sources->arena, decoded, strlen(decoded));
+        CinderLineDirective record = {file, next_offset, physical.line, (unsigned)number, path};
+        cinder_vec_push((CinderVec *)&pp->sources->line_directives, &record);
+        free(decoded);
+    }
+    pp_destroy_tokens(&expanded);
+}
+
+static void flush_pending(PP *pp, PPTokens *pending) {
+    if (pending->len != 0U) pp_expand(pp, pending, &pp->output, 0U);
+    pending->len = 0U;
+}
+
+static void require_empty(PP *pp, const PPTokens *tokens, CinderLoc loc, const char *directive) {
+    if (tokens->len != 0U) cinder_diag(pp->diags, CINDER_ERROR, loc, "trailing tokens after #%s", directive);
+}
+
+int pp_process(PP *pp, const char *path, unsigned depth) {
+    if (depth > 128U) {
+        cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "include nesting limit exceeded");
+        return 1;
+    }
+    char *canonical = realpath(path, NULL);
+    CinderFileId id = cinder_source_load(pp->sources, canonical == NULL ? path : canonical, stderr);
+    free(canonical);
+    CinderSourceFile *file = cinder_source_get(pp->sources, id);
+    if (file == NULL) {
+        cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "cannot read input '%s'", path);
+        return 1;
+    }
+    PPFile *state = file_state(pp, id);
+    if (state->included && state->once) return 0;
+    state->included = true;
+    /* Keep heap-owned path/bytes stable when recursive includes grow the file vector. */
+    const char *source_path = file->path;
+    size_t file_size = file->size;
+    PPTokens tokens = {0}, pending = {0};
+    pp_scan(pp, file->bytes, file_size, id, 0U, &tokens);
+    PPConditional conditions[128];
+    size_t condition_count = 0U;
+    size_t cursor = 0U;
+    while (cursor < tokens.len && pp->diags->errors == 0U) {
+        size_t end = cursor;
+        while (end < tokens.len && tokens.data[end].kind != PP_NEWLINE) ++end;
+        bool active = condition_count == 0U || conditions[condition_count - 1U].active;
+        bool directive = cursor < end && pp_is(tokens.data[cursor], "#");
+        if (!directive) {
+            if (active) for (size_t i = cursor; i < end; ++i) pp_push(&pending, tokens.data[i]);
+            if (end < tokens.len) {
+                if (active) pp_push(&pending, tokens.data[end]);
+                else pp_push(&pp->output, tokens.data[end]);
             }
-            string_append(out, out_len, out_cap, line + i, (size_t)(end - (line + i)));
-            i = (size_t)(end - line);
+            cursor = end < tokens.len ? end + 1U : end;
             continue;
         }
-        string_append(out, out_len, out_cap, line + i, 1U);
-        ++i;
+        flush_pending(pp, &pending);
+        size_t next_offset = end < tokens.len ? tokens.data[end].loc.offset + tokens.data[end].loc.length : file_size;
+        if (++cursor == end) { cursor = end < tokens.len ? end + 1U : end; continue; }
+        PPToken word = tokens.data[cursor++];
+        CinderLoc loc = word.loc;
+        PPTokens line = {tokens.data + cursor, end - cursor, end - cursor};
+        bool opening = pp_is(word, "if") || pp_is(word, "ifdef") || pp_is(word, "ifndef");
+        if (opening) {
+            bool value = false;
+            if (condition_count == CINDER_ARRAY_LEN(conditions)) {
+                cinder_diag(pp->diags, CINDER_ERROR, loc, "conditional nesting limit exceeded");
+            } else {
+                if (pp_is(word, "if")) {
+                    if (active) pp_evaluate(pp, &line, &value);
+                } else if (line.len != 1U || line.data[0].kind != PP_IDENT) {
+                    cinder_diag(pp->diags, CINDER_ERROR, loc, "#ifdef/#ifndef requires exactly one identifier");
+                } else {
+                    value = pp_find(pp, line.data[0]) != NULL;
+                    if (pp_is(line.data[0], "__FILE__") || pp_is(line.data[0], "__LINE__") || pp_is(line.data[0], "__DATE__") || pp_is(line.data[0], "__TIME__")) value = true;
+                    if (pp_is(word, "ifndef")) value = !value;
+                }
+                conditions[condition_count++] = (PPConditional){active, active && value, active && value, false, loc};
+            }
+        } else if (pp_is(word, "elif") || pp_is(word, "else") || pp_is(word, "endif")) {
+            if (condition_count == 0U) cinder_diag(pp->diags, CINDER_ERROR, loc, "unmatched #%s", word.text);
+            else {
+                PPConditional *condition = &conditions[condition_count - 1U];
+                if (pp_is(word, "endif")) { require_empty(pp, &line, loc, "endif"); --condition_count; }
+                else if (condition->seen_else) cinder_diag(pp->diags, CINDER_ERROR, loc, "#%s after #else", word.text);
+                else if (pp_is(word, "else")) {
+                    require_empty(pp, &line, loc, "else");
+                    condition->active = condition->parent && !condition->taken;
+                    condition->taken = true;
+                    condition->seen_else = true;
+                } else {
+                    bool value = false;
+                    if (condition->parent && !condition->taken) pp_evaluate(pp, &line, &value);
+                    condition->active = condition->parent && !condition->taken && value;
+                    condition->taken = condition->taken || condition->active;
+                }
+            }
+        } else if (active) {
+            if (pp_is(word, "define")) pp_define(pp, &line, false);
+            else if (pp_is(word, "undef")) {
+                if (line.len != 1U || line.data[0].kind != PP_IDENT) cinder_diag(pp->diags, CINDER_ERROR, loc, "#undef requires exactly one identifier");
+                else pp_undef(pp, line.data[0]);
+            } else if (pp_is(word, "include")) include_file(pp, source_path, &line, loc, depth);
+            else if (pp_is(word, "line")) line_control(pp, &line, id, next_offset, loc);
+            else if (pp_is(word, "pragma")) pp_pragma(pp, &line, loc);
+            else if (pp_is(word, "error")) {
+                CinderBytes message = {0};
+                for (size_t i = 0U; i < line.len; ++i) {
+                    if (i != 0U) cinder_bytes_put8(&message, ' ');
+                    cinder_bytes_append(&message, (const unsigned char *)line.data[i].text, line.data[i].length);
+                }
+                cinder_bytes_put8(&message, 0U);
+                cinder_diag(pp->diags, CINDER_ERROR, loc, "#error %s", (char *)message.data);
+                free(message.data);
+            } else cinder_diag(pp->diags, CINDER_ERROR, loc, "unknown preprocessing directive '%s'", word.text);
+        }
+        if (end < tokens.len) pp_push(&pp->output, tokens.data[end]);
+        cursor = end < tokens.len ? end + 1U : end;
     }
+    flush_pending(pp, &pending);
+    if (condition_count != 0U) cinder_diag(pp->diags, CINDER_ERROR, conditions[condition_count - 1U].opening, "unterminated conditional directive");
+    pp_destroy_tokens(&pending);
+    pp_destroy_tokens(&tokens);
+    return pp->diags->errors == 0U ? 0 : 1;
 }
 
-static void macro_define(CinderPP *pp, const char *text) {
-    const char *p = skip_space(text);
-    const char *end = NULL;
-    if (!identifier_at(p, &end)) {
-        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(CINDER_NO_FILE, 0U, 0U), "expected macro name after #define");
-        return;
-    }
-    CinderMacro macro;
-    macro.name = cinder_strndup(p, (size_t)(end - p));
-    macro.replacement = NULL;
-    macro.parameters.data = NULL;
-    macro.parameters.len = 0U;
-    macro.parameters.cap = 0U;
-    macro.function_like = *end == '(';
-    macro.variadic = false;
-    p = end;
-    if (macro.function_like) {
-        ++p;
-        while (*p != '\0' && *p != ')') {
-            p = skip_space(p);
-            if (*p == '.') {
-                macro.variadic = true;
-                while (*p != '\0' && *p != ')') ++p;
-                break;
-            }
-            if (!identifier_at(p, &end)) break;
-            char *parameter = cinder_strndup(p, (size_t)(end - p));
-            cinder_vec_push((CinderVec *)&macro.parameters, &parameter);
-            p = skip_space(end);
-            if (*p == ',') ++p;
+static void initialize_clock(PP *pp) {
+    time_t epoch = time(NULL);
+    const char *configured = getenv("SOURCE_DATE_EPOCH");
+    if (configured != NULL) {
+        char *end = NULL;
+        errno = 0;
+        unsigned long long value = strtoull(configured, &end, 10);
+        if (errno != 0 || end == configured || *end != '\0' || configured[0] == '-' || value > INT64_MAX) {
+            cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "invalid SOURCE_DATE_EPOCH");
+            return;
         }
-        if (*p == ')') ++p;
-    }
-    p = skip_space(p);
-    if (*p == '=') p = skip_space(p + 1);
-    macro.replacement = cinder_strndup(p, strlen(p));
-    for (size_t i = 0U; i < pp->macros.len; ++i) {
-        if (strcmp(pp->macros.data[i].name, macro.name) == 0) {
-            macro_free(&pp->macros.data[i]);
-            pp->macros.data[i] = macro;
+        epoch = (time_t)value;
+        if ((unsigned long long)epoch != value) {
+            cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "SOURCE_DATE_EPOCH is outside host time range");
             return;
         }
     }
-    cinder_vec_push((CinderVec *)&pp->macros, &macro);
-}
-
-static bool pp_condition(CinderPP *pp, const char *text) {
-    const char *p = skip_space(text);
-    const char *end = NULL;
-    if (strncmp(p, "defined", 7U) == 0 && !isalnum((unsigned char)p[7]) && p[7] != '_') {
-        p = skip_space(p + 7);
-        if (*p == '(') ++p;
-        if (identifier_at(p, &end)) return macro_find(pp, p, (size_t)(end - p)) != NULL;
-    }
-    if (identifier_at(p, &end)) {
-        CinderMacro *macro = macro_find(pp, p, (size_t)(end - p));
-        if (macro != NULL && !macro->function_like) return pp_condition(pp, macro->replacement);
-    }
-    char *end_number = NULL;
-    long value = strtol(p, &end_number, 0);
-    return end_number != p && value != 0L;
-}
-
-static bool read_include(CinderPP *pp, const char *current_path, const char *spec, char **resolved) {
-    const char *p = skip_space(spec);
-    char closing = *p == '<' ? '>' : '"';
-    if (*p != '<' && *p != '"') return false;
-    ++p;
-    const char *end = strchr(p, closing);
-    if (end == NULL) return false;
-    if (*p == '/' || (current_path != NULL && *current_path != '\0')) {
-        char candidate[4096];
-        const char *slash = strrchr(current_path, '/');
-        size_t prefix = slash == NULL ? 0U : (size_t)(slash - current_path + 1);
-        if (prefix + (size_t)(end - p) + 1U < sizeof(candidate)) {
-            memcpy(candidate, current_path, prefix);
-            memcpy(candidate + prefix, p, (size_t)(end - p));
-            candidate[prefix + (size_t)(end - p)] = '\0';
-            FILE *probe = fopen(candidate, "rb");
-            if (probe != NULL) {
-                fclose(probe);
-                *resolved = cinder_strndup(candidate, strlen(candidate));
-                return true;
-            }
-        }
-    }
-    for (size_t i = 0U; i < pp->include_dirs.len; ++i) {
-        char candidate[4096];
-        int written = snprintf(candidate, sizeof(candidate), "%s/%.*s", pp->include_dirs.data[i], (int)(end - p), p);
-        if (written > 0 && (size_t)written < sizeof(candidate)) {
-            FILE *probe = fopen(candidate, "rb");
-            if (probe != NULL) {
-                fclose(probe);
-                *resolved = cinder_strndup(candidate, (size_t)written);
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static void process_file(CinderPP *pp, const char *path, char **out, size_t *out_len, size_t *out_cap, unsigned depth) {
-    if (depth > 32U) {
-        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(CINDER_NO_FILE, 0U, 0U), "include nesting exceeded the recursion limit");
+    struct tm *calendar = gmtime(&epoch);
+    if (calendar == NULL) {
+        cinder_diag(pp->diags, CINDER_ERROR, (CinderLoc){0}, "cannot represent compilation source date");
         return;
     }
-    CinderFileId file_id = cinder_source_load(pp->sources, path, stderr);
-    CinderSourceFile *file = cinder_source_get(pp->sources, file_id);
-    if (file == NULL) return;
-    bool active[64];
-    bool parent_active[64];
-    unsigned condition_depth = 0U;
-    active[0] = true;
-    parent_active[0] = true;
-    const char *line = file->bytes;
-    while (*line != '\0') {
-        const char *line_end = strchr(line, '\n');
-        if (line_end == NULL) line_end = line + strlen(line);
-        const char *p = line;
-        while (*p == ' ' || *p == '\t') ++p;
-        bool directive = *p == '#';
-        if (directive) {
-            ++p;
-            p = skip_space(p);
-            const char *word_end = NULL;
-            if (identifier_at(p, &word_end)) {
-                size_t word_len = (size_t)(word_end - p);
-                bool current = active[condition_depth];
-                if (word_len == 6U && strncmp(p, "define", 6U) == 0 && current) { char *definition = cinder_strndup(word_end, (size_t)(line_end - word_end)); macro_define(pp, definition); free(definition); }
-                else if (word_len == 5U && strncmp(p, "undef", 5U) == 0 && current) {
-                    const char *name = skip_space(word_end);
-                    if (identifier_at(name, &word_end)) {
-                        for (size_t i = 0U; i < pp->macros.len; ++i) {
-                            if (strlen(pp->macros.data[i].name) == (size_t)(word_end - name) && memcmp(pp->macros.data[i].name, name, (size_t)(word_end - name)) == 0) {
-                                macro_free(&pp->macros.data[i]);
-                                memmove(&pp->macros.data[i], &pp->macros.data[i + 1U], (pp->macros.len - i - 1U) * sizeof(pp->macros.data[0]));
-                                pp->macros.len--;
-                                break;
-                            }
-                        }
-                    }
-                } else if (word_len == 2U && strncmp(p, "if", 2U) == 0) {
-                    if (condition_depth + 1U >= CINDER_ARRAY_LEN(active)) {
-                        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file_id, (size_t)(line - file->bytes), (size_t)(line_end - line)), "conditional nesting is too deep");
-                    } else {
-                        ++condition_depth;
-                        parent_active[condition_depth] = active[condition_depth - 1U];
-                        active[condition_depth] = parent_active[condition_depth] && pp_condition(pp, word_end);
-                    }
-                } else if (word_len == 5U && strncmp(p, "ifdef", 5U) == 0) {
-                    ++condition_depth;
-                    parent_active[condition_depth] = active[condition_depth - 1U];
-                    const char *name = skip_space(word_end);
-                    const char *name_end = NULL;
-                    active[condition_depth] = parent_active[condition_depth] && identifier_at(name, &name_end) && macro_find(pp, name, (size_t)(name_end - name)) != NULL;
-                } else if (word_len == 6U && strncmp(p, "ifndef", 6U) == 0) {
-                    ++condition_depth;
-                    parent_active[condition_depth] = active[condition_depth - 1U];
-                    const char *name = skip_space(word_end);
-                    const char *name_end = NULL;
-                    active[condition_depth] = parent_active[condition_depth] && identifier_at(name, &name_end) && macro_find(pp, name, (size_t)(name_end - name)) == NULL;
-                } else if (word_len == 4U && strncmp(p, "elif", 4U) == 0 && condition_depth > 0U) {
-                    active[condition_depth] = parent_active[condition_depth] && pp_condition(pp, word_end);
-                } else if (word_len == 4U && strncmp(p, "else", 4U) == 0 && condition_depth > 0U) {
-                    active[condition_depth] = parent_active[condition_depth] && !active[condition_depth];
-                } else if (word_len == 5U && strncmp(p, "endif", 5U) == 0 && condition_depth > 0U) {
-                    --condition_depth;
-                } else if (word_len == 7U && strncmp(p, "include", 7U) == 0 && current) {
-                    char *resolved = NULL;
-                    if (!read_include(pp, file->path, word_end, &resolved)) {
-                        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file_id, (size_t)(line - file->bytes), (size_t)(line_end - line)), "cannot resolve include");
-                    } else {
-                        process_file(pp, resolved, out, out_len, out_cap, depth + 1U);
-                        free(resolved);
-                    }
-                } else if (word_len == 5U && strncmp(p, "error", 5U) == 0 && current) {
-                    cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file_id, (size_t)(line - file->bytes), (size_t)(line_end - line)), "%.*s", (int)(line_end - word_end), word_end);
-                }
-            }
-        } else if (active[condition_depth]) {
-            expand_text(pp, line, (size_t)(line_end - line), out, out_len, out_cap, 0U);
-            string_append(out, out_len, out_cap, "\n", 1U);
-        }
-        line = *line_end == '\0' ? line_end : line_end + 1;
-    }
-    if (condition_depth != 0U) {
-        cinder_diag(pp->diags, CINDER_ERROR, cinder_loc(file_id, file->size, 0U), "unterminated conditional directive");
-    }
+    static const char *const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    char date[40], clock[40];
+    int d = snprintf(date, sizeof(date), "\"%s %2d %04d\"", months[calendar->tm_mon], calendar->tm_mday, calendar->tm_year + 1900);
+    int t = snprintf(clock, sizeof(clock), "\"%02d:%02d:%02d\"", calendar->tm_hour, calendar->tm_min, calendar->tm_sec);
+    pp->date = cinder_arena_strndup(&pp->arena, date, d > 0 ? (size_t)d : 0U);
+    pp->time = cinder_arena_strndup(&pp->arena, clock, t > 0 ? (size_t)t : 0U);
 }
 
 int cinder_preprocess(CinderSourceManager *sources, const char *path, const char *const *include_dirs, size_t include_count, const char *const *defines, size_t define_count, CinderDiagnostics *diags) {
-    CinderPP pp;
-    pp.macros.data = NULL;
-    pp.macros.len = 0U;
-    pp.macros.cap = 0U;
-    pp.include_dirs.data = NULL;
-    pp.include_dirs.len = 0U;
-    pp.include_dirs.cap = 0U;
+    PP pp;
+    memset(&pp, 0, sizeof(pp));
     pp.sources = sources;
     pp.diags = diags;
-    pp.depth = 0U;
-    for (size_t i = 0U; i < include_count; ++i) {
-        char *dir = cinder_strndup(include_dirs[i], strlen(include_dirs[i]));
-        cinder_vec_push((CinderVec *)&pp.include_dirs, &dir);
+    cinder_arena_init(&pp.arena, 32768U);
+    initialize_clock(&pp);
+    static const char *const predefined[] = {
+        "__STDC__ 1", "__STDC_VERSION__ 201710L", "__STDC_HOSTED__ 1", "__CINDER__ 1",
+        "__x86_64__ 1", "__linux__ 1", "__LP64__ 1", "__STDC_NO_ATOMICS__ 1",
+        "__STDC_NO_COMPLEX__ 1", "__STDC_NO_THREADS__ 1", "__STDC_NO_VLA__ 1"
+    };
+    for (size_t i = 0U; i < CINDER_ARRAY_LEN(predefined); ++i) define_text(&pp, predefined[i], true);
+    for (size_t i = 0U; i < include_count; ++i) cinder_vec_push((CinderVec *)&pp.include_dirs, &include_dirs[i]);
+    for (size_t i = 0U; i < define_count; ++i) {
+        const char *definition = defines[i];
+        const char *equal = strchr(definition, '=');
+        char *copy = NULL;
+        if (equal != NULL) {
+            copy = cinder_strndup(definition, strlen(definition));
+            copy[equal - definition] = ' ';
+        } else {
+            size_t length = strlen(definition);
+            copy = cinder_alloc(length + 3U);
+            memcpy(copy, definition, length);
+            memcpy(copy + length, " 1", 3U);
+        }
+        define_text(&pp, copy, false);
+        free(copy);
     }
-    for (size_t i = 0U; i < define_count; ++i) macro_define(&pp, defines[i]);
-    char *output = NULL;
-    size_t output_len = 0U;
-    size_t output_cap = 0U;
-    process_file(&pp, path, &output, &output_len, &output_cap, 0U);
-    sources->preprocessed = output;
-    sources->preprocessed_size = output_len;
-    for (size_t i = 0U; i < pp.macros.len; ++i) macro_free(&pp.macros.data[i]);
+    if (diags->errors == 0U) pp_process(&pp, path, 0U);
+    pp_render(&pp);
+    for (size_t i = 0U; i < pp.macros.len; ++i) {
+        free(pp.macros.data[i].params.data);
+        pp_destroy_tokens(&pp.macros.data[i].replacement);
+    }
     free(pp.macros.data);
-    for (size_t i = 0U; i < pp.include_dirs.len; ++i) free(pp.include_dirs.data[i]);
     free(pp.include_dirs.data);
+    free(pp.files.data);
+    pp_destroy_tokens(&pp.output);
+    cinder_arena_destroy(&pp.arena);
     return diags->errors == 0U ? 0 : 1;
 }
