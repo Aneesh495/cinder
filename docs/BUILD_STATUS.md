@@ -151,9 +151,29 @@ edges. Normal compilation verifies both before and after optimization. Void
 calls and optimizer tombstones have explicit effect-only handling. Signed
 arithmetic in interpretation and constant folding avoids host overflow.
 
+## Numeric token and storage increment
+
+Semantic number parsing now validates digits, ranges, integer suffix order,
+LP64 literal ranks, decimal/hex floating syntax, and float32 rounding. The
+lexer preserves exponent signs inside preprocessing numbers. Float32 literals
+use direct conversion rather than rounding a binary64 intermediate. Source
+checks now include 65 positive programs and 17 malformed-number cases that
+also require preservation of prior output. The complete C01-C48 registry is
+present and records incomplete feature boundaries explicitly.
+
+Arena block growth reserves alignment padding before returning large aligned
+objects. A sanitizer probe writes complete allocations across alignments up to
+4096 bytes. Linux run
+[37096039587](https://github.com/Aneesh495/cinder/actions/runs/37096039587)
+passed all 1,000 native object/assembly probes but failed the optimized GCC
+sanitizer build on an implicit conditional-expression narrowing. The explicit
+byte conversion fix is pushed as `ac9ef00`. Local GCC compiled that sanitizer
+profile cleanly; its macOS installation has no ASan link runtime. Clang
+provides the local sanitizer execution checks.
+
 ## Next action
 
-Complete the immutable object campaign and native checks, then add typed scalar
-conversions, full SSA construction/edge copies, and addressable storage. The
-complete language registry, true bootstrap, debugging, full acceptance engine,
-and remaining required campaigns are still open.
+Validate the numeric increment on Linux, then implement explicit scalar
+conversions and addressable storage. Full SSA construction/edge copies, the
+remaining language features, true bootstrap, debugging, acceptance integrity,
+and required full campaigns remain open.

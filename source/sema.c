@@ -96,8 +96,8 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope) {
     if (expr == NULL) return sema->types->void_type;
     switch (expr->kind) {
-        case EX_INT: case EX_CHAR: expr->type = sema->types->int_type; expr->is_lvalue = false; return expr->type;
-        case EX_FLOAT: expr->type = sema->types->double_type; expr->is_lvalue = false; return expr->type;
+        case EX_INT: case EX_CHAR: if (expr->type == NULL) expr->type = sema->types->int_type; expr->is_lvalue = false; return expr->type;
+        case EX_FLOAT: if (expr->type == NULL) expr->type = sema->types->double_type; expr->is_lvalue = false; return expr->type;
         case EX_STRING: expr->type = cinder_type_pointer(sema->types, sema->types->char_type); return expr->type;
         case EX_NAME: {
             CinderSymbol *symbol = cinder_scope_lookup(scope, expr->as.name);
