@@ -20,6 +20,8 @@ if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
     if [ "$status" -ne 9 ]; then
         printf 'multi-TU native result=%s, expected=9\n' "$status" >&2
         file "$tmp/multi" >&2 || true
+        objdump -dr "$tmp/multi" >&2 || true
+        readelf -Ws "$tmp/multi" >&2 || true
         exit 1
     fi
 else
