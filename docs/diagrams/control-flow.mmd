@@ -1,0 +1,8 @@
+flowchart TD
+    Init[for initializer] --> Cond[condition]
+    Cond -->|true| Body[body]
+    Cond -->|false| Exit[exit]
+    Body --> Step[step]
+    Body -->|continue| Step
+    Body -->|break| Exit
+    Step --> Cond

@@ -20,6 +20,8 @@ static bool eval_binary(CinderIROp op, int64_t left, int64_t right, int64_t *res
         case IR_MUL: *result = left * right; return true;
         case IR_DIV_S: if (right == 0 || (left == INT64_MIN && right == -1)) return false; *result = left / right; return true;
         case IR_MOD_S: if (right == 0 || (left == INT64_MIN && right == -1)) return false; *result = left % right; return true;
+        case IR_DIV_U: if (right == 0) return false; *result = (int64_t)((uint64_t)left / (uint64_t)right); return true;
+        case IR_MOD_U: if (right == 0) return false; *result = (int64_t)((uint64_t)left % (uint64_t)right); return true;
         case IR_BIT_AND: *result = left & right; return true;
         case IR_BIT_OR: *result = left | right; return true;
         case IR_BIT_XOR: *result = left ^ right; return true;
@@ -64,6 +66,7 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
             const CinderIRInst *inst = &block->instructions.data[i];
             int64_t value = 0;
             switch (inst->op) {
+                case IR_NOP: break;
                 case IR_CONST: values[inst->dst] = inst->integer; value_is_float[inst->dst] = false; break;
                 case IR_FCONST: float_values[inst->dst] = inst->floating; value_is_float[inst->dst] = true; break;
                 case IR_GLOBAL_LOAD: { const CinderIRGlobal *global = find_global(module, inst->callee); if (global == NULL) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter cannot find global '%s'", inst->callee); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } values[inst->dst] = global->integer; value_is_float[inst->dst] = false; break; }

@@ -121,7 +121,11 @@ static void emit_binary(CinderMachineObject *object, const CinderIRFunction *fun
         case IR_SUB: emit8(object, 0x4CU); emit8(object, 0x29U); emit8(object, 0xD0U); break;
         case IR_MUL: emit8(object, 0x49U); emit8(object, 0x0FU); emit8(object, 0xAFU); emit8(object, 0xC2U); break;
         case IR_DIV_S: emit8(object, 0x48U); emit8(object, 0x99U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xFAU); break;
-        case IR_MOD_S: emit8(object, 0x48U); emit8(object, 0x99U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xF2U); break;
+        case IR_MOD_S: emit8(object, 0x48U); emit8(object, 0x99U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xFAU); emit_mov_reg_reg(object, 0U, 2U); break;
+        case IR_DIV_U: case IR_MOD_U:
+            emit8(object, 0x31U); emit8(object, 0xD2U); emit8(object, 0x49U); emit8(object, 0xF7U); emit8(object, 0xF2U);
+            if (inst->op == IR_MOD_U) emit_mov_reg_reg(object, 0U, 2U);
+            break;
         case IR_BIT_AND: emit8(object, 0x4CU); emit8(object, 0x21U); emit8(object, 0xD0U); break;
         case IR_BIT_OR: emit8(object, 0x4CU); emit8(object, 0x09U); emit8(object, 0xD0U); break;
         case IR_BIT_XOR: emit8(object, 0x4CU); emit8(object, 0x31U); emit8(object, 0xD0U); break;
@@ -152,7 +156,7 @@ static void asm_line(FILE *out, const char *format, ...) {
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)diags;
-    size_t frame = (function->local_count + function->value_count) * 8U;
+    size_t frame = (function->local_count + function->value_count + 4U) * 8U;
     frame = (frame + 15U) & ~((size_t)15U);
     allocation->frame_size = frame;
     size_t start = object->text.len;
@@ -161,6 +165,10 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     cinder_vec_push((CinderVec *)&object->symbol_offsets, &start);
     if (assembly) asm_line(asm_out, ".text\n.globl %s\n.type %s,@function\n%s:", function->name, function->name, function->name);
     emit_prologue(object, frame);
+    for (unsigned reg = 12U; reg <= 15U; ++reg) {
+        emit_mov_rax_from_reg(object, reg);
+        emit_mov_mem_rax(object, -(int)((function->local_count + function->value_count + (size_t)(reg - 11U)) * 8U));
+    }
     CINDER_VEC_TYPE(BranchFixup) branches = {NULL, 0U, 0U};
     size_t *labels = cinder_alloc((function->blocks.len == 0U ? 1U : function->blocks.len) * sizeof(*labels));
     for (size_t i = 0U; i < function->blocks.len; ++i) labels[i] = SIZE_MAX;
@@ -169,6 +177,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderIRInst *inst = &block->instructions.data[i];
             switch (inst->op) {
+                case IR_NOP: break;
                 case IR_CONST: emit_mov_rax_imm(object, inst->integer); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_FCONST: store_float_constant(object, function, allocation, inst->dst, inst->floating); break;
                 case IR_GLOBAL_LOAD: emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } store_value_alloc(object, function, allocation, inst->dst); break;
@@ -207,11 +216,15 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         switch (block->terminator.kind) {
             case TERM_RETURN:
                 if (block->terminator.value != CINDER_INVALID_VALUE) { if (function->type->return_type->kind == TYPE_FLOAT || function->type->return_type->kind == TYPE_DOUBLE) load_float_value(object, function, allocation, block->terminator.value, 0U); else load_value_alloc(object, function, allocation, block->terminator.value); }
+                for (unsigned reg = 12U; reg <= 15U; ++reg) {
+                    emit_mov_r10_mem(object, -(int)((function->local_count + function->value_count + (size_t)(reg - 11U)) * 8U));
+                    emit_mov_reg_reg(object, reg, 10U);
+                }
                 emit_epilogue(object); break;
             case TERM_JUMP: emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
             case TERM_BRANCH:
                 load_value_alloc(object, function, allocation, block->terminator.condition); emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xF8U); emit8(object, 0U); emit8(object, 0x0FU); emit8(object, 0x85U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup yes = {offset, block->terminator.yes}; cinder_vec_push((CinderVec *)&branches, &yes); } emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup no = {offset, block->terminator.no}; cinder_vec_push((CinderVec *)&branches, &no); } break;
-            case TERM_UNREACHABLE: emit_epilogue(object); break;
+            case TERM_UNREACHABLE: emit8(object, 0x0FU); emit8(object, 0x0BU); break;
         }
     }
     for (size_t i = 0U; i < branches.len; ++i) { BranchFixup *branch = &branches.data[i]; if (branch->target >= function->blocks.len || labels[branch->target] == SIZE_MAX) continue; int64_t displacement = (int64_t)labels[branch->target] - (int64_t)(branch->offset + 4U); cinder_bytes_patch32(&object->text, branch->offset, (uint32_t)(int32_t)displacement); }

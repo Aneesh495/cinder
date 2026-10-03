@@ -89,6 +89,27 @@ backtraces, dependency output, and prefix mapping remain open.
 Strict Linux validation for `637406d` caught a GCC misleading-indentation
 warning in AST inspection. It was corrected and pushed as `237fb19`.
 
+## Control-flow increment
+
+The parser and lowering now preserve short-circuit evaluation, conditional
+expressions, comma sequencing, prefix/postfix values, all compound assignments,
+`for` initialization/step/continue, and `do` loop semantics. Local lowering
+restores nested scope bindings. Unsupported address expressions produce an
+error instead of a silent copy. Both execution paths skip optimizer tombstones.
+Native remainder encoding now returns RDX after signed division, and unsigned
+division/remainder use the unsigned instruction. Allocation uses preserved
+R12-R15 rather than scratch or incoming argument registers; full liveness and
+allocation are still pending.
+
+`make test-control` checks 40 authored programs against an independently
+compiled reference, both interpreter optimization levels, and emitted objects.
+It additionally links and executes both levels on Linux x86-64. The macOS
+results explicitly record `native=false`; the Linux workflow runs the same
+cases before acceptance evidence generation.
+
 ## Next action
 
-A Linux x86-64 environment is required for native execution, mixed-toolchain ABI checks, and self-hosting. The next implementation increment is full hosted `va_list` cursor/save-area behavior or broader aggregate expression lowering, with native or explicitly unavailable evidence.
+Validate this increment on Linux, then replace the allocator with CFG liveness
+and interval allocation. Typed scalar conversions, complete declarators and
+addressable storage, genuine SSA/out-of-SSA, ABI, debug information, bootstrap,
+and the required full evidence campaigns remain open.

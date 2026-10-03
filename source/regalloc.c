@@ -40,7 +40,7 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
         if (block->terminator.condition != CINDER_INVALID_VALUE && block->terminator.condition < count) intervals[block->terminator.condition].end = position;
         if (block->terminator.value != CINDER_INVALID_VALUE && block->terminator.value < count) intervals[block->terminator.value].end = position;
     }
-    int registers[] = {REG_R8, REG_R9, REG_R10, REG_R11};
+    int registers[] = {REG_R12, REG_R13, REG_R14, REG_R15};
     size_t spill_index = 0U;
     for (size_t i = 0U; i < count; ++i) {
         if (!seen[i]) continue;

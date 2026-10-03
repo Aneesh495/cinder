@@ -363,7 +363,7 @@ struct CinderExpr {
         char *string;
         char *name;
         struct { int op; CinderExpr *left; CinderExpr *right; } binary;
-        struct { int op; CinderExpr *value; } unary;
+        struct { int op; CinderExpr *value; bool postfix; } unary;
         struct { CinderExpr *target; CinderExpr *value; int op; } assign;
         struct { CinderExpr *callee; CINDER_VEC_TYPE(CinderExpr *) args; } call;
         struct { CinderExpr *list; CinderType *type; } va_arg;
