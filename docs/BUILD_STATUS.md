@@ -107,6 +107,27 @@ It additionally links and executes both levels on Linux x86-64. The macOS
 results explicitly record `native=false`; the Linux workflow runs the same
 cases before acceptance evidence generation.
 
+## CFG allocation increment
+
+Liveness now solves use/def/live-in/live-out bitsets to a fixed point, including
+phi uses on incoming edges and loop backedges. Linear scan assigns R12-R15 and
+XMM2-XMM7, spills SSE values across calls, and reuses disjoint spill slots. The
+encoder consumes these assignments, preserves used callee-saved registers,
+snapshots incoming argument registers, and stages outgoing mixed scalar
+arguments before ABI moves. Integer and SSE overflow arguments retain source
+order on the stack. NaN comparisons account for unordered flags; floating
+negation flips the sign bit, including signed zero.
+
+The checker independently reconstructs live sets by backward instruction
+transfer. It rejects storage interference, reserved registers, wrong classes,
+call clobbers, missing preservation, and invalid spill locations. The allocation
+campaign contains 10,000 seeded pressure graphs with branches, backedges,
+integer/SSE phis, and calls, plus 1,000 deliberately corrupted allocations.
+These are allocation checks, not a claim that all IR semantics or the aggregate
+ABI are complete. Source behavior checks now include 52 authored programs.
+Native execution of the previous 40-case increment passed in Linux run
+[37094039401](https://github.com/Aneesh495/cinder/actions/runs/37094039401).
+
 ## Next action
 
 Validate this increment on Linux, then replace the allocator with CFG liveness

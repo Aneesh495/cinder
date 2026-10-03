@@ -77,12 +77,20 @@ static void emit_movsd_xmm_xmm(CinderMachineObject *object, unsigned destination
 
 static void store_float_value(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
     const CinderLocation *location = location_for(allocation, value);
+    if (location != NULL && location->kind == LOC_REGISTER) {
+        emit_movsd_xmm_xmm(object, (unsigned)(location->reg - REG_XMM2) + 2U, 0U);
+        return;
+    }
     int offset = location != NULL ? location->stack_offset : value_offset(function, value);
     emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x11U); emit8(object, 0x85U); emit32(object, (uint32_t)offset);
 }
 
 static void load_float_value(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value, unsigned xmm) {
     const CinderLocation *location = location_for(allocation, value);
+    if (location != NULL && location->kind == LOC_REGISTER) {
+        emit_movsd_xmm_xmm(object, xmm, (unsigned)(location->reg - REG_XMM2) + 2U);
+        return;
+    }
     int offset = location != NULL ? location->stack_offset : value_offset(function, value);
     emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, (uint8_t)(0x85U | ((xmm & 7U) << 3U))); emit32(object, (uint32_t)offset);
 }
@@ -108,7 +116,12 @@ static void emit_float_binary(CinderMachineObject *object, const CinderIRFunctio
 static void emit_float_compare(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
     load_float_value(object, function, allocation, inst->left, 0U); load_float_value(object, function, allocation, inst->right, 1U); emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x2EU); emit8(object, 0xC1U);
     uint8_t condition = 0x94U; switch (inst->op) { case IR_FCMP_EQ: condition = 0x94U; break; case IR_FCMP_NE: condition = 0x95U; break; case IR_FCMP_LT: condition = 0x92U; break; case IR_FCMP_LE: condition = 0x96U; break; case IR_FCMP_GT: condition = 0x97U; break; case IR_FCMP_GE: condition = 0x93U; break; default: break; }
-    emit8(object, 0x0FU); emit8(object, condition); emit8(object, 0xC0U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); store_value_alloc(object, function, allocation, inst->dst);
+    emit8(object, 0x0FU); emit8(object, condition); emit8(object, 0xC0U);
+    if (inst->op == IR_FCMP_EQ || inst->op == IR_FCMP_LT || inst->op == IR_FCMP_LE || inst->op == IR_FCMP_NE) {
+        emit8(object, 0x0FU); emit8(object, inst->op == IR_FCMP_NE ? 0x9AU : 0x9BU); emit8(object, 0xC2U);
+        emit8(object, inst->op == IR_FCMP_NE ? 0x08U : 0x20U); emit8(object, 0xD0U);
+    }
+    emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U); store_value_alloc(object, function, allocation, inst->dst);
 }
 
 static void emit_arg_from_stack(CinderMachineObject *object, unsigned index) { emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x85U); emit32(object, (uint32_t)(16U + (index - 6U) * 8U)); }
@@ -145,6 +158,63 @@ static void emit_binary(CinderMachineObject *object, const CinderIRFunction *fun
 
 static unsigned abi_register(unsigned index) { static const unsigned regs[] = {7U, 6U, 2U, 1U, 8U, 9U}; return index < CINDER_ARRAY_LEN(regs) ? regs[index] : 0U; }
 
+static size_t argument_stack_offset(const CinderIRFunction *function, size_t parameter) {
+    size_t integer = 0U, floating = 0U, stacked = 0U;
+    for (size_t p = 0U; p < parameter && p < function->params.len; ++p) {
+        if (cinder_ir_floating(function->params.data[p]->type)) { if (floating++ >= 8U) ++stacked; }
+        else if (integer++ >= 6U) ++stacked;
+    }
+    return 16U + stacked * 8U;
+}
+
+static void stack_store_rax(CinderMachineObject *object, size_t offset) {
+    emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
+}
+
+static void stack_load_rax(CinderMachineObject *object, size_t offset) {
+    emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
+}
+
+static void emit_call(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+    size_t integer = 0U, floating = 0U, stacked = 0U;
+    for (size_t a = 0U; a < inst->args.len; ++a) {
+        bool fp = a < inst->arg_floats.len && inst->arg_floats.data[a];
+        if (fp) { if (floating++ >= 8U) ++stacked; }
+        else if (integer++ >= 6U) ++stacked;
+    }
+    size_t frame = ((stacked + inst->args.len) * 8U + 15U) & ~(size_t)15U;
+    if (frame != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xECU); emit32(object, (uint32_t)frame); }
+    /* Snapshot all arguments before assigning ABI registers. In particular,
+     * XMM2-XMM7 may contain an argument needed after another ABI move. */
+    for (size_t a = 0U; a < inst->args.len; ++a) {
+        size_t offset = (stacked + a) * 8U;
+        bool fp = a < inst->arg_floats.len && inst->arg_floats.data[a];
+        if (fp) {
+            load_float_value(object, function, allocation, inst->args.data[a], 0U);
+            emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x11U); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
+        } else { load_value_alloc(object, function, allocation, inst->args.data[a]); stack_store_rax(object, offset); }
+    }
+    integer = 0U; floating = 0U; size_t stack_index = 0U;
+    for (size_t a = 0U; a < inst->args.len; ++a) {
+        size_t offset = (stacked + a) * 8U;
+        bool fp = a < inst->arg_floats.len && inst->arg_floats.data[a];
+        bool overflow = fp ? floating >= 8U : integer >= 6U;
+        if (overflow) { stack_load_rax(object, offset); stack_store_rax(object, stack_index++ * 8U); }
+        else if (fp) {
+            emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U);
+            emit8(object, (uint8_t)(0x84U | ((unsigned)floating << 3U))); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
+        } else { stack_load_rax(object, offset); emit_mov_reg_from_rax(object, abi_register((unsigned)integer)); }
+        if (fp) ++floating; else ++integer;
+    }
+    emit8(object, 0xB0U); emit8(object, (uint8_t)(floating < 8U ? floating : 8U));
+    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U);
+    CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4};
+    cinder_vec_push((CinderVec *)&object->fixups, &fix);
+    if (frame != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xC4U); emit32(object, (uint32_t)frame); }
+    if (inst->floating_result) store_float_value(object, function, allocation, inst->dst);
+    else store_value_alloc(object, function, allocation, inst->dst);
+}
+
 void cinder_machine_init(CinderMachineObject *object) { object->text.data = NULL; object->text.len = 0U; object->text.cap = 0U; object->data.data = NULL; object->data.len = 0U; object->data.cap = 0U; object->rodata.data = NULL; object->rodata.len = 0U; object->rodata.cap = 0U; object->bss_size = 0U; object->fixups.data = NULL; object->fixups.len = 0U; object->fixups.cap = 0U; object->defined_symbols.data = NULL; object->defined_symbols.len = 0U; object->defined_symbols.cap = 0U; object->symbol_offsets.data = NULL; object->symbol_offsets.len = 0U; object->symbol_offsets.cap = 0U; object->data_symbols.data = NULL; object->data_symbols.len = 0U; object->data_symbols.cap = 0U; object->literal_counter = 0U; object->frame_size = 0U; }
 
 void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); }
@@ -156,18 +226,28 @@ static void asm_line(FILE *out, const char *format, ...) {
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
     (void)diags;
-    size_t frame = (function->local_count + function->value_count + 4U) * 8U;
-    frame = (frame + 15U) & ~((size_t)15U);
-    allocation->frame_size = frame;
+    size_t frame = allocation->frame_size;
     size_t start = object->text.len;
     char *name = cinder_strndup(function->name, strlen(function->name));
     cinder_vec_push((CinderVec *)&object->defined_symbols, &name);
     cinder_vec_push((CinderVec *)&object->symbol_offsets, &start);
     if (assembly) asm_line(asm_out, ".text\n.globl %s\n.type %s,@function\n%s:", function->name, function->name, function->name);
     emit_prologue(object, frame);
-    for (unsigned reg = 12U; reg <= 15U; ++reg) {
-        emit_mov_rax_from_reg(object, reg);
-        emit_mov_mem_rax(object, -(int)((function->local_count + function->value_count + (size_t)(reg - 11U)) * 8U));
+    unsigned saved = 0U;
+    for (unsigned bit = 0U; bit < 4U; ++bit) {
+        if ((allocation->saved_gpr_mask & (1U << bit)) == 0U) continue;
+        emit_mov_rax_from_reg(object, bit + 12U);
+        emit_mov_mem_rax(object, -(int)((function->local_count + allocation->spill_slots + ++saved) * 8U));
+    }
+    size_t incoming_base = function->local_count + allocation->spill_slots + saved;
+    for (unsigned a = 0U; a < 6U; ++a) {
+        emit_mov_rax_from_reg(object, abi_register(a));
+        emit_mov_mem_rax(object, -(int)((incoming_base + a + 1U) * 8U));
+    }
+    for (unsigned a = 0U; a < 8U; ++a) {
+        emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x11U);
+        emit8(object, (uint8_t)(0x85U | (a << 3U)));
+        emit32(object, (uint32_t)(-(int)((incoming_base + 7U + a) * 8U)));
     }
     CINDER_VEC_TYPE(BranchFixup) branches = {NULL, 0U, 0U};
     size_t *labels = cinder_alloc((function->blocks.len == 0U ? 1U : function->blocks.len) * sizeof(*labels));
@@ -183,42 +263,53 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_GLOBAL_LOAD: emit8(object, 0x48U); emit8(object, 0x8BU); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_GLOBAL_STORE: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0x89U); emit8(object, 0x05U); { size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PC32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix); } break;
                 case IR_ARG:
-                    if (inst->operator_code >= 0 && inst->operator_code < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->operator_code)); else if (inst->operator_code >= 6) emit_arg_from_stack(object, (unsigned)inst->operator_code);
+                    if (inst->operator_code >= 0 && inst->operator_code < 6) emit_mov_rax_mem(object, -(int)((incoming_base + (size_t)inst->operator_code + 1U) * 8U)); else if (inst->operator_code >= 6) emit_mov_rax_mem(object, (int)argument_stack_offset(function, (size_t)inst->slot));
                     store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_FARG: emit_movsd_xmm_xmm(object, 0U, (unsigned)inst->operator_code); store_float_value(object, function, allocation, inst->dst); break;
+                case IR_FARG:
+                    emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x85U);
+                    emit32(object, inst->operator_code < 8 ? (uint32_t)(-(int)((incoming_base + 7U + (size_t)inst->operator_code) * 8U)) : (uint32_t)argument_stack_offset(function, (size_t)inst->slot));
+                    store_float_value(object, function, allocation, inst->dst); break;
                 case IR_VA_ARG:
-                    if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_from_reg(object, abi_register((unsigned)inst->slot)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
+                    if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_mem(object, -(int)((incoming_base + (size_t)inst->slot + 1U) * 8U)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
                     store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_LOCAL_LOAD: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_PHI: emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_LOCAL_STORE: load_value_alloc(object, function, allocation, inst->left); emit_mov_mem_rax(object, local_offset(inst->slot)); break;
-                case IR_COPY: load_value_alloc(object, function, allocation, inst->left); store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_FNEG: load_float_value(object, function, allocation, inst->left, 0U); emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x57U); emit8(object, 0xC9U); emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5CU); emit8(object, 0xC8U); emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x28U); emit8(object, 0xC1U); store_float_value(object, function, allocation, inst->dst); break;
+                case IR_LOCAL_LOAD: case IR_PHI:
+                    if (cinder_ir_floating(inst->type)) {
+                        emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x85U); emit32(object, (uint32_t)local_offset(inst->slot));
+                        store_float_value(object, function, allocation, inst->dst);
+                    } else { emit_mov_rax_mem(object, local_offset(inst->slot)); store_value_alloc(object, function, allocation, inst->dst); }
+                    break;
+                case IR_LOCAL_STORE:
+                    if (cinder_ir_floating(function->local_types.data[inst->slot])) {
+                        load_float_value(object, function, allocation, inst->left, 0U);
+                        emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x11U); emit8(object, 0x85U); emit32(object, (uint32_t)local_offset(inst->slot));
+                    } else { load_value_alloc(object, function, allocation, inst->left); emit_mov_mem_rax(object, local_offset(inst->slot)); }
+                    break;
+                case IR_COPY:
+                    if (cinder_ir_floating(inst->type)) { load_float_value(object, function, allocation, inst->left, 0U); store_float_value(object, function, allocation, inst->dst); }
+                    else { load_value_alloc(object, function, allocation, inst->left); store_value_alloc(object, function, allocation, inst->dst); }
+                    break;
+                case IR_FNEG:
+                    load_float_value(object, function, allocation, inst->left, 0U);
+                    emit_mov_rax_imm(object, INT64_MIN);
+                    emit8(object, 0x66U); emit8(object, 0x48U); emit8(object, 0x0FU); emit8(object, 0x6EU); emit8(object, 0xC8U);
+                    emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x57U); emit8(object, 0xC1U);
+                    store_float_value(object, function, allocation, inst->dst); break;
                 case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV: emit_float_binary(object, function, allocation, inst); break;
                 case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE: emit_float_compare(object, function, allocation, inst); break;
                 case IR_NEG: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_BIT_NOT: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD0U); store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_CALL: {
-                    size_t extra = inst->args.len > 6U ? inst->args.len - 6U : 0U;
-                    size_t padding = extra & 1U;
-                    if (padding != 0U) { emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xECU); emit8(object, 8U); }
-                    for (size_t a = inst->args.len; a > 6U; --a) { load_value_alloc(object, function, allocation, inst->args.data[a - 1U]); emit8(object, 0x50U); }
-                    for (size_t a = 6U; a < inst->args.len; ++a) if (a < inst->arg_floats.len && inst->arg_floats.data[a]) cinder_diag(diags, CINDER_ERROR, inst->loc, "floating stack arguments are not yet supported");
-                    size_t integer_index = 0U; size_t float_index = 0U;
-                    for (size_t a = 0U; a < inst->args.len && a < 6U; ++a) { bool is_float = a < inst->arg_floats.len && inst->arg_floats.data[a]; if (is_float) { load_float_value(object, function, allocation, inst->args.data[a], 0U); emit_movsd_xmm_xmm(object, (unsigned)float_index, 0U); float_index++; } else { load_value_alloc(object, function, allocation, inst->args.data[a]); emit_mov_reg_from_rax(object, abi_register((unsigned)integer_index)); integer_index++; } }
-                    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U); CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4}; cinder_vec_push((CinderVec *)&object->fixups, &fix);
-                    if (extra + padding != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xC4U); emit32(object, (uint32_t)((extra + padding) * 8U)); }
-                    if (inst->floating_result) store_float_value(object, function, allocation, inst->dst); else store_value_alloc(object, function, allocation, inst->dst); break;
-                }
+                case IR_CALL: emit_call(object, function, allocation, inst); break;
                 default: emit_binary(object, function, allocation, inst); break;
             }
         }
         switch (block->terminator.kind) {
             case TERM_RETURN:
                 if (block->terminator.value != CINDER_INVALID_VALUE) { if (function->type->return_type->kind == TYPE_FLOAT || function->type->return_type->kind == TYPE_DOUBLE) load_float_value(object, function, allocation, block->terminator.value, 0U); else load_value_alloc(object, function, allocation, block->terminator.value); }
-                for (unsigned reg = 12U; reg <= 15U; ++reg) {
-                    emit_mov_r10_mem(object, -(int)((function->local_count + function->value_count + (size_t)(reg - 11U)) * 8U));
-                    emit_mov_reg_reg(object, reg, 10U);
+                saved = 0U;
+                for (unsigned bit = 0U; bit < 4U; ++bit) {
+                    if ((allocation->saved_gpr_mask & (1U << bit)) == 0U) continue;
+                    emit_mov_r10_mem(object, -(int)((function->local_count + allocation->spill_slots + ++saved) * 8U));
+                    emit_mov_reg_reg(object, bit + 12U, 10U);
                 }
                 emit_epilogue(object); break;
             case TERM_JUMP: emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;

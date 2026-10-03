@@ -1,0 +1,1 @@
+double check(long a,double b,long c,double d,long e,double f,long g,double h,long i,double j,long k,double l,long m,double n) { if (a!=1 || c!=3 || e!=5 || g!=7 || i!=9 || k!=11 || m!=13) return 99.0; return b+d+f+h+j+l+n; } int main(void) { return check(1,2.0,3,4.0,5,6.0,7,8.0,9,10.0,11,12.0,13,14.0) != 56.0; }

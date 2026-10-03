@@ -36,6 +36,9 @@ test-ir: build
 test-control: build
 	@python3 tests/test_control.py $(BUILD_DIR)/cindercc
 
+test-allocation: build
+	@tests/run_allocation.sh
+
 test-parallel-copy: build
 	@tests/run_parallel_copy.sh $(BUILD_DIR)/cindercc
 

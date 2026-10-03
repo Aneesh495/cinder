@@ -180,6 +180,7 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
             if (!complete) { free(incoming); continue; }
             CinderIRInst phi;
             memset(&phi, 0, sizeof(phi));
+            phi.type = function->local_types.data[slot];
             phi.op = IR_PHI; phi.dst = (CinderValueId)function->value_count++; phi.left = CINDER_INVALID_VALUE; phi.right = CINDER_INVALID_VALUE; phi.slot = (int)slot;
             phi.args.data = NULL; phi.args.len = 0U; phi.args.cap = 0U; phi.phi_blocks.data = NULL; phi.phi_blocks.len = 0U; phi.phi_blocks.cap = 0U;
             for (size_t p = 0U; p < block->predecessors.len; ++p) { cinder_vec_push((CinderVec *)&phi.args, &incoming[p]); cinder_vec_push((CinderVec *)&phi.phi_blocks, &block->predecessors.data[p]); }

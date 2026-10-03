@@ -1,61 +1,132 @@
-#include "cinder.h"
+#include "regalloc_private.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 static const char *register_name(CinderRegister reg) {
-    static const char *names[] = {"rax","rcx","rdx","rsi","rdi","r8","r9","r10","r11","r12","r13","r14","r15","rbp","rsp","none"};
+    static const char *names[] = {"rax","rcx","rdx","rsi","rdi","r8","r9","r10","r11","r12","r13","r14","r15","rbp","rsp","xmm2","xmm3","xmm4","xmm5","xmm6","xmm7","none"};
     return reg < CINDER_ARRAY_LEN(names) ? names[reg] : "none";
 }
 
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function) {
-    allocation->ir = function; allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; allocation->frame_size = 0U; allocation->spills = 0U;
+    allocation->ir = function; allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; allocation->frame_size = 0U; allocation->spills = 0U; allocation->spill_slots = 0U; allocation->saved_gpr_mask = 0U;
 }
 
 void cinder_alloc_destroy(CinderAllocation *allocation) { free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; }
 
-static bool value_is_float(const CinderIRFunction *function, CinderValueId value) {
-    for (size_t b = 0U; b < function->blocks.len; ++b) for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) { const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i]; if (inst->dst == value) return inst->op == IR_FCONST || inst->op == IR_FARG || inst->op == IR_FADD || inst->op == IR_FSUB || inst->op == IR_FMUL || inst->op == IR_FDIV || inst->op == IR_FNEG || (inst->op == IR_CALL && inst->floating_result); }
+static void touch(CinderInterval *intervals, size_t count, CinderValueId value, size_t position) {
+    if ((size_t)value >= count) return;
+    if (position < intervals[value].start) intervals[value].start = position;
+    if (position > intervals[value].end) intervals[value].end = position;
+}
+
+static int interval_order(const void *left, const void *right) {
+    const CinderInterval *a = left; const CinderInterval *b = right;
+    if (a->start != b->start) return a->start < b->start ? -1 : 1;
+    return a->value < b->value ? -1 : a->value != b->value;
+}
+
+static bool floating_value(const CinderIRFunction *function, CinderValueId value) {
+    for (size_t b = 0U; b < function->blocks.len; ++b)
+        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
+            const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
+            if (inst->dst == value) return inst->type != NULL && (inst->type->kind == TYPE_FLOAT || inst->type->kind == TYPE_DOUBLE);
+        }
     return false;
 }
 
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
-    (void)diags;
-    size_t count = allocation->ir->value_count;
+    const CinderIRFunction *function = allocation->ir;
+    CinderLiveness live;
+    if (cinder_liveness_build(function, &live, diags) != 0) return 1;
+    size_t count = function->value_count;
     CinderInterval *intervals = cinder_alloc((count == 0U ? 1U : count) * sizeof(*intervals));
-    bool *seen = cinder_alloc((count == 0U ? 1U : count) * sizeof(*seen));
-    for (size_t i = 0U; i < count; ++i) { intervals[i].value = (CinderValueId)i; intervals[i].start = SIZE_MAX; intervals[i].end = 0U; intervals[i].location.kind = LOC_STACK; intervals[i].location.reg = REG_NONE; intervals[i].location.stack_offset = 0; seen[i] = false; }
-    size_t position = 0U;
-    CINDER_VEC_TYPE(size_t) call_positions = {NULL, 0U, 0U};
-    for (size_t b = 0U; b < allocation->ir->blocks.len; ++b) {
-        CinderIRBlock *block = &allocation->ir->blocks.data[b];
-        for (size_t i = 0U; i < block->instructions.len; ++i, ++position) {
-            CinderIRInst *inst = &block->instructions.data[i];
-            if (inst->op == IR_CALL) cinder_vec_push((CinderVec *)&call_positions, &position);
-            CinderValueId uses[2] = {inst->left, inst->right};
-            for (size_t u = 0U; u < 2U; ++u) if (uses[u] != CINDER_INVALID_VALUE && uses[u] < count) { if (!seen[uses[u]]) { intervals[uses[u]].start = position; seen[uses[u]] = true; } intervals[uses[u]].end = position; }
-            for (size_t a = 0U; a < inst->args.len; ++a) if (inst->args.data[a] < count) { if (!seen[inst->args.data[a]]) { intervals[inst->args.data[a]].start = position; seen[inst->args.data[a]] = true; } intervals[inst->args.data[a]].end = position; }
-            if (inst->dst != CINDER_INVALID_VALUE && inst->dst < count) { intervals[inst->dst].start = position; intervals[inst->dst].end = position; seen[inst->dst] = true; }
+    CINDER_VEC_TYPE(size_t) calls = {NULL, 0U, 0U};
+    for (size_t v = 0U; v < count; ++v) {
+        intervals[v].value = (CinderValueId)v; intervals[v].start = SIZE_MAX; intervals[v].end = 0U;
+        intervals[v].location = (CinderLocation){LOC_STACK, REG_NONE, 0};
+    }
+    for (size_t b = 0U; b < function->blocks.len; ++b) {
+        const CinderIRBlock *block = &function->blocks.data[b];
+        for (size_t v = 0U; v < count; ++v) {
+            if (cinder_live_has(live.in + b * live.words, (CinderValueId)v)) touch(intervals, count, (CinderValueId)v, live.begin[b]);
+            if (cinder_live_has(live.out + b * live.words, (CinderValueId)v)) touch(intervals, count, (CinderValueId)v, live.end[b]);
         }
-        if (block->terminator.condition != CINDER_INVALID_VALUE && block->terminator.condition < count) intervals[block->terminator.condition].end = position;
-        if (block->terminator.value != CINDER_INVALID_VALUE && block->terminator.value < count) intervals[block->terminator.value].end = position;
+        for (size_t i = 0U; i < block->instructions.len; ++i) {
+            const CinderIRInst *inst = &block->instructions.data[i];
+            size_t position = live.begin[b] + i;
+            touch(intervals, count, inst->dst, position);
+            if (inst->op == IR_CALL) cinder_vec_push((CinderVec *)&calls, &position);
+            if (inst->op == IR_PHI) {
+                for (size_t p = 0U; p < inst->args.len && p < inst->phi_blocks.len; ++p)
+                    if (inst->phi_blocks.data[p] < live.blocks) touch(intervals, count, inst->args.data[p], live.end[inst->phi_blocks.data[p]]);
+            } else {
+                touch(intervals, count, inst->left, position); touch(intervals, count, inst->right, position);
+                for (size_t a = 0U; a < inst->args.len; ++a) touch(intervals, count, inst->args.data[a], position);
+            }
+        }
+        touch(intervals, count, block->terminator.value, live.end[b]);
+        touch(intervals, count, block->terminator.condition, live.end[b]);
     }
-    int registers[] = {REG_R12, REG_R13, REG_R14, REG_R15};
-    size_t spill_index = 0U;
-    for (size_t i = 0U; i < count; ++i) {
-        if (!seen[i]) continue;
-        CinderInterval interval = intervals[i];
-        bool live_across_call = false;
-        for (size_t c = 0U; c < call_positions.len; ++c) if (interval.start < call_positions.data[c] && interval.end > call_positions.data[c]) live_across_call = true;
-        bool float_value = value_is_float(allocation->ir, interval.value);
-        if (!float_value && !live_across_call && i < CINDER_ARRAY_LEN(registers)) { interval.location.kind = LOC_REGISTER; interval.location.reg = (CinderRegister)registers[i]; interval.location.stack_offset = 0; }
-        else { interval.location.kind = LOC_STACK; interval.location.reg = REG_NONE; interval.location.stack_offset = -((int)(allocation->ir->local_count + spill_index + 1U) * 8); allocation->spills++; spill_index++; }
-        cinder_vec_push((CinderVec *)&allocation->intervals, &interval);
+    for (size_t v = 0U; v < count; ++v)
+        if (intervals[v].start != SIZE_MAX) cinder_vec_push((CinderVec *)&allocation->intervals, &intervals[v]);
+    qsort(allocation->intervals.data, allocation->intervals.len, sizeof(CinderInterval), interval_order);
+    size_t active[10]; size_t active_count = 0U;
+    for (size_t i = 0U; i < allocation->intervals.len; ++i) {
+        CinderInterval *current = &allocation->intervals.data[i];
+        for (size_t a = 0U; a < active_count;) {
+            if (allocation->intervals.data[active[a]].end < current->start) active[a] = active[--active_count];
+            else ++a;
+        }
+        bool floating = floating_value(function, current->value);
+        bool crossing_call = false;
+        for (size_t c = 0U; c < calls.len; ++c) if (current->start < calls.data[c] && current->end > calls.data[c]) crossing_call = true;
+        if (floating && crossing_call) continue;
+        CinderRegister first = floating ? REG_XMM2 : REG_R12;
+        CinderRegister last = floating ? REG_XMM7 : REG_R15;
+        CinderRegister available = REG_NONE;
+        for (CinderRegister reg = first; reg <= last; reg = (CinderRegister)((unsigned)reg + 1U)) {
+            bool occupied = false;
+            for (size_t a = 0U; a < active_count; ++a) if (allocation->intervals.data[active[a]].location.reg == reg) occupied = true;
+            if (!occupied) { available = reg; break; }
+        }
+        if (available == REG_NONE) {
+            size_t victim = SIZE_MAX;
+            for (size_t a = 0U; a < active_count; ++a) {
+                const CinderInterval *candidate = &allocation->intervals.data[active[a]];
+                if (candidate->location.reg >= first && candidate->location.reg <= last && candidate->end > current->end && (victim == SIZE_MAX || candidate->end > allocation->intervals.data[active[victim]].end)) victim = a;
+            }
+            if (victim != SIZE_MAX) {
+                CinderInterval *spilled = &allocation->intervals.data[active[victim]];
+                available = spilled->location.reg;
+                spilled->location = (CinderLocation){LOC_STACK, REG_NONE, 0};
+                active[victim] = active[--active_count];
+            }
+        }
+        if (available != REG_NONE) {
+            current->location = (CinderLocation){LOC_REGISTER, available, 0};
+            active[active_count++] = i;
+        }
     }
-    size_t slots = allocation->ir->local_count + allocation->spills;
-    allocation->frame_size = (slots * 8U + 15U) & ~((size_t)15U);
-    free(call_positions.data);
-    free(seen); free(intervals);
+    size_t *slot_end = cinder_alloc((count == 0U ? 1U : count) * sizeof(*slot_end));
+    allocation->spill_slots = 0U; allocation->spills = 0U; allocation->saved_gpr_mask = 0U;
+    for (size_t i = 0U; i < allocation->intervals.len; ++i) {
+        CinderInterval *interval = &allocation->intervals.data[i];
+        if (interval->location.kind == LOC_REGISTER) {
+            if (interval->location.reg >= REG_R12 && interval->location.reg <= REG_R15) allocation->saved_gpr_mask |= 1U << (unsigned)(interval->location.reg - REG_R12);
+            continue;
+        }
+        size_t slot = 0U;
+        while (slot < allocation->spill_slots && slot_end[slot] >= interval->start) ++slot;
+        if (slot == allocation->spill_slots) ++allocation->spill_slots;
+        slot_end[slot] = interval->end;
+        interval->location.stack_offset = -(int)((function->local_count + slot + 1U) * 8U);
+        ++allocation->spills;
+    }
+    unsigned saved = 0U;
+    for (unsigned bit = 0U; bit < 4U; ++bit) if ((allocation->saved_gpr_mask & (1U << bit)) != 0U) ++saved;
+    allocation->frame_size = ((function->local_count + allocation->spill_slots + saved + 14U) * 8U + 15U) & ~(size_t)15U;
+    free(slot_end); free(calls.data); free(intervals); cinder_liveness_destroy(&live);
     return 0;
 }
 
@@ -70,37 +141,6 @@ void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out) {
     }
     dump_phi_copy_plans(allocation, out);
 }
-
-int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags) {
-    if ((allocation->frame_size & 15U) != 0U) {
-        cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation frame for '%s' is not 16-byte aligned", allocation->ir->name);
-        return 1;
-    }
-    for (size_t i = 0U; i < allocation->intervals.len; ++i) {
-        const CinderInterval *left = &allocation->intervals.data[i];
-        if (left->start > left->end) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation interval for value %u is inverted", left->value); continue; }
-        for (size_t j = i + 1U; j < allocation->intervals.len; ++j) {
-            const CinderInterval *right = &allocation->intervals.data[j];
-            bool overlap = left->start <= right->end && right->start <= left->end;
-            if (overlap && left->location.kind == LOC_REGISTER && right->location.kind == LOC_REGISTER && left->location.reg == right->location.reg) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "overlapping values %u and %u share register %u", left->value, right->value, left->location.reg);
-            if (overlap && left->location.kind == LOC_STACK && right->location.kind == LOC_STACK && left->location.stack_offset == right->location.stack_offset) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "overlapping values %u and %u share stack slot", left->value, right->value);
-        }
-    }
-    for (size_t b = 0U; b < allocation->ir->blocks.len; ++b) {
-        CinderIRBlock *block = &allocation->ir->blocks.data[b];
-        for (size_t i = 0U; i < block->instructions.len; ++i) {
-            CinderIRInst *inst = &block->instructions.data[i];
-            if (inst->op != IR_PHI || inst->args.len == 0U) continue;
-            CinderValueId *destinations = cinder_alloc(inst->args.len * sizeof(*destinations));
-            for (size_t p = 0U; p < inst->args.len; ++p) destinations[p] = inst->dst;
-            CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
-            (void)cinder_resolve_parallel_copies(inst->args.data, destinations, inst->args.len, &plan, diags);
-            cinder_parallel_copy_destroy(&plan); free(destinations);
-        }
-    }
-    return diags->errors == 0U ? 0 : 1;
-}
-
 
 void cinder_parallel_copy_init(CinderParallelCopyPlan *plan) { plan->moves.data = NULL; plan->moves.len = 0U; plan->moves.cap = 0U; plan->temporary_count = 0U; }
 

@@ -506,6 +506,7 @@ typedef enum {
 
 typedef struct {
     CinderIROp op;
+    CinderType *type;
     CinderValueId dst;
     CinderValueId left;
     CinderValueId right;
@@ -548,6 +549,8 @@ typedef struct {
     size_t value_count;
     size_t local_count;
     size_t float_param_count;
+    CinderTypeContext *types;
+    CINDER_VEC_TYPE(CinderType *) local_types;
     CinderAst *ast;
 } CinderIRFunction;
 
@@ -614,7 +617,7 @@ int cinder_optimize(CinderIRModule *module, int level, CinderOptStats *stats, Ci
 
 /* ---------- machine representation and allocation ---------- */
 typedef enum { LOC_STACK, LOC_REGISTER } CinderLocationKind;
-typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_NONE } CinderRegister;
+typedef enum { REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15, REG_RBP, REG_RSP, REG_XMM2, REG_XMM3, REG_XMM4, REG_XMM5, REG_XMM6, REG_XMM7, REG_NONE } CinderRegister;
 typedef struct {
     CinderLocationKind kind;
     CinderRegister reg;
@@ -633,12 +636,15 @@ typedef struct {
     CINDER_VEC_TYPE(CinderInterval) intervals;
     size_t frame_size;
     unsigned spills;
+    unsigned saved_gpr_mask;
+    size_t spill_slots;
 } CinderAllocation;
 
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function);
 void cinder_alloc_destroy(CinderAllocation *allocation);
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags);
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags);
+bool cinder_ir_floating(const CinderType *type);
 typedef struct {
     CinderValueId source;
     CinderValueId destination;
