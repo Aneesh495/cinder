@@ -9,13 +9,8 @@ static const CinderIRFunction *find_function(const CinderIRModule *module, const
     return NULL;
 }
 
-static const CinderIRGlobal *find_global(const CinderIRModule *module, const char *name) {
-    for (size_t i = 0U; i < module->globals.len; ++i) if (strcmp(module->globals.data[i].name, name) == 0) return &module->globals.data[i];
-    return NULL;
-}
-
 static int64_t integer_value(uint64_t bits, const CinderType *type) {
-    unsigned width = type != NULL && type->size != 0U ? (unsigned)(type->size * 8U) : 64U;
+    unsigned width = type != NULL && type->size != 0U && type->size <= 8U ? (unsigned)(type->size * 8U) : 64U;
     if (type != NULL && type->kind == TYPE_BOOL) return bits != 0U;
     uint64_t mask = width == 64U ? UINT64_MAX : (UINT64_C(1) << width) - 1U;
     bits &= mask;
@@ -127,90 +122,206 @@ static bool eval_float(const CinderIRInst *inst, double left, double right, doub
     switch (op) { case IR_FADD: *result = left + right; return true; case IR_FSUB: *result = left - right; return true; case IR_FMUL: *result = left * right; return true; case IR_FDIV: *result = left / right; return true; case IR_FCMP_EQ: *comparison = left == right; return true; case IR_FCMP_NE: *comparison = left != right; return true; case IR_FCMP_LT: *comparison = left < right; return true; case IR_FCMP_LE: *comparison = left <= right; return true; case IR_FCMP_GT: *comparison = left > right; return true; case IR_FCMP_GE: *comparison = left >= right; return true; default: return false; }
 }
 
-static CinderInterpResult interpret_function(const CinderIRModule *module, const CinderIRFunction *function, const int64_t *args, size_t arg_count, const double *float_args, size_t float_arg_count, unsigned *steps, unsigned limit, CinderDiagnostics *diags) {
-    CinderInterpResult failure = {false, false, 0, 0.0};
-    int64_t *values = cinder_alloc(function->value_count == 0U ? 1U : function->value_count * sizeof(*values));
-    double *float_values = cinder_alloc(function->value_count == 0U ? 1U : function->value_count * sizeof(*float_values));
-    bool *value_is_float = cinder_alloc(function->value_count == 0U ? 1U : function->value_count * sizeof(*value_is_float));
-    double *float_locals = cinder_alloc(function->local_count == 0U ? 1U : function->local_count * sizeof(*float_locals));
-    bool *local_is_float = cinder_alloc(function->local_count == 0U ? 1U : function->local_count * sizeof(*local_is_float));
-    int64_t *locals = cinder_alloc(function->local_count == 0U ? 1U : function->local_count * sizeof(*locals));
-    memset(locals, 0, function->local_count * sizeof(*locals));
-    memset(value_is_float, 0, function->value_count * sizeof(*value_is_float));
-    memset(local_is_float, 0, function->local_count * sizeof(*local_is_float));
-    CinderBlockId block_id = 0U;
-    CinderBlockId previous_block = CINDER_INVALID_BLOCK;
+typedef struct {
+    int64_t integer;
+    double floating;
+    bool fp;
+    bool defined;
+} InterpValue;
+
+typedef struct {
+    const CinderIRModule *module;
+    InterpValue *globals;
+    unsigned steps;
+    unsigned limit;
+    unsigned depth;
+    CinderInterpClass classification;
+    CinderDiagnostics *diags;
+} InterpContext;
+
+static void failure(InterpContext *context, CinderInterpClass classification, CinderLoc loc, const char *reason) {
+    context->classification = classification;
+    cinder_diag(context->diags, CINDER_ERROR, loc, "IR interpretation: %s", reason);
+}
+
+static size_t global_index(const CinderIRModule *module, const char *name) {
+    for (size_t i = 0U; i < module->globals.len; ++i)
+        if (strcmp(module->globals.data[i].name, name) == 0) return i;
+    return SIZE_MAX;
+}
+
+static bool tick(InterpContext *context, CinderLoc loc) {
+    if (context->steps >= context->limit) {
+        failure(context, INTERP_RESOURCE_LIMIT, loc, "instruction limit exceeded"); return false;
+    }
+    ++context->steps; return true;
+}
+
+static bool require_defined(InterpContext *context, const InterpValue *values, CinderValueId operand, CinderLoc loc) {
+    if (values[operand].defined) return true;
+    failure(context, INTERP_UNINITIALIZED, loc, "undefined behavior from an uninitialized value");
+    return false;
+}
+
+static bool phi_inputs(InterpContext *context, const CinderIRBlock *block, CinderBlockId previous, InterpValue *values, InterpValue *snapshot) {
+    for (size_t i = 0U; i < block->instructions.len; ++i) {
+        const CinderIRInst *phi = &block->instructions.data[i];
+        if (phi->op != IR_PHI) continue;
+        size_t incoming = SIZE_MAX;
+        for (size_t p = 0U; p < phi->phi_blocks.len; ++p) if (phi->phi_blocks.data[p] == previous) incoming = p;
+        if (incoming == SIZE_MAX) { failure(context, INTERP_MALFORMED, phi->loc, "phi has no incoming predecessor"); return false; }
+        snapshot[phi->dst] = values[phi->args.data[incoming]];
+    }
+    /* Commit after reading every input. Loop-header swaps and longer cycles
+     * observe the predecessor state, independent of phi instruction order. */
+    for (size_t i = 0U; i < block->instructions.len; ++i) {
+        const CinderIRInst *phi = &block->instructions.data[i];
+        if (phi->op == IR_PHI) values[phi->dst] = snapshot[phi->dst];
+    }
+    return true;
+}
+
+static bool interpret_function(InterpContext *context, const CinderIRFunction *function, const int64_t *args, size_t arg_count, const double *float_args, size_t float_count, InterpValue *returned) {
+    if (context->depth >= 256U) { failure(context, INTERP_RESOURCE_LIMIT, (CinderLoc){0}, "call-depth limit exceeded"); return false; }
+    ++context->depth;
+    size_t value_count = function->value_count == 0U ? 1U : function->value_count;
+    size_t local_count = function->local_count == 0U ? 1U : function->local_count;
+    InterpValue *values = cinder_alloc(value_count * sizeof(*values));
+    InterpValue *snapshot = cinder_alloc(value_count * sizeof(*snapshot));
+    InterpValue *locals = cinder_alloc(local_count * sizeof(*locals));
+    memset(values, 0, value_count * sizeof(*values)); memset(locals, 0, local_count * sizeof(*locals));
+    CinderBlockId block_id = 0U, previous = CINDER_INVALID_BLOCK;
+    bool success = false;
     while (true) {
-        if (++*steps > limit) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR interpreter step limit exceeded in '%s'", function->name); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; }
         const CinderIRBlock *block = &function->blocks.data[block_id];
+        if (!phi_inputs(context, block, previous, values, snapshot)) goto done;
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             const CinderIRInst *inst = &block->instructions.data[i];
-            int64_t value = 0;
+            if (!tick(context, inst->loc)) goto done;
+            if (inst->op == IR_NOP || inst->op == IR_PHI) continue;
+            if (inst->left != CINDER_INVALID_VALUE && !require_defined(context, values, inst->left, inst->loc)) goto done;
+            if (inst->right != CINDER_INVALID_VALUE && !require_defined(context, values, inst->right, inst->loc)) goto done;
+            InterpValue result = {0, 0.0, cinder_ir_floating(inst->type), true};
             switch (inst->op) {
-                case IR_NOP: break;
-                case IR_CONST: values[inst->dst] = inst->integer; value_is_float[inst->dst] = false; break;
-                case IR_FCONST: float_values[inst->dst] = inst->floating; value_is_float[inst->dst] = true; break;
-                case IR_GLOBAL_LOAD: { const CinderIRGlobal *global = find_global(module, inst->callee); if (global == NULL) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter cannot find global '%s'", inst->callee); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } values[inst->dst] = global->integer; value_is_float[inst->dst] = false; break; }
-                case IR_GLOBAL_STORE: cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter does not mutate global '%s'", inst->callee); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure;
-                case IR_ARG: values[inst->dst] = inst->operator_code >= 0 && (size_t)inst->operator_code < arg_count ? args[inst->operator_code] : 0; value_is_float[inst->dst] = false; break;
-                case IR_FARG: if (inst->operator_code < 0 || (size_t)inst->operator_code >= float_arg_count) { cinder_diag(diags, CINDER_ERROR, inst->loc, "floating argument register is unavailable"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } float_values[inst->dst] = float_args[inst->operator_code]; value_is_float[inst->dst] = true; break;
-                case IR_VA_ARG: if (inst->slot < 0 || (size_t)inst->slot >= arg_count) { cinder_diag(diags, CINDER_ERROR, inst->loc, "variadic argument index is unavailable"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } values[inst->dst] = args[inst->slot]; value_is_float[inst->dst] = false; break;
-                case IR_LOCAL_LOAD: if (local_is_float[inst->slot]) { float_values[inst->dst] = float_locals[inst->slot]; value_is_float[inst->dst] = true; } else { values[inst->dst] = locals[inst->slot]; value_is_float[inst->dst] = false; } break;
-                case IR_LOCAL_STORE: if (value_is_float[inst->left]) { float_locals[inst->slot] = float_values[inst->left]; local_is_float[inst->slot] = true; } else { locals[inst->slot] = values[inst->left]; local_is_float[inst->slot] = false; } break;
-                case IR_CONVERT:
-                    if (!scalar_convert(inst, value_is_float[inst->left] ? 0 : values[inst->left], value_is_float[inst->left] ? float_values[inst->left] : 0.0, value_is_float[inst->left], &values[inst->dst], &float_values[inst->dst], &value_is_float[inst->dst])) {
-                        cinder_diag(diags, CINDER_ERROR, inst->loc, "undefined out-of-range scalar conversion in IR interpretation");
-                        free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure;
+                case IR_UNDEF: result.defined = false; break;
+                case IR_CONST: result.integer = integer_value((uint64_t)inst->integer, inst->type); break;
+                case IR_FCONST: result.floating = inst->floating; break;
+                case IR_ARG:
+                    if (inst->operator_code < 0 || (size_t)inst->operator_code >= arg_count) {
+                        failure(context, INTERP_UNSUPPORTED, inst->loc, "integer argument is unavailable"); goto done;
                     }
-                    break;
-                case IR_COPY: if (value_is_float[inst->left]) { float_values[inst->dst] = float_values[inst->left]; value_is_float[inst->dst] = true; } else { values[inst->dst] = values[inst->left]; value_is_float[inst->dst] = false; } break;
-                case IR_PHI: {
-                    size_t incoming = SIZE_MAX;
-                    for (size_t p = 0U; p < inst->phi_blocks.len; ++p) if (inst->phi_blocks.data[p] == previous_block) incoming = p;
-                    if (incoming == SIZE_MAX || incoming >= inst->args.len) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter reached a phi without a matching predecessor"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; }
-                    CinderValueId source = inst->args.data[incoming];
-                    value_is_float[inst->dst] = value_is_float[source];
-                    if (value_is_float[source]) float_values[inst->dst] = float_values[source];
-                    else values[inst->dst] = values[source];
+                    result.integer = integer_value((uint64_t)args[inst->operator_code], inst->type); break;
+                case IR_FARG:
+                    if (inst->operator_code < 0 || (size_t)inst->operator_code >= float_count) {
+                        failure(context, INTERP_UNSUPPORTED, inst->loc, "floating argument is unavailable"); goto done;
+                    }
+                    result.floating = float_args[inst->operator_code]; break;
+                case IR_VA_ARG:
+                    if (inst->slot < 0 || (size_t)inst->slot >= arg_count) {
+                        failure(context, INTERP_UNSUPPORTED, inst->loc, "variadic integer ordinal is unavailable"); goto done;
+                    }
+                    result.integer = integer_value((uint64_t)args[inst->slot], inst->type); break;
+                case IR_GLOBAL_LOAD: case IR_GLOBAL_STORE: {
+                    size_t index = global_index(context->module, inst->callee);
+                    if (index == SIZE_MAX || context->module->globals.data[index].is_extern) {
+                        failure(context, INTERP_UNSUPPORTED, inst->loc, "external global storage is unavailable"); goto done;
+                    }
+                    if (inst->op == IR_GLOBAL_LOAD) result = context->globals[index];
+                    else context->globals[index] = values[inst->left];
                     break;
                 }
-                case IR_FNEG: float_values[inst->dst] = -float_values[inst->left]; value_is_float[inst->dst] = true; break;
-                case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV: { double result = 0.0; int64_t comparison = 0; if (!eval_float(inst, float_values[inst->left], float_values[inst->right], &result, &comparison)) { cinder_diag(diags, CINDER_ERROR, inst->loc, "invalid floating operation during IR interpretation"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } if (inst->op >= IR_FCMP_EQ && inst->op <= IR_FCMP_GE) { values[inst->dst] = comparison; value_is_float[inst->dst] = false; } else { float_values[inst->dst] = inst->type->kind == TYPE_FLOAT ? (double)(float)result : result; value_is_float[inst->dst] = true; } break; }
-                case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE: { double result = 0.0; int64_t comparison = 0; if (!eval_float(inst, float_values[inst->left], float_values[inst->right], &result, &comparison)) { cinder_diag(diags, CINDER_ERROR, inst->loc, "invalid floating comparison during IR interpretation"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } values[inst->dst] = comparison; value_is_float[inst->dst] = false; break; }
-                case IR_NEG:
-                    if (!inst->type->is_unsigned && (values[inst->left] == INT64_MIN || (inst->type->size < 8U && values[inst->left] == -(INT64_C(1) << (inst->type->size * 8U - 1U))))) {
-                        cinder_diag(diags, CINDER_ERROR, inst->loc, "undefined signed negation in IR interpretation");
-                        free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure;
+                case IR_LOCAL_LOAD:
+                    if (!locals[inst->slot].defined) {
+                        failure(context, INTERP_UNINITIALIZED, inst->loc, "undefined behavior from an uninitialized local"); goto done;
                     }
-                    values[inst->dst] = integer_value(UINT64_C(0) - (uint64_t)values[inst->left], inst->type); break;
-                case IR_BIT_NOT: values[inst->dst] = integer_value((uint64_t)~values[inst->left], inst->type); break;
+                    result = locals[inst->slot]; break;
+                case IR_LOCAL_STORE: locals[inst->slot] = values[inst->left]; break;
+                case IR_COPY: result = values[inst->left]; break;
+                case IR_CONVERT: {
+                    const InterpValue *source = &values[inst->left];
+                    if (!scalar_convert(inst, source->integer, source->floating, source->fp, &result.integer, &result.floating, &result.fp)) {
+                        failure(context, INTERP_CONVERSION_RANGE, inst->loc, "undefined out-of-range scalar conversion"); goto done;
+                    }
+                    break;
+                }
+                case IR_NEG:
+                    if (!inst->type->is_unsigned && (values[inst->left].integer == INT64_MIN || (inst->type->size < 8U && values[inst->left].integer == -(INT64_C(1) << (inst->type->size * 8U - 1U))))) {
+                        failure(context, INTERP_SIGNED_OVERFLOW, inst->loc, "undefined signed negation overflow"); goto done;
+                    }
+                    result.integer = integer_value(UINT64_C(0) - (uint64_t)values[inst->left].integer, inst->type); break;
+                case IR_BIT_NOT: result.integer = integer_value((uint64_t)~values[inst->left].integer, inst->type); break;
+                case IR_FNEG: result.floating = -values[inst->left].floating; break;
+                case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
+                case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE:
+                    if (!eval_float(inst, values[inst->left].floating, values[inst->right].floating, &result.floating, &result.integer)) {
+                        failure(context, INTERP_MALFORMED, inst->loc, "invalid floating operation"); goto done;
+                    }
+                    break;
                 case IR_CALL: {
-                    const CinderIRFunction *callee = find_function(module, inst->callee);
-                    if (callee == NULL) { cinder_diag(diags, CINDER_ERROR, inst->loc, "IR interpreter cannot execute external call '%s'", inst->callee); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; }
-                    int64_t *call_args = cinder_alloc((inst->args.len == 0U ? 1U : inst->args.len) * sizeof(*call_args));
-                    double *call_float_args = cinder_alloc((inst->args.len == 0U ? 1U : inst->args.len) * sizeof(*call_float_args));
-                    size_t integer_count = 0U; size_t float_count = 0U;
-                    for (size_t a = 0U; a < inst->args.len; ++a) { bool is_float = a < inst->arg_floats.len && inst->arg_floats.data[a]; if (is_float) call_float_args[float_count++] = float_values[inst->args.data[a]]; else call_args[integer_count++] = values[inst->args.data[a]]; }
-                    CinderInterpResult result = interpret_function(module, callee, call_args, integer_count, call_float_args, float_count, steps, limit, diags); free(call_args); free(call_float_args);
-                    if (!result.valid) { free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } if (inst->dst == CINDER_INVALID_VALUE) break; if (result.floating_result) { float_values[inst->dst] = result.floating; value_is_float[inst->dst] = true; } else { values[inst->dst] = result.value; value_is_float[inst->dst] = false; } break;
+                    const CinderIRFunction *callee = find_function(context->module, inst->callee);
+                    if (callee == NULL) { failure(context, INTERP_UNSUPPORTED, inst->loc, "external call is unavailable"); goto done; }
+                    size_t count = inst->args.len == 0U ? 1U : inst->args.len;
+                    int64_t *integers = cinder_alloc(count * sizeof(*integers));
+                    double *floats = cinder_alloc(count * sizeof(*floats));
+                    size_t ni = 0U, nf = 0U; bool ready = true;
+                    for (size_t a = 0U; a < inst->args.len; ++a) {
+                        if (!require_defined(context, values, inst->args.data[a], inst->loc)) { ready = false; break; }
+                        if (inst->arg_floats.data[a]) floats[nf++] = values[inst->args.data[a]].floating;
+                        else integers[ni++] = values[inst->args.data[a]].integer;
+                    }
+                    bool called = ready && interpret_function(context, callee, integers, ni, floats, nf, &result);
+                    free(floats); free(integers);
+                    if (!called) goto done;
+                    break;
                 }
                 default:
-                    if (!eval_binary(inst, values[inst->left], values[inst->right], &value)) { cinder_diag(diags, CINDER_ERROR, inst->loc, "invalid operation during IR interpretation"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; }
-                    values[inst->dst] = integer_value((uint64_t)value, inst->type); value_is_float[inst->dst] = false; break;
+                    if (!eval_binary(inst, values[inst->left].integer, values[inst->right].integer, &result.integer)) {
+                        CinderInterpClass classification = INTERP_SIGNED_OVERFLOW;
+                        const char *reason = "undefined signed arithmetic overflow";
+                        if (inst->op == IR_SHL || inst->op == IR_SHR_S || inst->op == IR_SHR_U) { classification = INTERP_INVALID_SHIFT; reason = "undefined shift operation"; }
+                        if ((inst->op == IR_DIV_S || inst->op == IR_MOD_S || inst->op == IR_DIV_U || inst->op == IR_MOD_U) && values[inst->right].integer == 0) { classification = INTERP_DIVISION_ZERO; reason = "undefined division by zero"; }
+                        failure(context, classification, inst->loc, reason); goto done;
+                    }
+                    result.integer = integer_value((uint64_t)result.integer, inst->type); break;
             }
+            if (inst->dst != CINDER_INVALID_VALUE) values[inst->dst] = result;
         }
         const CinderTerminator *term = &block->terminator;
-        if (term->kind == TERM_RETURN) { if (function->type->return_type->kind == TYPE_FLOAT || function->type->return_type->kind == TYPE_DOUBLE) { double result = term->value == CINDER_INVALID_VALUE ? 0.0 : float_values[term->value]; free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); CinderInterpResult success = {true, true, 0, result}; return success; } int64_t result = term->value == CINDER_INVALID_VALUE ? 0 : values[term->value]; free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); CinderInterpResult success = {true, false, result, 0.0}; return success; }
-        if (term->kind == TERM_JUMP) { previous_block = block_id; block_id = term->target; continue; }
-        if (term->kind == TERM_BRANCH) { previous_block = block_id; block_id = values[term->condition] != 0 ? term->yes : term->no; continue; }
-        cinder_diag(diags, CINDER_ERROR, term->loc, "IR interpreter reached an unterminated block"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure;
+        if (!tick(context, term->loc)) goto done;
+        if (term->kind == TERM_RETURN) {
+            if (term->value != CINDER_INVALID_VALUE) {
+                if (!require_defined(context, values, term->value, term->loc)) goto done;
+                *returned = values[term->value];
+            } else *returned = (InterpValue){0, 0.0, false, true};
+            success = true; break;
+        }
+        previous = block_id;
+        if (term->kind == TERM_JUMP) block_id = term->target;
+        else if (term->kind == TERM_BRANCH) {
+            if (!require_defined(context, values, term->condition, term->loc)) goto done;
+            block_id = values[term->condition].integer != 0 ? term->yes : term->no;
+        } else { failure(context, INTERP_MALFORMED, term->loc, "reached an unterminated block"); goto done; }
     }
+done:
+    free(locals); free(snapshot); free(values); --context->depth;
+    return success;
 }
 
 CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *function_name, const int64_t *args, size_t arg_count, unsigned step_limit, CinderDiagnostics *diags) {
+    CinderInterpResult result = {false, false, 0, 0.0, INTERP_MALFORMED};
+    if (cinder_verify_ir(module, diags) != 0) return result;
     const CinderIRFunction *function = find_function(module, function_name);
-    CinderInterpResult failure = {false, false, 0, 0.0};
-    if (function == NULL) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR interpreter cannot find '%s'", function_name); return failure; }
-    unsigned steps = 0U;
-    return interpret_function(module, function, args, arg_count, NULL, 0U, &steps, step_limit == 0U ? 1000000U : step_limit, diags);
+    if (function == NULL) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR interpreter cannot find '%s'", function_name); return result; }
+    size_t count = module->globals.len == 0U ? 1U : module->globals.len;
+    InterpValue *globals = cinder_alloc(count * sizeof(*globals));
+    for (size_t i = 0U; i < module->globals.len; ++i) {
+        const CinderIRGlobal *global = &module->globals.data[i];
+        globals[i] = (InterpValue){integer_value((uint64_t)global->integer, global->type), global->floating, cinder_ir_floating(global->type), true};
+    }
+    InterpContext context = {module, globals, 0U, step_limit == 0U ? 1000000U : step_limit, 0U, INTERP_DEFINED, diags};
+    InterpValue returned = {0, 0.0, false, false};
+    result.valid = interpret_function(&context, function, args, arg_count, NULL, 0U, &returned);
+    result.floating_result = returned.fp; result.value = returned.integer; result.floating = returned.floating;
+    result.classification = context.classification;
+    free(globals); return result;
 }

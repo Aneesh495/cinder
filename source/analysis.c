@@ -4,16 +4,29 @@
 #include <string.h>
 
 static void visit_rpo(const CinderIRFunction *function, CinderBlockId block, bool *seen, CinderBlockId *postorder, size_t *length) {
-    if (block >= function->blocks.len || seen[block]) return;
-    seen[block] = true;
-    const CinderIRBlock *current = &function->blocks.data[block];
-    for (size_t i = 0U; i < current->successors.len; ++i) visit_rpo(function, current->successors.data[i], seen, postorder, length);
-    postorder[(*length)++] = block;
+    typedef struct { CinderBlockId block; size_t successor; } Frame;
+    Frame *stack = cinder_alloc(function->blocks.len * sizeof(*stack));
+    size_t count = 0U;
+    stack[count++] = (Frame){block, 0U}; seen[block] = true;
+    while (count != 0U) {
+        Frame *frame = &stack[count - 1U];
+        const CinderIRBlock *current = &function->blocks.data[frame->block];
+        if (frame->successor < current->successors.len) {
+            CinderBlockId child = current->successors.data[frame->successor++];
+            if (child < function->blocks.len && !seen[child]) { seen[child] = true; stack[count++] = (Frame){child, 0U}; }
+        } else { postorder[(*length)++] = frame->block; --count; }
+    }
+    free(stack);
 }
 
 void cinder_cfg_init(CinderCFGAnalysis *analysis) { memset(analysis, 0, sizeof(*analysis)); }
 
 void cinder_cfg_destroy(CinderCFGAnalysis *analysis) {
+    for (size_t b = 0U; b < analysis->block_count; ++b) {
+        if (analysis->frontier != NULL) free(analysis->frontier[b].data);
+        if (analysis->children != NULL) free(analysis->children[b].data);
+    }
+    free(analysis->frontier); free(analysis->children);
     free(analysis->rpo); free(analysis->idom); free(analysis->reachable); free(analysis->loop_header); free(analysis->rpo_index);
     memset(analysis, 0, sizeof(*analysis));
 }
@@ -44,6 +57,10 @@ int cinder_analyze_cfg(const CinderIRFunction *function, CinderCFGAnalysis *anal
         return 1;
     }
     size_t count = analysis->block_count;
+    analysis->frontier = cinder_alloc(count * sizeof(*analysis->frontier));
+    analysis->children = cinder_alloc(count * sizeof(*analysis->children));
+    memset(analysis->frontier, 0, count * sizeof(*analysis->frontier));
+    memset(analysis->children, 0, count * sizeof(*analysis->children));
     analysis->rpo = cinder_alloc(count * sizeof(*analysis->rpo));
     analysis->idom = cinder_alloc(count * sizeof(*analysis->idom));
     analysis->reachable = cinder_alloc(count * sizeof(*analysis->reachable));
@@ -83,6 +100,25 @@ int cinder_analyze_cfg(const CinderIRFunction *function, CinderCFGAnalysis *anal
         const CinderIRBlock *block = &function->blocks.data[b];
         for (size_t s = 0U; s < block->successors.len; ++s) if (dominates(analysis, block->successors.data[s], (CinderBlockId)b)) analysis->loop_header[block->successors.data[s]] = true;
     }
+    for (size_t b = 1U; b < count; ++b)
+        if (analysis->reachable[b] && analysis->idom[b] != CINDER_INVALID_BLOCK) {
+            CinderBlockId child = (CinderBlockId)b;
+            cinder_vec_push((CinderVec *)&analysis->children[analysis->idom[b]], &child);
+        }
+    for (size_t b = 0U; b < count; ++b) {
+        const CinderIRBlock *join = &function->blocks.data[b];
+        if (!analysis->reachable[b] || join->predecessors.len < 2U) continue;
+        for (size_t p = 0U; p < join->predecessors.len; ++p) {
+            CinderBlockId runner = join->predecessors.data[p];
+            for (size_t hops = 0U; runner < count && analysis->reachable[runner] && runner != analysis->idom[b] && hops < count; ++hops) {
+                CinderBlockVec *set = &analysis->frontier[runner];
+                bool found = false;
+                for (size_t i = 0U; i < set->len; ++i) if (set->data[i] == b) found = true;
+                if (!found) { CinderBlockId member = (CinderBlockId)b; cinder_vec_push((CinderVec *)set, &member); }
+                runner = analysis->idom[runner];
+            }
+        }
+    }
     free(postorder); free(seen);
     return diags->errors == 0U ? 0 : 1;
 }
@@ -97,6 +133,8 @@ void cinder_dump_cfg(const CinderIRFunction *function, const CinderCFGAnalysis *
         if (analysis->loop_header[b]) fputs(" loop-header", out);
         fputs(" preds=", out); for (size_t i = 0U; i < block->predecessors.len; ++i) fprintf(out, "%u%s", block->predecessors.data[i], i + 1U == block->predecessors.len ? "" : ",");
         fputs(" succs=", out); for (size_t i = 0U; i < block->successors.len; ++i) fprintf(out, "%u%s", block->successors.data[i], i + 1U == block->successors.len ? "" : ",");
+        fputs(" frontier=", out);
+        for (size_t i = 0U; i < analysis->frontier[b].len; ++i) fprintf(out, "%u%s", analysis->frontier[b].data[i], i + 1U == analysis->frontier[b].len ? "" : ",");
         fputc('\n', out);
     }
 }
@@ -142,63 +180,11 @@ unsigned cinder_remove_dead_ir(CinderIRFunction *function) {
             CinderIRBlock *block = &function->blocks.data[b];
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 CinderIRInst *inst = &block->instructions.data[i];
-                bool pure = inst->op == IR_CONST || inst->op == IR_COPY || inst->op == IR_ADD || inst->op == IR_SUB || inst->op == IR_MUL || inst->op == IR_NEG || inst->op == IR_BIT_NOT || inst->op == IR_BIT_AND || inst->op == IR_BIT_OR || inst->op == IR_BIT_XOR || (inst->op >= IR_CMP_EQ && inst->op <= IR_CMP_GE_U);
-                if (pure && inst->dst != CINDER_INVALID_VALUE && inst->dst < function->value_count && uses[inst->dst] == 0U) { inst->op = IR_NOP; inst->dst = CINDER_INVALID_VALUE; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; removed++; changed = true; }
+                bool pure = inst->op == IR_UNDEF || inst->op == IR_PHI || inst->op == IR_FCONST || inst->op == IR_CONST || inst->op == IR_COPY || inst->op == IR_ADD || inst->op == IR_SUB || inst->op == IR_MUL || inst->op == IR_NEG || inst->op == IR_BIT_NOT || inst->op == IR_BIT_AND || inst->op == IR_BIT_OR || inst->op == IR_BIT_XOR || (inst->op >= IR_CMP_EQ && inst->op <= IR_CMP_GE_U);
+                if (pure && inst->dst != CINDER_INVALID_VALUE && inst->dst < function->value_count && uses[inst->dst] == 0U) { free(inst->args.data); free(inst->phi_blocks.data); inst->args.data = NULL; inst->args.len = 0U; inst->args.cap = 0U; inst->phi_blocks.data = NULL; inst->phi_blocks.len = 0U; inst->phi_blocks.cap = 0U; inst->op = IR_NOP; inst->dst = CINDER_INVALID_VALUE; inst->left = CINDER_INVALID_VALUE; inst->right = CINDER_INVALID_VALUE; removed++; changed = true; }
             }
         }
         free(uses);
     }
     return removed;
-}
-
-static bool block_has_phi_for_slot(const CinderIRBlock *block, int slot) {
-    for (size_t i = 0U; i < block->instructions.len; ++i) if (block->instructions.data[i].op == IR_PHI && block->instructions.data[i].slot == slot) return true;
-    return false;
-}
-
-int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags) {
-    (void)diags;
-    int inserted = 0;
-    if (function->local_count == 0U) return 0;
-    for (size_t b = 0U; b < function->blocks.len; ++b) {
-        CinderIRBlock *block = &function->blocks.data[b];
-        if (block->predecessors.len < 2U) continue;
-        for (size_t slot = 0U; slot < function->local_count; ++slot) {
-            if (block_has_phi_for_slot(block, (int)slot)) continue;
-            CinderValueId *incoming = cinder_alloc(block->predecessors.len * sizeof(*incoming));
-            bool complete = true;
-            for (size_t p = 0U; p < block->predecessors.len; ++p) {
-                CinderBlockId predecessor = block->predecessors.data[p];
-                incoming[p] = CINDER_INVALID_VALUE;
-                if (predecessor >= function->blocks.len) { complete = false; break; }
-                CinderIRBlock *pred_block = &function->blocks.data[predecessor];
-                for (size_t i = 0U; i < pred_block->instructions.len; ++i) {
-                    CinderIRInst *inst = &pred_block->instructions.data[i];
-                    if (inst->op == IR_LOCAL_STORE && inst->slot == (int)slot) incoming[p] = inst->left;
-                }
-                if (incoming[p] == CINDER_INVALID_VALUE) complete = false;
-            }
-            if (!complete) { free(incoming); continue; }
-            CinderIRInst phi;
-            memset(&phi, 0, sizeof(phi));
-            phi.type = function->local_types.data[slot];
-            phi.op = IR_PHI; phi.dst = (CinderValueId)function->value_count++; phi.left = CINDER_INVALID_VALUE; phi.right = CINDER_INVALID_VALUE; phi.slot = (int)slot;
-            phi.args.data = NULL; phi.args.len = 0U; phi.args.cap = 0U; phi.phi_blocks.data = NULL; phi.phi_blocks.len = 0U; phi.phi_blocks.cap = 0U;
-            for (size_t p = 0U; p < block->predecessors.len; ++p) { cinder_vec_push((CinderVec *)&phi.args, &incoming[p]); cinder_vec_push((CinderVec *)&phi.phi_blocks, &block->predecessors.data[p]); }
-            CinderIRInst *old = block->instructions.data;
-            CinderIRInst *new_data = cinder_alloc((block->instructions.len + 1U) * sizeof(*new_data));
-            new_data[0] = phi;
-            memcpy(new_data + 1U, old, block->instructions.len * sizeof(*old));
-            free(old); block->instructions.data = new_data; block->instructions.len++; block->instructions.cap = block->instructions.len;
-            CinderValueId value = phi.dst;
-            bool current = true;
-            for (size_t i = 1U; i < block->instructions.len; ++i) {
-                CinderIRInst *inst = &block->instructions.data[i];
-                if (inst->op == IR_LOCAL_STORE && inst->slot == (int)slot) current = false;
-                else if (current && inst->op == IR_LOCAL_LOAD && inst->slot == (int)slot) { inst->op = IR_COPY; inst->left = value; inst->right = CINDER_INVALID_VALUE; inst->slot = -1; }
-            }
-            free(incoming); inserted++;
-        }
-    }
-    return inserted;
 }

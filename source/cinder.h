@@ -511,6 +511,7 @@ typedef enum {
     IR_CALL,
     IR_PHI,
     IR_CONVERT,
+    IR_UNDEF,
 } CinderIROp;
 
 typedef enum {
@@ -576,6 +577,7 @@ typedef struct {
     char *name;
     CinderType *type;
     int64_t integer;
+    double floating;
     char *bytes;
     size_t byte_count;
     bool read_only;
@@ -599,7 +601,15 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags);
 void cinder_dump_ir(const CinderIRModule *module, FILE *out);
 
 typedef struct {
+    CinderBlockId *data;
+    size_t len;
+    size_t cap;
+} CinderBlockVec;
+
+typedef struct {
     size_t block_count;
+    CinderBlockVec *frontier;
+    CinderBlockVec *children;
     CinderBlockId *rpo;
     size_t rpo_count;
     CinderBlockId *idom;
@@ -616,11 +626,24 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
 unsigned cinder_forward_local_memory(CinderIRFunction *function);
 unsigned cinder_remove_dead_ir(CinderIRFunction *function);
 /* ---------- interpreter and optimization ---------- */
+typedef enum {
+    INTERP_DEFINED,
+    INTERP_SIGNED_OVERFLOW,
+    INTERP_DIVISION_ZERO,
+    INTERP_INVALID_SHIFT,
+    INTERP_UNINITIALIZED,
+    INTERP_CONVERSION_RANGE,
+    INTERP_UNSUPPORTED,
+    INTERP_RESOURCE_LIMIT,
+    INTERP_MALFORMED,
+} CinderInterpClass;
+
 typedef struct {
     bool valid;
     bool floating_result;
     int64_t value;
     double floating;
+    CinderInterpClass classification;
 } CinderInterpResult;
 CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *function_name, const int64_t *args, size_t arg_count, unsigned step_limit, CinderDiagnostics *diags);
 
@@ -677,7 +700,7 @@ void cinder_parallel_copy_init(CinderParallelCopyPlan *plan);
 void cinder_parallel_copy_destroy(CinderParallelCopyPlan *plan);
 int cinder_resolve_parallel_copies(const CinderValueId *sources, const CinderValueId *destinations, size_t count, CinderParallelCopyPlan *plan, CinderDiagnostics *diags);
 void cinder_dump_regalloc(const CinderAllocation *allocation, FILE *out);
-int cinder_mir_boundary(const CinderIRFunction *function, CinderDiagnostics *diags);
+int cinder_mir_boundary(CinderIRFunction *function, CinderDiagnostics *diags);
 
 /* ---------- x86-64 machine output ---------- */
 typedef struct {

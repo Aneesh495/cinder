@@ -189,3 +189,22 @@ and argument/return boundaries, and unevaluated size/alignment queries. Targeted
 conversion cases and invalid-constraint cases are being checked on strict GCC
 release and Clang sanitizer builds. Native validation of this new checkpoint
 is pending publication. See `CONVERSIONS.md`.
+
+## SSA and native phi continuation
+
+Implemented pruned iterated-dominance-frontier promotion, dominator-tree renaming,
+explicit undef values, critical-edge splitting, physical edge-copy cycles, and
+simultaneous interpreter phi evaluation. Copy propagation and unused phi/undef
+cleanup are connected to optimization. The interpreter now shares mutable global
+state across calls and returns explicit undefined/resource classifications.
+
+Local strict GCC release and Clang ASan/UBSan validation passed 149 authored
+reference/interpreter/object cases, 16 authored undefined-execution cases, and
+1,000 generated simultaneous-phi/critical-edge/forced-physical-cycle cases. The
+existing 10,000 allocation graphs and 1,000 rejection mutations also pass.
+Native execution of this SSA checkpoint is pending publication.
+
+Linux validation of `75cc3f8` found float32 overflow-argument preparation clobbering
+a populated SSE argument register. The repaired caller writes overflow stack
+arguments before filling ABI registers. Raw control objects and native binaries
+are now retained on failure. This defect is not closed until the Linux rerun passes.

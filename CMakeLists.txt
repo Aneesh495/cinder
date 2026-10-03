@@ -28,6 +28,7 @@ set(CINDER_SOURCES
   source/ir.c
   source/ir_verify.c
   source/analysis.c
+  source/ssa.c
   source/ir_interp.c
   source/opt.c
   source/mir.c
@@ -41,17 +42,30 @@ set(CINDER_SOURCES
   source/inspect.c
 )
 
-add_executable(cindercc ${CINDER_SOURCES})
-target_include_directories(cindercc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
-target_compile_definitions(cindercc PRIVATE CINDER_VERSION=\"0.1.0\")
-target_compile_options(cindercc PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Werror)
-if(CINDER_SANITIZE)
-  target_compile_options(cindercc PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-  target_link_options(cindercc PRIVATE -fsanitize=address,undefined)
-endif()
+function(cinder_target_profile target)
+  target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
+  target_compile_definitions(${target} PRIVATE CINDER_VERSION="0.1.0")
+  target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Werror)
+  if(CINDER_SANITIZE)
+    target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+  endif()
+endfunction()
+
+set(CINDER_CORE_SOURCES ${CINDER_SOURCES})
+list(REMOVE_ITEM CINDER_CORE_SOURCES source/main.c)
+add_library(cinder_core STATIC ${CINDER_CORE_SOURCES})
+cinder_target_profile(cinder_core)
+add_executable(cindercc source/main.c)
+cinder_target_profile(cindercc)
+target_link_libraries(cindercc PRIVATE cinder_core)
 
 include(CTest)
 if(BUILD_TESTING)
   add_test(NAME cinder_smoke COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_smoke.sh $<TARGET_FILE:cindercc>)
   set_tests_properties(cinder_smoke PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
+
+add_executable(cinder_ssa_probe EXCLUDE_FROM_ALL tests/ssa_probe.c)
+cinder_target_profile(cinder_ssa_probe)
+target_link_libraries(cinder_ssa_probe PRIVATE cinder_core)

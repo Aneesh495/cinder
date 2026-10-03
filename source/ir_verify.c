@@ -113,7 +113,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
             bool ordinary = false;
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 const CinderIRInst *inst = &block->instructions.data[i];
-                if (inst->op < IR_NOP || inst->op > IR_CONVERT) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid IR opcode");
+                if (inst->op < IR_NOP || inst->op > IR_UNDEF) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid IR opcode");
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_GLOBAL_STORE && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);

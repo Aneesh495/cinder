@@ -175,18 +175,28 @@ int cinder_resolve_parallel_copies(const CinderValueId *sources, const CinderVal
 
 
 static void dump_phi_copy_plans(const CinderAllocation *allocation, FILE *out) {
-    for (size_t b = 0U; b < allocation->ir->blocks.len; ++b) {
-        CinderIRBlock *block = &allocation->ir->blocks.data[b];
-        for (size_t i = 0U; i < block->instructions.len; ++i) {
-            CinderIRInst *inst = &block->instructions.data[i];
-            if (inst->op != IR_PHI || inst->args.len == 0U) continue;
-            CinderValueId *destinations = cinder_alloc(inst->args.len * sizeof(*destinations));
-            for (size_t p = 0U; p < inst->args.len; ++p) destinations[p] = inst->dst;
-            CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
-            CinderDiagnostics diagnostics; cinder_diags_init(&diagnostics);
-            (void)cinder_resolve_parallel_copies(inst->args.data, destinations, inst->args.len, &plan, &diagnostics);
-            fprintf(out, "  parallel-copy phi=%%v%u moves=%zu temporaries=%u\n", inst->dst, plan.moves.len, plan.temporary_count);
-            cinder_diags_destroy(&diagnostics); cinder_parallel_copy_destroy(&plan); free(destinations);
+    const CinderIRFunction *function = allocation->ir;
+    for (size_t b = 0U; b < function->blocks.len; ++b) {
+        const CinderIRBlock *block = &function->blocks.data[b];
+        for (size_t p = 0U; p < block->predecessors.len; ++p) {
+            CINDER_VEC_TYPE(CinderValueId) sources = {NULL, 0U, 0U}, destinations = {NULL, 0U, 0U};
+            for (size_t i = 0U; i < block->instructions.len; ++i) {
+                const CinderIRInst *phi = &block->instructions.data[i];
+                if (phi->op != IR_PHI) continue;
+                for (size_t a = 0U; a < phi->phi_blocks.len; ++a)
+                    if (phi->phi_blocks.data[a] == block->predecessors.data[p]) {
+                        cinder_vec_push((CinderVec *)&sources, &phi->args.data[a]);
+                        cinder_vec_push((CinderVec *)&destinations, &phi->dst);
+                    }
+            }
+            if (sources.len != 0U) {
+                CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
+                CinderDiagnostics diagnostics; cinder_diags_init(&diagnostics);
+                (void)cinder_resolve_parallel_copies(sources.data, destinations.data, sources.len, &plan, &diagnostics);
+                fprintf(out, "  parallel-copy edge=%u->%zu moves=%zu temporaries=%u\n", block->predecessors.data[p], b, plan.moves.len, plan.temporary_count);
+                cinder_diags_destroy(&diagnostics); cinder_parallel_copy_destroy(&plan);
+            }
+            free(destinations.data); free(sources.data);
         }
     }
 }

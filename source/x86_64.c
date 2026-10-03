@@ -283,12 +283,13 @@ static void emit_call(CinderMachineObject *object, const CinderIRFunction *funct
             emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x11U); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
         } else { load_value_alloc(object, function, allocation, inst->args.data[a]); stack_store_rax(object, offset); }
     }
+    for (unsigned phase = 0U; phase < 2U; ++phase) {
     integer = 0U; floating = 0U; size_t stack_index = 0U;
     for (size_t a = 0U; a < inst->args.len; ++a) {
         size_t offset = (stacked + a) * 8U;
         bool fp = a < inst->arg_floats.len && inst->arg_floats.data[a];
         bool overflow = fp ? floating >= 8U : integer >= 6U;
-        if (overflow) {
+        if (overflow && phase == 0U) {
             CinderType *argument_type = cinder_ir_value_type(function, inst->args.data[a]);
             if (fp && argument_type->kind == TYPE_FLOAT) {
                 emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x84U); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
@@ -297,13 +298,14 @@ static void emit_call(CinderMachineObject *object, const CinderIRFunction *funct
             } else stack_load_rax(object, offset);
             stack_store_rax(object, stack_index++ * 8U);
         }
-        else if (fp) {
+        else if (!overflow && phase == 1U && fp) {
             emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U);
             emit8(object, (uint8_t)(0x84U | ((unsigned)floating << 3U))); emit8(object, 0x24U); emit32(object, (uint32_t)offset);
             CinderType *argument_type = cinder_ir_value_type(function, inst->args.data[a]);
             if (argument_type->kind == TYPE_FLOAT) { emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, (uint8_t)(0xC0U | ((unsigned)floating << 3U) | (unsigned)floating)); }
-        } else { stack_load_rax(object, offset); emit_mov_reg_from_rax(object, abi_register((unsigned)integer)); }
+        } else if (!overflow && phase == 1U) { stack_load_rax(object, offset); emit_mov_reg_from_rax(object, abi_register((unsigned)integer)); }
         if (fp) ++floating; else ++integer;
+    }
     }
     emit8(object, 0xB0U); emit8(object, (uint8_t)(floating < 8U ? floating : 8U));
     emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U);
@@ -349,12 +351,70 @@ static void emit_global_store(CinderMachineObject *object, const CinderIRFunctio
     symbol_displacement(object, inst->callee);
 }
 
+static CinderValueId storage_key(const CinderLocation *location) {
+    return location->kind == LOC_REGISTER ? (CinderValueId)location->reg : (CinderValueId)((size_t)REG_NONE + 1U + (size_t)(-(int64_t)location->stack_offset / 8));
+}
+
+static int emit_phi_transfers(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderBlockId from, CinderBlockId to, CinderDiagnostics *diags) {
+    const CinderIRBlock *target = &function->blocks.data[to];
+    size_t count = 0U;
+    for (size_t i = 0U; i < target->instructions.len; ++i) if (target->instructions.data[i].op == IR_PHI) ++count;
+    if (count == 0U) return 0;
+    CinderValueId *sources = cinder_alloc(count * sizeof(*sources));
+    CinderValueId *destinations = cinder_alloc(count * sizeof(*destinations));
+    CinderValueId *source_values = cinder_alloc(count * sizeof(*source_values));
+    CinderValueId *destination_values = cinder_alloc(count * sizeof(*destination_values));
+    size_t index = 0U;
+    for (size_t i = 0U; i < target->instructions.len; ++i) {
+        const CinderIRInst *phi = &target->instructions.data[i];
+        if (phi->op != IR_PHI) continue;
+        size_t incoming = SIZE_MAX;
+        for (size_t p = 0U; p < phi->phi_blocks.len; ++p) if (phi->phi_blocks.data[p] == from) incoming = p;
+        if (incoming == SIZE_MAX) { cinder_diag(diags, CINDER_FATAL, phi->loc, "phi transfer has no incoming edge"); break; }
+        const CinderLocation *source = location_for(allocation, phi->args.data[incoming]);
+        const CinderLocation *destination = location_for(allocation, phi->dst);
+        if (source == NULL || destination == NULL) { cinder_diag(diags, CINDER_FATAL, phi->loc, "phi transfer has no physical location"); break; }
+        sources[index] = storage_key(source); destinations[index] = storage_key(destination);
+        source_values[index] = phi->args.data[incoming]; destination_values[index] = phi->dst; ++index;
+    }
+    CinderParallelCopyPlan plan; cinder_parallel_copy_init(&plan);
+    if (diags->errors == 0U) (void)cinder_resolve_parallel_copies(sources, destinations, count, &plan, diags);
+    bool temporary_float = false;
+    for (size_t m = 0U; m < plan.moves.len && diags->errors == 0U; ++m) {
+        CinderParallelCopy move = plan.moves.data[m];
+        CinderValueId source = CINDER_INVALID_VALUE, destination = CINDER_INVALID_VALUE;
+        for (size_t k = 0U; k < count; ++k) {
+            if (sources[k] == move.source) source = source_values[k];
+            if (destinations[k] == move.destination) destination = destination_values[k];
+        }
+        bool floating = source != CINDER_INVALID_VALUE ? cinder_ir_floating(cinder_ir_value_type(function, source)) : temporary_float;
+        if (move.source == CINDER_INVALID_VALUE) {
+            if (floating) emit_movsd_xmm_xmm(object, 0U, 1U);
+            else emit_mov_reg_reg(object, 0U, 11U);
+        } else if (source != CINDER_INVALID_VALUE) {
+            if (floating) load_float_value(object, function, allocation, source, 0U);
+            else load_value_alloc(object, function, allocation, source);
+        } else { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "parallel-copy source is absent"); break; }
+        if (move.destination == CINDER_INVALID_VALUE) {
+            temporary_float = floating;
+            if (floating) emit_movsd_xmm_xmm(object, 1U, 0U);
+            else emit_mov_reg_reg(object, 11U, 0U);
+        } else if (destination != CINDER_INVALID_VALUE) {
+            if (floating) store_float_value(object, function, allocation, destination);
+            else store_value_alloc(object, function, allocation, destination);
+        } else { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "parallel-copy destination is absent"); break; }
+    }
+    cinder_parallel_copy_destroy(&plan);
+    free(destination_values); free(source_values); free(destinations); free(sources);
+    return diags->errors == 0U ? 0 : 1;
+}
+
 void cinder_machine_init(CinderMachineObject *object) { object->text.data = NULL; object->text.len = 0U; object->text.cap = 0U; object->data.data = NULL; object->data.len = 0U; object->data.cap = 0U; object->rodata.data = NULL; object->rodata.len = 0U; object->rodata.cap = 0U; object->bss_size = 0U; object->fixups.data = NULL; object->fixups.len = 0U; object->fixups.cap = 0U; object->defined_symbols.data = NULL; object->defined_symbols.len = 0U; object->defined_symbols.cap = 0U; object->symbol_offsets.data = NULL; object->symbol_offsets.len = 0U; object->symbol_offsets.cap = 0U; object->symbol_sizes.data = NULL; object->symbol_sizes.len = 0U; object->symbol_sizes.cap = 0U; object->symbol_globals.data = NULL; object->symbol_globals.len = 0U; object->symbol_globals.cap = 0U; object->data_symbols.data = NULL; object->data_symbols.len = 0U; object->data_symbols.cap = 0U; object->literal_counter = 0U; object->frame_size = 0U; }
 
 void cinder_machine_destroy(CinderMachineObject *object) { free(object->text.data); free(object->data.data); free(object->rodata.data); for (size_t i = 0U; i < object->fixups.len; ++i) free(object->fixups.data[i].symbol); free(object->fixups.data); for (size_t i = 0U; i < object->defined_symbols.len; ++i) free(object->defined_symbols.data[i]); free(object->defined_symbols.data); free(object->symbol_offsets.data); free(object->symbol_sizes.data); free(object->symbol_globals.data); for (size_t i = 0U; i < object->data_symbols.len; ++i) free(object->data_symbols.data[i].name); free(object->data_symbols.data); }
 
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags) {
-    (void)diags; (void)assembly; (void)asm_out;
+    (void)assembly; (void)asm_out;
     size_t frame = allocation->frame_size;
     size_t start = object->text.len;
     char *name = cinder_strndup(function->name, strlen(function->name));
@@ -402,7 +462,14 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_VA_ARG:
                     if (inst->slot >= 0 && inst->slot < 6) emit_mov_rax_mem(object, -(int)((incoming_base + (size_t)inst->slot + 1U) * 8U)); else if (inst->slot >= 6) emit_arg_from_stack(object, (unsigned)inst->slot);
                     store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_LOCAL_LOAD: case IR_PHI:
+                case IR_UNDEF:
+                    if (cinder_ir_floating(inst->type)) {
+                        emit8(object, 0x66U); emit8(object, 0x0FU); emit8(object, 0x57U); emit8(object, 0xC0U);
+                        store_float_value(object, function, allocation, inst->dst);
+                    } else { emit_mov_rax_imm(object, 0); store_value_alloc(object, function, allocation, inst->dst); }
+                    break;
+                case IR_PHI: break;
+                case IR_LOCAL_LOAD:
                     if (cinder_ir_floating(inst->type)) {
                         emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x85U); emit32(object, (uint32_t)local_offset(inst->slot));
                         store_float_value(object, function, allocation, inst->dst);
@@ -444,7 +511,9 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     emit_mov_reg_reg(object, bit + 12U, 10U);
                 }
                 emit_epilogue(object); break;
-            case TERM_JUMP: emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
+            case TERM_JUMP:
+                if (emit_phi_transfers(object, function, allocation, (CinderBlockId)b, block->terminator.target, diags) != 0) { free(labels); free(branches.data); return 1; }
+                emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
             case TERM_BRANCH:
                 load_value_alloc(object, function, allocation, block->terminator.condition); emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xF8U); emit8(object, 0U); emit8(object, 0x0FU); emit8(object, 0x85U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup yes = {offset, block->terminator.yes}; cinder_vec_push((CinderVec *)&branches, &yes); } emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup no = {offset, block->terminator.no}; cinder_vec_push((CinderVec *)&branches, &no); } break;
             case TERM_UNREACHABLE: emit8(object, 0x0FU); emit8(object, 0x0BU); break;
