@@ -193,7 +193,7 @@ static CinderExpr *parse_unary(CinderAst *ast) {
     CinderTokenKind kind = peek(ast)->kind;
     if (kind == '+' || kind == '-' || kind == '!' || kind == '~' || kind == '&' || kind == '*' || kind == TOK_PLUSPLUS || kind == TOK_MINUSMINUS) {
         CinderToken *token = &ast->tokens->tokens.data[ast->cursor++];
-        CinderExpr *expr = new_expr(ast, EX_UNARY, token->loc); expr->as.unary.op = token->kind; expr->as.unary.value = parse_unary(ast); return expr;
+        CinderExpr *expr = new_expr(ast, EX_UNARY, token->loc); expr->as.unary.op = (int)token->kind; expr->as.unary.value = parse_unary(ast); return expr;
     }
     if (take(ast, TOK_KW_SIZEOF)) {
         CinderExpr *expr = new_expr(ast, EX_SIZEOF, previous(ast)->loc); expr->as.unary.value = parse_unary(ast); return expr;
@@ -201,7 +201,7 @@ static CinderExpr *parse_unary(CinderAst *ast) {
     return parse_postfix(ast);
 }
 
-static int precedence(CinderTokenKind kind) {
+static int precedence(int kind) {
     switch (kind) {
         case TOK_OROR: return 1;
         case TOK_ANDAND: return 2;
@@ -220,12 +220,12 @@ static int precedence(CinderTokenKind kind) {
 static CinderExpr *parse_binary(CinderAst *ast, int minimum) {
     CinderExpr *left = parse_unary(ast);
     while (true) {
-        int priority = precedence(peek(ast)->kind);
+        int priority = precedence((int)peek(ast)->kind);
         if (priority < minimum || priority == 0) break;
         CinderToken *operator_token = &ast->tokens->tokens.data[ast->cursor++];
         CinderExpr *right = parse_binary(ast, priority + 1);
         CinderExpr *binary = new_expr(ast, EX_BINARY, operator_token->loc);
-        binary->as.binary.op = operator_token->kind;
+        binary->as.binary.op = (int)operator_token->kind;
         binary->as.binary.left = left;
         binary->as.binary.right = right;
         left = binary;

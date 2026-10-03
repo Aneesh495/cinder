@@ -1,0 +1,8 @@
+flowchart LR
+    SOURCE[Input source] --> PIPELINE[Preprocess, parse, verify, encode]
+    PIPELINE --> STAGE[Exclusive sibling output]
+    STAGE --> CLOSE[Check stream and close]
+    CLOSE --> SUCCESS{Compilation and linking succeed?}
+    SUCCESS -->|Yes| RENAME[Atomic rename to destination]
+    SUCCESS -->|No| DISCARD[Delete owned staging file]
+    DISCARD --> PRIOR[Preserve prior destination]
