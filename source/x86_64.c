@@ -367,7 +367,7 @@ static void bytes_align(CinderBytes *bytes, size_t align) {
 
 static void append_integer(CinderBytes *bytes, int64_t value, size_t size) {
     for (size_t byte = 0U; byte < size; ++byte)
-        cinder_bytes_put8(bytes, byte < 8U ? (uint8_t)((uint64_t)value >> (byte * 8U)) : 0U);
+        cinder_bytes_put8(bytes, (uint8_t)(byte < 8U ? (uint64_t)value >> (byte * 8U) : 0U));
 }
 
 int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *object, CinderDiagnostics *diags) {
