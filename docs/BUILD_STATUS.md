@@ -1,6 +1,6 @@
 # Build status
 
-Updated: 2026-10-02
+Updated: 2026-10-03
 
 ## Repository and publication
 
@@ -128,9 +128,32 @@ ABI are complete. Source behavior checks now include 52 authored programs.
 Native execution of the previous 40-case increment passed in Linux run
 [37094039401](https://github.com/Aneesh495/cinder/actions/runs/37094039401).
 
+## Object and verification increment
+
+ELF headers, section headers, symbols, and relocations are serialized in
+explicit target byte order. Local symbols precede globals and `.symtab` records
+the first global index. Static functions/data retain local binding, function
+sizes are recorded, and floating literal symbols remain local to their object.
+Narrow global loads sign/zero extend the declared width; stores use that width.
+Two-byte initializers occupy two bytes. Assembly output now preserves encoded
+text, external relocations, all data sections, symbol binding, and sizes.
+
+The object campaign generates 1,000 two-unit probes. Each is emitted at both
+optimization levels, inspected by an independent ELF reader, and independently
+assembled from the compiler's assembly output. On Linux, both object paths are
+linked and executed. The harness uses an immutable compiler snapshot. A prior
+local run overlapping a rebuild is retained only as exploratory evidence and
+cannot satisfy a source-frozen acceptance gate.
+
+IR verification now checks unique definitions, dominance, operand/result
+classes, reciprocal CFG edges, local storage bounds, and complete phi incoming
+edges. Normal compilation verifies both before and after optimization. Void
+calls and optimizer tombstones have explicit effect-only handling. Signed
+arithmetic in interpretation and constant folding avoids host overflow.
+
 ## Next action
 
-Validate this increment on Linux, then replace the allocator with CFG liveness
-and interval allocation. Typed scalar conversions, complete declarators and
-addressable storage, genuine SSA/out-of-SSA, ABI, debug information, bootstrap,
-and the required full evidence campaigns remain open.
+Complete the immutable object campaign and native checks, then add typed scalar
+conversions, full SSA construction/edge copies, and addressable storage. The
+complete language registry, true bootstrap, debugging, full acceptance engine,
+and remaining required campaigns are still open.

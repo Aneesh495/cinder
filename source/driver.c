@@ -92,10 +92,11 @@ int cinder_driver_run(const CinderOptions *options) {
     cinder_ir_init(&module, &types);
     if (cinder_lower_ir(&module, &ast, &diags) != 0) goto done_ir;
     for (size_t f = 0U; f < module.functions.len; ++f) if (cinder_insert_join_phis(&module.functions.data[f], &diags) < 0) goto done_ir;
-    if (options->verify_each && cinder_verify_ir(&module, &diags) != 0) goto done_ir;
+    if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) cinder_dump_ir(&module, stdout);
     CinderOptStats stats;
     if (cinder_optimize(&module, options->optimization, &stats, &diags) != 0) goto done_ir;
+    if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) { fputs("; optimized IR\n", stdout); cinder_dump_ir(&module, stdout); }
     if (options->dump_mir) { fprintf(stdout, "MIR boundary: %zu functions, target=x86_64-sysv folded=%u forwarded=%u dead=%u\n", module.functions.len, stats.constants_folded, stats.memory_forwarded, stats.dead_instructions_removed); for (size_t f = 0U; f < module.functions.len; ++f) { CinderCFGAnalysis cfg; cinder_cfg_init(&cfg); if (cinder_analyze_cfg(&module.functions.data[f], &cfg, &diags) == 0) cinder_dump_cfg(&module.functions.data[f], &cfg, stdout); cinder_cfg_destroy(&cfg); } }
     if (options->interpret) { CinderInterpResult interpretation = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags); if (!interpretation.valid) goto done_ir; fprintf(stdout, "interpret main => %lld\n", (long long)interpretation.value); result = 0; if (options->explorer == NULL && !options->dump_regalloc) goto done_ir; }
@@ -121,7 +122,11 @@ int cinder_driver_run(const CinderOptions *options) {
         if (cinder_write_explorer(options->explorer, &tokens, &ast, &module, &machine, &diags) != 0) goto done_machine;
     }
     if (inspection_only) { result = 0; goto done_machine; }
-    if (options->emit_assembly) { result = assembly == stdout ? (fflush(stdout) != 0 ? 1 : 0) : cinder_output_commit(&assembly_output, &diags); assembly = NULL; goto done_machine; }
+    if (options->emit_assembly) {
+        if (cinder_write_assembly(&machine, assembly, &diags) != 0) goto done_assembly;
+        result = assembly == stdout ? (fflush(stdout) != 0 ? 1 : 0) : cinder_output_commit(&assembly_output, &diags);
+        assembly = NULL; goto done_machine;
+    }
     const char *object_path = options->output == NULL ? default_object_name(options->input) : options->output;
     if (options->emit_object) {
         if (cinder_write_elf64(&machine, object_path, &diags) != 0) goto done_machine;

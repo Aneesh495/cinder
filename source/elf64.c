@@ -20,16 +20,46 @@
 #define RODATA_SECTION 2U
 #define BSS_SECTION 3U
 
-#if defined(__GNUC__) || defined(__clang__)
-#define CINDER_PACKED __attribute__((packed))
-#else
-#define CINDER_PACKED
-#endif
+typedef struct { unsigned char e_ident[16]; uint16_t e_type; uint16_t e_machine; uint32_t e_version; uint64_t e_entry; uint64_t e_phoff; uint64_t e_shoff; uint32_t e_flags; uint16_t e_ehsize; uint16_t e_phentsize; uint16_t e_phnum; uint16_t e_shentsize; uint16_t e_shnum; uint16_t e_shstrndx; } ElfHeader;
+typedef struct { uint32_t sh_name; uint32_t sh_type; uint64_t sh_flags; uint64_t sh_addr; uint64_t sh_offset; uint64_t sh_size; uint32_t sh_link; uint32_t sh_info; uint64_t sh_addralign; uint64_t sh_entsize; } SectionHeader;
+typedef struct { uint32_t st_name; unsigned char st_info; unsigned char st_other; uint16_t st_shndx; uint64_t st_value; uint64_t st_size; } Symbol;
+typedef struct { uint64_t r_offset; uint64_t r_info; int64_t r_addend; } Rela;
 
-typedef struct CINDER_PACKED { unsigned char e_ident[16]; uint16_t e_type; uint16_t e_machine; uint32_t e_version; uint64_t e_entry; uint64_t e_phoff; uint64_t e_shoff; uint32_t e_flags; uint16_t e_ehsize; uint16_t e_phentsize; uint16_t e_phnum; uint16_t e_shentsize; uint16_t e_shnum; uint16_t e_shstrndx; } ElfHeader;
-typedef struct CINDER_PACKED { uint32_t sh_name; uint32_t sh_type; uint64_t sh_flags; uint64_t sh_addr; uint64_t sh_offset; uint64_t sh_size; uint32_t sh_link; uint32_t sh_info; uint64_t sh_addralign; uint64_t sh_entsize; } SectionHeader;
-typedef struct CINDER_PACKED { uint32_t st_name; unsigned char st_info; unsigned char st_other; uint16_t st_shndx; uint64_t st_value; uint64_t st_size; } Symbol;
-typedef struct CINDER_PACKED { uint64_t r_offset; uint64_t r_info; int64_t r_addend; } Rela;
+enum { ELF_HEADER_SIZE = 64U, ELF_SECTION_SIZE = 64U, ELF_SYMBOL_SIZE = 24U, ELF_RELA_SIZE = 24U };
+
+static void put16(CinderBytes *bytes, uint16_t value) {
+    cinder_bytes_put8(bytes, (uint8_t)value); cinder_bytes_put8(bytes, (uint8_t)(value >> 8U));
+}
+
+static void append_symbol(CinderBytes *bytes, const Symbol *symbol) {
+    cinder_bytes_put32(bytes, symbol->st_name);
+    cinder_bytes_put8(bytes, symbol->st_info); cinder_bytes_put8(bytes, symbol->st_other);
+    put16(bytes, symbol->st_shndx);
+    cinder_bytes_put64(bytes, symbol->st_value); cinder_bytes_put64(bytes, symbol->st_size);
+}
+
+static void append_relocation(CinderBytes *bytes, const Rela *relocation) {
+    cinder_bytes_put64(bytes, relocation->r_offset); cinder_bytes_put64(bytes, relocation->r_info);
+    cinder_bytes_put64(bytes, (uint64_t)relocation->r_addend);
+}
+
+static void append_section(CinderBytes *bytes, const SectionHeader *section) {
+    cinder_bytes_put32(bytes, section->sh_name); cinder_bytes_put32(bytes, section->sh_type);
+    cinder_bytes_put64(bytes, section->sh_flags); cinder_bytes_put64(bytes, section->sh_addr);
+    cinder_bytes_put64(bytes, section->sh_offset); cinder_bytes_put64(bytes, section->sh_size);
+    cinder_bytes_put32(bytes, section->sh_link); cinder_bytes_put32(bytes, section->sh_info);
+    cinder_bytes_put64(bytes, section->sh_addralign); cinder_bytes_put64(bytes, section->sh_entsize);
+}
+
+static void append_header(CinderBytes *bytes, const ElfHeader *header) {
+    cinder_bytes_append(bytes, header->e_ident, 16U);
+    put16(bytes, header->e_type); put16(bytes, header->e_machine);
+    cinder_bytes_put32(bytes, header->e_version);
+    cinder_bytes_put64(bytes, header->e_entry); cinder_bytes_put64(bytes, header->e_phoff); cinder_bytes_put64(bytes, header->e_shoff);
+    cinder_bytes_put32(bytes, header->e_flags);
+    put16(bytes, header->e_ehsize); put16(bytes, header->e_phentsize); put16(bytes, header->e_phnum);
+    put16(bytes, header->e_shentsize); put16(bytes, header->e_shnum); put16(bytes, header->e_shstrndx);
+}
 
 typedef struct {
     const char *name;
@@ -88,33 +118,38 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     CinderBytes symbytes = {NULL, 0U, 0U};
     Symbol null_symbol;
     memset(&null_symbol, 0, sizeof(null_symbol));
-    cinder_bytes_append(&symbytes, (const unsigned char *)&null_symbol, sizeof(null_symbol));
+    append_symbol(&symbytes, &null_symbol);
     CINDER_VEC_TYPE(uint32_t) function_indices = {NULL, 0U, 0U};
     CINDER_VEC_TYPE(uint32_t) data_indices = {NULL, 0U, 0U};
 
-    for (size_t i = 0U; i < object->defined_symbols.len; ++i) {
-        Symbol symbol;
-        memset(&symbol, 0, sizeof(symbol));
-        symbol.st_name = string_add(&strtab, object->defined_symbols.data[i]);
-        symbol.st_info = (unsigned char)((STB_GLOBAL << 4U) | STT_FUNC);
-        symbol.st_shndx = 1U;
-        symbol.st_value = object->symbol_offsets.data[i];
-        uint32_t index = (uint32_t)(symbytes.len / sizeof(Symbol));
-        cinder_bytes_append(&symbytes, (const unsigned char *)&symbol, sizeof(symbol));
-        cinder_vec_push((CinderVec *)&function_indices, &index);
-    }
-    for (size_t i = 0U; i < object->data_symbols.len; ++i) {
-        const CinderDataSymbol *definition = &object->data_symbols.data[i];
-        Symbol symbol;
-        memset(&symbol, 0, sizeof(symbol));
-        symbol.st_name = string_add(&strtab, definition->name);
-        symbol.st_info = (unsigned char)((definition->global ? STB_GLOBAL : 0U) << 4U | STT_NOTYPE);
-        symbol.st_shndx = section_for_data(definition->section_kind);
-        symbol.st_value = definition->offset;
-        symbol.st_size = definition->size;
-        uint32_t index = (uint32_t)(symbytes.len / sizeof(Symbol));
-        cinder_bytes_append(&symbytes, (const unsigned char *)&symbol, sizeof(symbol));
-        cinder_vec_push((CinderVec *)&data_indices, &index);
+    uint32_t zero_index = 0U;
+    for (size_t i = 0U; i < object->defined_symbols.len; ++i) cinder_vec_push((CinderVec *)&function_indices, &zero_index);
+    for (size_t i = 0U; i < object->data_symbols.len; ++i) cinder_vec_push((CinderVec *)&data_indices, &zero_index);
+    uint32_t first_global = 1U;
+    for (unsigned binding = 0U; binding < 2U; ++binding) {
+        if (binding == 1U) first_global = (uint32_t)(symbytes.len / ELF_SYMBOL_SIZE);
+        for (size_t i = 0U; i < object->defined_symbols.len; ++i) {
+            bool global = object->symbol_globals.data[i];
+            if (global != (binding == 1U)) continue;
+            Symbol symbol; memset(&symbol, 0, sizeof(symbol));
+            symbol.st_name = string_add(&strtab, object->defined_symbols.data[i]);
+            symbol.st_info = (unsigned char)((binding << 4U) | STT_FUNC);
+            symbol.st_shndx = 1U; symbol.st_value = object->symbol_offsets.data[i];
+            symbol.st_size = object->symbol_sizes.data[i];
+            function_indices.data[i] = (uint32_t)(symbytes.len / ELF_SYMBOL_SIZE);
+            append_symbol(&symbytes, &symbol);
+        }
+        for (size_t i = 0U; i < object->data_symbols.len; ++i) {
+            const CinderDataSymbol *definition = &object->data_symbols.data[i];
+            if (definition->global != (binding == 1U)) continue;
+            Symbol symbol; memset(&symbol, 0, sizeof(symbol));
+            symbol.st_name = string_add(&strtab, definition->name);
+            symbol.st_info = (unsigned char)((binding << 4U) | 1U);
+            symbol.st_shndx = section_for_data(definition->section_kind);
+            symbol.st_value = definition->offset; symbol.st_size = definition->size;
+            data_indices.data[i] = (uint32_t)(symbytes.len / ELF_SYMBOL_SIZE);
+            append_symbol(&symbytes, &symbol);
+        }
     }
 
     CINDER_VEC_TYPE(char *) undefined = {NULL, 0U, 0U};
@@ -132,8 +167,8 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         memset(&symbol, 0, sizeof(symbol));
         symbol.st_name = string_add(&strtab, undefined.data[i]);
         symbol.st_info = (unsigned char)(STB_GLOBAL << 4U | STT_NOTYPE);
-        uint32_t index = (uint32_t)(symbytes.len / sizeof(Symbol));
-        cinder_bytes_append(&symbytes, (const unsigned char *)&symbol, sizeof(symbol));
+        uint32_t index = (uint32_t)(symbytes.len / ELF_SYMBOL_SIZE);
+        append_symbol(&symbytes, &symbol);
         cinder_vec_push((CinderVec *)&undefined_indices, &index);
     }
 
@@ -148,7 +183,7 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         rela.r_offset = object->fixups.data[i].offset;
         rela.r_info = ((uint64_t)symbol_index << 32U) | (uint32_t)object->fixups.data[i].type;
         rela.r_addend = object->fixups.data[i].addend;
-        cinder_bytes_append(&relabytes, (const unsigned char *)&rela, sizeof(rela));
+        append_relocation(&relabytes, &rela);
     }
 
     Section sections[10];
@@ -156,16 +191,16 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     sections[0] = (Section){"", 0U, 0U, 0U, NULL, 0U, 0U, 0U, 0U, section_name_offsets[0], 0U};
     sections[1] = (Section){".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR, 16U, object->text.data, object->text.len, 0U, 0U, 0U, section_name_offsets[1], 0U};
     sections[2] = (Section){".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE, 8U, object->data.data, object->data.len, 0U, 0U, 0U, section_name_offsets[2], 0U};
-    sections[3] = (Section){".rodata", SHT_PROGBITS, SHF_ALLOC, 1U, object->rodata.data, object->rodata.len, 0U, 0U, 0U, section_name_offsets[3], 0U};
+    sections[3] = (Section){".rodata", SHT_PROGBITS, SHF_ALLOC, 8U, object->rodata.data, object->rodata.len, 0U, 0U, 0U, section_name_offsets[3], 0U};
     sections[4] = (Section){".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE, 8U, NULL, object->bss_size, 0U, 0U, 0U, section_name_offsets[4], 0U};
-    sections[5] = (Section){".rela.text", SHT_RELA, 0U, 8U, relabytes.data, relabytes.len, 7U, 1U, sizeof(Rela), section_name_offsets[5], 0U};
+    sections[5] = (Section){".rela.text", SHT_RELA, 0U, 8U, relabytes.data, relabytes.len, 7U, 1U, ELF_RELA_SIZE, section_name_offsets[5], 0U};
     sections[6] = (Section){".note.GNU-stack", SHT_PROGBITS, 0U, 1U, NULL, 0U, 0U, 0U, 0U, section_name_offsets[6], 0U};
-    sections[7] = (Section){".symtab", SHT_SYMTAB, 0U, 8U, symbytes.data, symbytes.len, 8U, 1U, sizeof(Symbol), section_name_offsets[7], 0U};
+    sections[7] = (Section){".symtab", SHT_SYMTAB, 0U, 8U, symbytes.data, symbytes.len, 8U, first_global, ELF_SYMBOL_SIZE, section_name_offsets[7], 0U};
     sections[8] = (Section){".strtab", SHT_STRTAB, 0U, 1U, strtab.data, strtab.len, 0U, 0U, 0U, section_name_offsets[8], 0U};
     sections[9] = (Section){".shstrtab", SHT_STRTAB, 0U, 1U, shstrtab.data, shstrtab.len, 0U, 0U, 0U, section_name_offsets[9], 0U};
 
     CinderBytes file = {NULL, 0U, 0U};
-    size_t cursor = sizeof(ElfHeader);
+    size_t cursor = ELF_HEADER_SIZE;
     for (size_t i = 1U; i < CINDER_ARRAY_LEN(sections); ++i) {
         cursor = align_up(cursor, (size_t)sections[i].align);
         sections[i].file_offset = cursor;
@@ -175,7 +210,7 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     }
     cursor = align_up(cursor, 8U);
     size_t section_table_offset = cursor;
-    size_t section_table_size = sizeof(SectionHeader) * CINDER_ARRAY_LEN(sections);
+    size_t section_table_size = ELF_SECTION_SIZE * CINDER_ARRAY_LEN(sections);
     write_at(&file, section_table_offset, NULL, section_table_size);
     SectionHeader headers[10];
     memset(headers, 0, sizeof(headers));
@@ -190,12 +225,18 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
         headers[i].sh_addralign = sections[i].align;
         headers[i].sh_entsize = sections[i].entsize;
     }
-    write_at(&file, section_table_offset, headers, section_table_size);
+    CinderBytes serialized = {NULL, 0U, 0U};
+    for (size_t i = 0U; i < CINDER_ARRAY_LEN(sections); ++i) append_section(&serialized, &headers[i]);
+    write_at(&file, section_table_offset, serialized.data, serialized.len);
+    free(serialized.data); serialized = (CinderBytes){NULL, 0U, 0U};
     ElfHeader header;
     memset(&header, 0, sizeof(header));
     header.e_ident[0] = 0x7FU; header.e_ident[1] = 'E'; header.e_ident[2] = 'L'; header.e_ident[3] = 'F'; header.e_ident[4] = 2U; header.e_ident[5] = 1U; header.e_ident[6] = 1U;
-    header.e_type = 1U; header.e_machine = 62U; header.e_version = 1U; header.e_shoff = section_table_offset; header.e_ehsize = sizeof(ElfHeader); header.e_shentsize = sizeof(SectionHeader); header.e_shnum = CINDER_ARRAY_LEN(sections); header.e_shstrndx = 9U;
-    write_at(&file, 0U, &header, sizeof(header));
+    header.e_type = 1U; header.e_machine = 62U; header.e_version = 1U; header.e_shoff = section_table_offset; header.e_ehsize = ELF_HEADER_SIZE; header.e_shentsize = ELF_SECTION_SIZE; header.e_shnum = CINDER_ARRAY_LEN(sections); header.e_shstrndx = 9U;
+    append_header(&serialized, &header);
+    write_at(&file, 0U, serialized.data, serialized.len);
+    free(serialized.data);
+    if (diags->errors != 0U) goto failure;
 
     CinderOutput output;
     if (cinder_output_begin(&output, path, diags) != 0) goto failure;

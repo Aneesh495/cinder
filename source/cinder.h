@@ -551,6 +551,7 @@ typedef struct {
     size_t float_param_count;
     CinderTypeContext *types;
     CINDER_VEC_TYPE(CinderType *) local_types;
+    bool global;
     CinderAst *ast;
 } CinderIRFunction;
 
@@ -561,6 +562,7 @@ typedef struct {
     char *bytes;
     size_t byte_count;
     bool read_only;
+    bool global;
     bool is_extern;
     bool has_initializer;
     CinderLoc loc;
@@ -689,6 +691,8 @@ typedef struct {
     CINDER_VEC_TYPE(CinderFixup) fixups;
     CINDER_VEC_TYPE(char *) defined_symbols;
     CINDER_VEC_TYPE(size_t) symbol_offsets;
+    CINDER_VEC_TYPE(size_t) symbol_sizes;
+    CINDER_VEC_TYPE(bool) symbol_globals;
     CINDER_VEC_TYPE(CinderDataSymbol) data_symbols;
     unsigned literal_counter;
     size_t frame_size;
@@ -706,6 +710,7 @@ void cinder_machine_destroy(CinderMachineObject *object);
 int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *object, CinderDiagnostics *diags);
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags);
 int cinder_write_elf64(const CinderMachineObject *object, const char *path, CinderDiagnostics *diags);
+int cinder_write_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags);
 
 /* ---------- driver and inspection ---------- */
 typedef struct {

@@ -15,9 +15,20 @@ static const CinderIRGlobal *find_global(const CinderIRModule *module, const cha
 
 static bool eval_binary(CinderIROp op, int64_t left, int64_t right, int64_t *result) {
     switch (op) {
-        case IR_ADD: *result = left + right; return true;
-        case IR_SUB: *result = left - right; return true;
-        case IR_MUL: *result = left * right; return true;
+        case IR_ADD:
+            if ((right > 0 && left > INT64_MAX - right) || (right < 0 && left < INT64_MIN - right)) return false;
+            *result = left + right; return true;
+        case IR_SUB:
+            if ((right < 0 && left > INT64_MAX + right) || (right > 0 && left < INT64_MIN + right)) return false;
+            *result = left - right; return true;
+        case IR_MUL: {
+            bool negative = (left < 0) != (right < 0);
+            uint64_t a = left < 0 ? UINT64_C(0) - (uint64_t)left : (uint64_t)left;
+            uint64_t b = right < 0 ? UINT64_C(0) - (uint64_t)right : (uint64_t)right;
+            uint64_t bound = negative ? UINT64_C(1) << 63U : (uint64_t)INT64_MAX;
+            if (b != 0U && a > bound / b) return false;
+            *result = (int64_t)((uint64_t)left * (uint64_t)right); return true;
+        }
         case IR_DIV_S: if (right == 0 || (left == INT64_MIN && right == -1)) return false; *result = left / right; return true;
         case IR_MOD_S: if (right == 0 || (left == INT64_MIN && right == -1)) return false; *result = left % right; return true;
         case IR_DIV_U: if (right == 0) return false; *result = (int64_t)((uint64_t)left / (uint64_t)right); return true;
@@ -90,7 +101,12 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
                 case IR_FNEG: float_values[inst->dst] = -float_values[inst->left]; value_is_float[inst->dst] = true; break;
                 case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV: { double result = 0.0; int64_t comparison = 0; if (!eval_float(inst->op, float_values[inst->left], float_values[inst->right], &result, &comparison)) { cinder_diag(diags, CINDER_ERROR, inst->loc, "invalid floating operation during IR interpretation"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } if (inst->op >= IR_FCMP_EQ && inst->op <= IR_FCMP_GE) { values[inst->dst] = comparison; value_is_float[inst->dst] = false; } else { float_values[inst->dst] = result; value_is_float[inst->dst] = true; } break; }
                 case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE: { double result = 0.0; int64_t comparison = 0; if (!eval_float(inst->op, float_values[inst->left], float_values[inst->right], &result, &comparison)) { cinder_diag(diags, CINDER_ERROR, inst->loc, "invalid floating comparison during IR interpretation"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } values[inst->dst] = comparison; value_is_float[inst->dst] = false; break; }
-                case IR_NEG: values[inst->dst] = -values[inst->left]; break;
+                case IR_NEG:
+                    if (values[inst->left] == INT64_MIN) {
+                        cinder_diag(diags, CINDER_ERROR, inst->loc, "undefined signed negation in IR interpretation");
+                        free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure;
+                    }
+                    values[inst->dst] = -values[inst->left]; break;
                 case IR_BIT_NOT: values[inst->dst] = ~values[inst->left]; break;
                 case IR_CALL: {
                     const CinderIRFunction *callee = find_function(module, inst->callee);
@@ -100,7 +116,7 @@ static CinderInterpResult interpret_function(const CinderIRModule *module, const
                     size_t integer_count = 0U; size_t float_count = 0U;
                     for (size_t a = 0U; a < inst->args.len; ++a) { bool is_float = a < inst->arg_floats.len && inst->arg_floats.data[a]; if (is_float) call_float_args[float_count++] = float_values[inst->args.data[a]]; else call_args[integer_count++] = values[inst->args.data[a]]; }
                     CinderInterpResult result = interpret_function(module, callee, call_args, integer_count, call_float_args, float_count, steps, limit, diags); free(call_args); free(call_float_args);
-                    if (!result.valid) { free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } if (result.floating_result) { float_values[inst->dst] = result.floating; value_is_float[inst->dst] = true; } else { values[inst->dst] = result.value; value_is_float[inst->dst] = false; } break;
+                    if (!result.valid) { free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; } if (inst->dst == CINDER_INVALID_VALUE) break; if (result.floating_result) { float_values[inst->dst] = result.floating; value_is_float[inst->dst] = true; } else { values[inst->dst] = result.value; value_is_float[inst->dst] = false; } break;
                 }
                 default:
                     if (!eval_binary(inst->op, values[inst->left], values[inst->right], &value)) { cinder_diag(diags, CINDER_ERROR, inst->loc, "invalid operation during IR interpretation"); free(values); free(float_values); free(value_is_float); free(locals); free(float_locals); free(local_is_float); return failure; }
