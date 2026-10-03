@@ -11,7 +11,16 @@ trap 'rm -rf "$tmp"' EXIT
     file tu_a.o | grep -q 'ELF 64-bit.*x86-64'
     file tu_b.o | grep -q 'ELF 64-bit.*x86-64'
 )
-if "$ccbin" "$root/examples/tu_a.c" "$root/examples/tu_b.c" -o "$tmp/multi" >"$tmp/link.out" 2>"$tmp/link.err"; then
-    exit 1
+if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+    "$ccbin" "$root/examples/tu_a.c" "$root/examples/tu_b.c" -o "$tmp/multi"
+    set +e
+    "$tmp/multi"
+    status=$?
+    set -e
+    test "$status" -eq 9
+else
+    if "$ccbin" "$root/examples/tu_a.c" "$root/examples/tu_b.c" -o "$tmp/multi" >"$tmp/link.out" 2>"$tmp/link.err"; then
+        exit 1
+    fi
+    grep -q 'linking is unavailable' "$tmp/link.err"
 fi
-grep -q 'linking is unavailable' "$tmp/link.err"
