@@ -42,7 +42,7 @@ test-varargs: build
 	@tests/run_varargs.sh $(BUILD_DIR)/cindercc
 
 test-generated: build
-	@python3 tools/run_defined_cases.py $(BUILD_DIR)/cindercc --count 1200 --output .agent-local/generated-summary.json
+	@python3 tools/run_defined_cases.py $(BUILD_DIR)/cindercc --count 1200 --output artifacts/generated-summary.json
 
 test-native-linux: build
 	@tests/run_native_linux.sh $(BUILD_DIR)/cindercc
@@ -74,8 +74,8 @@ acceptance: build
 	@tests/acceptance.sh $(BUILD_DIR)/cindercc
 
 verify: build
-	@python3 tools/source_census.py --root . --output .agent-local/source-census.json
+	@python3 tools/source_census.py --root . --output artifacts/source-census.json
 	@tests/verify_evidence.sh $(BUILD_DIR)/cindercc
 
 clean:
-	@rm -rf $(BUILD_DIR) $(BUILD_DIR)-asan out
+	@rm -rf $(BUILD_DIR) $(BUILD_DIR)-asan out artifacts
