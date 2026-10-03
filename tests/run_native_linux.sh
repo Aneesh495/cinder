@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 ccbin=${1:?compiler path}
+ccbin=$(CDPATH= cd -- "$(dirname -- "$ccbin")" && pwd)/$(basename -- "$ccbin")
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
     printf '%s\n' 'native Linux x86-64 smoke requires Linux x86_64' >&2
