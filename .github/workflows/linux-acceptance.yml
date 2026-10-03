@@ -1,0 +1,37 @@
+name: Cinder Linux acceptance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-x86-64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang binutils gdb python3
+      - name: Build
+        run: make build
+      - name: Frontend and object checks
+        run: make test test-frontend test-globals test-multi test-preprocessor test-ir test-parallel-copy test-float test-varargs test-apps test-generated test-abi test-object
+      - name: Native Linux execution
+        run: tests/run_native_linux.sh build/cindercc
+      - name: Sanitizer build
+        run: make fuzz
+      - name: Acceptance evidence
+        run: tests/acceptance.sh build/cindercc
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinder-linux-acceptance
+          path: |
+            .agent-local/evidence
+            .agent-local/generated-summary.json
+            build
+          if-no-files-found: ignore
