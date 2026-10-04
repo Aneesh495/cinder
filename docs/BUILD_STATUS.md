@@ -207,4 +207,26 @@ Native execution of this SSA checkpoint is pending publication.
 Linux validation of `75cc3f8` found float32 overflow-argument preparation clobbering
 a populated SSE argument register. The repaired caller writes overflow stack
 arguments before filling ABI registers. Raw control objects and native binaries
-are now retained on failure. This defect is not closed until the Linux rerun passes.
+are now retained on failure. Linux run
+[37162479324](https://github.com/Aneesh495/cinder/actions/runs/37162479324)
+passed `4f4a9b0`, including all authored control cases, all forced phi-cycle
+native executions, and the complete native object/assembly campaign. This closes
+the float32 caller defect.
+
+## Typed IR serialization continuation
+
+Added the original canonical IR writer/parser and standalone `cinderir` tool.
+Verification now checks scalar widths and complete call/storage/return contracts.
+The typed IR campaign executes 100,000 cases through original interpretation,
+exact round trips, parsed interpretation, and O2 optimization. Local strict GCC
+release and Clang ASan/UBSan runs each passed: 97,501 defined outcomes and 2,499
+explicit undefined/resource outcomes. Coverage inventory caught a correlated
+generator condition excluding uninitialized joins; the generator now exercises
+those outcomes and the harness requires their presence.
+
+The campaign exposed narrow signed minimum remainder folding into a defined
+constant. Folding now checks the actual operand width for both division and
+remainder; an authored undefined-execution regression retains the defect.
+Source round trips and malformed-input mutations are being validated before
+this checkpoint is published. Final acceptance, object memory, full frontend,
+aggregate ABI, bootstrap, debugging, fuzzing, and full workload gates remain open.

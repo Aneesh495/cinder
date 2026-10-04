@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-control test-parallel-copy test-float test-varargs test-generated test-apps test-native-linux test-abi test-object test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-constraints test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-generated test-apps test-native-linux test-abi test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -32,6 +32,13 @@ test-preprocessor: build
 
 test-ir: build
 	@tests/run_ir.sh $(BUILD_DIR)/cindercc
+
+test-ir-campaign: build
+	@$(CMAKE) --build $(BUILD_DIR) --target cinder_ir_campaign --parallel
+	@python3 tests/test_ir_campaign.py $(BUILD_DIR)/cinder_ir_campaign 100000
+
+test-ir-text: build
+	@python3 tests/test_ir_text.py $(BUILD_DIR)/cindercc
 
 test-ssa: build
 	@$(CMAKE) --build $(BUILD_DIR) --target cinder_ssa_probe --parallel

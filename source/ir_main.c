@@ -1,0 +1,74 @@
+#include "cinder.h"
+
+#include <inttypes.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+    const char *input = NULL, *output = NULL;
+    bool interpret = false, object = false, assembly = false, verify = false;
+    int level = 0;
+    for (int a = 1; a < argc; ++a) {
+        if (strcmp(argv[a], "--help") == 0) {
+            fputs("Usage: cinderir [--verify|--interpret|-c|-S] [-O0|-O1|-O2] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
+        }
+        if (strcmp(argv[a], "--verify") == 0) verify = true;
+        else if (strcmp(argv[a], "--interpret") == 0) interpret = true;
+        else if (strcmp(argv[a], "-c") == 0) object = true;
+        else if (strcmp(argv[a], "-S") == 0) assembly = true;
+        else if (strcmp(argv[a], "-O0") == 0) level = 0;
+        else if (strcmp(argv[a], "-O1") == 0) level = 1;
+        else if (strcmp(argv[a], "-O2") == 0) level = 2;
+        else if (strcmp(argv[a], "-o") == 0 && a + 1 < argc) output = argv[++a];
+        else if (argv[a][0] == '-' || input != NULL) { fprintf(stderr, "cinderir: invalid argument '%s'\n", argv[a]); return 2; }
+        else input = argv[a];
+    }
+    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify > 1U || (object && output == NULL)) {
+        fputs("cinderir: one input and one mode are required; -c requires -o\n", stderr); return 2;
+    }
+    CinderSourceManager sources; cinder_sources_init(&sources);
+    CinderDiagnostics diags; cinder_diags_init(&diags);
+    CinderTypeContext types; cinder_types_init(&types);
+    CinderIRModule module; cinder_ir_init(&module, &types);
+    int result = 1;
+    CinderFileId file = cinder_source_load(&sources, input, stderr);
+    CinderSourceFile *source = cinder_source_get(&sources, file);
+    if (source == NULL || cinder_parse_ir(&module, source->bytes, source->size, &diags) != 0) goto done;
+    CinderOptStats stats;
+    if (cinder_optimize(&module, level, &stats, &diags) != 0 || cinder_verify_ir(&module, &diags) != 0) goto done;
+    if (verify) { puts("IR verified"); result = 0; goto done; }
+    if (interpret) {
+        CinderInterpResult observed = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags);
+        if (!observed.valid) goto done;
+        printf("interpret main => %" PRId64 "\n", observed.value); result = 0; goto done;
+    }
+    CinderMachineObject machine; cinder_machine_init(&machine);
+    if (object || assembly) {
+        if (cinder_lower_globals(&module, &machine, &diags) != 0) goto done_machine;
+        for (size_t f = 0U; f < module.functions.len; ++f)
+            if (cinder_mir_boundary(&module.functions.data[f], &diags) != 0) goto done_machine;
+        if (cinder_verify_ir(&module, &diags) != 0) goto done_machine;
+        for (size_t f = 0U; f < module.functions.len; ++f) {
+            CinderAllocation allocation; cinder_alloc_init(&allocation, &module.functions.data[f]);
+            int failed = cinder_allocate(&allocation, &diags) != 0 || cinder_verify_allocation(&allocation, &diags) != 0 || cinder_lower_x86(&module.functions.data[f], &allocation, &machine, false, NULL, &diags) != 0;
+            cinder_alloc_destroy(&allocation); if (failed) goto done_machine;
+        }
+    }
+    if (object) result = cinder_write_elf64(&machine, output, &diags);
+    else if (output == NULL || strcmp(output, "-") == 0) {
+        result = assembly ? cinder_write_assembly(&machine, stdout, &diags) : cinder_write_ir(&module, stdout, &diags);
+        if (fflush(stdout) != 0) result = 1;
+    } else {
+        CinderOutput staged;
+        if (cinder_output_begin(&staged, output, &diags) != 0) goto done_machine;
+        int failed = assembly ? cinder_write_assembly(&machine, staged.stream, &diags) : cinder_write_ir(&module, staged.stream, &diags);
+        if (failed) cinder_output_abort(&staged);
+        else result = cinder_output_commit(&staged, &diags);
+    }
+done_machine:
+    cinder_machine_destroy(&machine);
+done:
+    if (diags.items.len != 0U) cinder_diag_print(&diags, &sources, stderr);
+    cinder_ir_destroy(&module); cinder_types_destroy(&types); cinder_diags_destroy(&diags); cinder_sources_destroy(&sources);
+    return result;
+}

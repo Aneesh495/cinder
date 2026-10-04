@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
         if (strcmp(arg, "-O2") == 0) { options.optimization = 2; continue; }
         if (strcmp(arg, "--dump-tokens") == 0) { options.dump_tokens = true; continue; }
         if (strcmp(arg, "--dump-ast") == 0) { options.dump_ast = true; continue; }
+        if (strcmp(arg, "--serialize-ir") == 0) { options.serialize_ir = true; continue; }
         if (strcmp(arg, "--emit-ir") == 0) { options.dump_ir = true; continue; }
         if (strcmp(arg, "--dump-mir") == 0) { options.dump_mir = true; continue; }
         if (strcmp(arg, "--dump-regalloc") == 0) { options.dump_regalloc = true; continue; }

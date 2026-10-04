@@ -50,7 +50,7 @@ static void discard_object(char *path) {
 
 void cinder_print_help(FILE *out) {
     fputs("Cinder c17-core compiler\n\nUsage: cindercc [options] file.c\n\n", out);
-    fputs("  -E                 preprocess only\n  -S                 emit x86-64 assembly\n  -c                 emit ELF64 relocatable object\n  -o PATH             output path\n  -I DIR              quoted/angle include directory\n  -DNAME[=VALUE]      define a preprocessing macro\n  -fsyntax-only       stop after semantic analysis\n  -O0/-O1/-O2        select conservative optimization level\n  --dump-tokens       print preprocessing tokens\n  --dump-ast          print parsed/typed AST\n  --emit-ir           print typed CFG IR\n  --dump-mir          print machine lowering boundary\n  --dump-regalloc     print allocation intervals and frame\n  --interpret         execute main in the independent IR interpreter\n  --explorer DIR      write an offline stage summary report\n  -fverify-each       verify IR at each boundary\n  -g                  request debug profile (currently source contract only)\n  --help              show this help\n  --version           show compiler version\n", out);
+    fputs("  -E                 preprocess only\n  -S                 emit x86-64 assembly\n  -c                 emit ELF64 relocatable object\n  -o PATH             output path\n  -I DIR              quoted/angle include directory\n  -DNAME[=VALUE]      define a preprocessing macro\n  -fsyntax-only       stop after semantic analysis\n  -O0/-O1/-O2        select conservative optimization level\n  --dump-tokens       print preprocessing tokens\n  --dump-ast          print parsed/typed AST\n  --emit-ir           print typed CFG IR\n  --serialize-ir      write canonical round-trip IR\n  --dump-mir          print machine lowering boundary\n  --dump-regalloc     print allocation intervals and frame\n  --interpret         execute main in the independent IR interpreter\n  --explorer DIR      write an offline stage summary report\n  -fverify-each       verify IR at each boundary\n  -g                  request debug profile (currently source contract only)\n  --help              show this help\n  --version           show compiler version\n", out);
 }
 
 void cinder_print_version(FILE *out) { fprintf(out, "cindercc %s (C17-core, ELF64 x86-64 backend)\n", CINDER_VERSION); }
@@ -61,7 +61,7 @@ int cinder_driver_run(const CinderOptions *options) {
     if (options->input_count > 1U) return cinder_driver_run_multi(options);
     CinderSourceManager sources; CinderDiagnostics diags; CinderTokenStream tokens; CinderTypeContext types; CinderAst ast; CinderSema sema; CinderIRModule module; CinderMachineObject machine;
     cinder_sources_init(&sources); cinder_diags_init(&diags); cinder_tokens_init(&tokens); cinder_types_init(&types);
-    bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->dump_mir || options->dump_regalloc || options->interpret || options->explorer != NULL);
+    bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->interpret || options->explorer != NULL);
     int result = 1;
     CinderOutput assembly_output = {0};
     if (cinder_preprocess(&sources, options->input, options->include_dirs, options->include_count, options->defines, options->define_count, &diags) != 0) goto done;
@@ -81,11 +81,11 @@ int cinder_driver_run(const CinderOptions *options) {
     }
     if (cinder_lex(&sources, &tokens, &diags) != 0) goto done;
     if (options->dump_tokens) cinder_dump_tokens(&tokens, &sources, stdout);
-    if (inspection_only && !options->dump_ast && !options->dump_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
+    if (inspection_only && !options->dump_ast && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
     cinder_ast_init(&ast, &types, &tokens, &diags);
     if (cinder_parse(&ast) != 0) goto done_ast;
     if (options->dump_ast) cinder_dump_ast(&ast, &sources, stdout);
-    if (inspection_only && !options->dump_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done_ast; }
+    if (inspection_only && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done_ast; }
     cinder_sema_init(&sema, &ast, &types, &diags);
     if (cinder_sema_run(&sema) != 0) goto done_sema;
     if (options->syntax_only) { result = 0; goto done_sema; }
@@ -99,6 +99,18 @@ int cinder_driver_run(const CinderOptions *options) {
     for (size_t f = 0U; f < module.functions.len; ++f) if (cinder_mir_boundary(&module.functions.data[f], &diags) != 0) goto done_ir;
     if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) { fputs("; optimized IR\n", stdout); cinder_dump_ir(&module, stdout); }
+    if (options->serialize_ir) {
+        if (options->output == NULL || strcmp(options->output, "-") == 0) {
+            result = cinder_write_ir(&module, stdout, &diags);
+            if (fflush(stdout) != 0) result = 1;
+        } else {
+            CinderOutput output;
+            if (cinder_output_begin(&output, options->output, &diags) != 0) goto done_ir;
+            if (cinder_write_ir(&module, output.stream, &diags) != 0) cinder_output_abort(&output);
+            else result = cinder_output_commit(&output, &diags);
+        }
+        goto done_ir;
+    }
     if (options->dump_mir) { fprintf(stdout, "MIR boundary: %zu functions, target=x86_64-sysv folded=%u forwarded=%u dead=%u\n", module.functions.len, stats.constants_folded, stats.memory_forwarded, stats.dead_instructions_removed); for (size_t f = 0U; f < module.functions.len; ++f) { CinderCFGAnalysis cfg; cinder_cfg_init(&cfg); if (cinder_analyze_cfg(&module.functions.data[f], &cfg, &diags) == 0) cinder_dump_cfg(&module.functions.data[f], &cfg, stdout); cinder_cfg_destroy(&cfg); } }
     if (options->interpret) { CinderInterpResult interpretation = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags); if (!interpretation.valid) goto done_ir; fprintf(stdout, "interpret main => %lld\n", (long long)interpretation.value); result = 0; if (options->explorer == NULL && !options->dump_regalloc) goto done_ir; }
     if (inspection_only && !options->dump_regalloc && options->explorer == NULL) { result = 0; goto done_ir; }
@@ -208,7 +220,7 @@ static int cinder_driver_run_multi(const CinderOptions *options) {
     if (options->preprocess_only && options->output != NULL) { fprintf(stderr, "cindercc: -E with multiple inputs cannot use one output path\n"); return 1; }
     if (options->emit_assembly && options->output != NULL) { fprintf(stderr, "cindercc: -S with multiple inputs requires one output per translation unit\n"); return 1; }
     if (options->emit_object && options->output != NULL) { fprintf(stderr, "cindercc: -c with multiple inputs requires one output per translation unit\n"); return 1; }
-    if (options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->dump_mir || options->dump_regalloc) {
+    if (options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc) {
         for (size_t i = 0U; i < options->input_count; ++i) {
             CinderOptions child = *options;
             child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U;

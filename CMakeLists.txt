@@ -27,6 +27,7 @@ set(CINDER_SOURCES
   source/sema.c
   source/ir.c
   source/ir_verify.c
+  source/ir_text.c
   source/analysis.c
   source/ssa.c
   source/ir_interp.c
@@ -69,3 +70,11 @@ endif()
 add_executable(cinder_ssa_probe EXCLUDE_FROM_ALL tests/ssa_probe.c)
 cinder_target_profile(cinder_ssa_probe)
 target_link_libraries(cinder_ssa_probe PRIVATE cinder_core)
+
+add_executable(cinderir source/ir_main.c)
+cinder_target_profile(cinderir)
+target_link_libraries(cinderir PRIVATE cinder_core)
+
+add_executable(cinder_ir_campaign EXCLUDE_FROM_ALL tests/ir_campaign.c)
+cinder_target_profile(cinder_ir_campaign)
+target_link_libraries(cinder_ir_campaign PRIVATE cinder_core)
