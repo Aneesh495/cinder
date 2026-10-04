@@ -1,0 +1,1 @@
+enum { Value = 1, Value = 2 };

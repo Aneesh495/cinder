@@ -274,6 +274,7 @@ typedef struct {
 } CinderParamVec;
 struct CinderType {
     CinderTypeKind kind;
+    uint32_t identity;
     unsigned qualifiers;
     bool complete;
     bool is_unsigned;
@@ -370,6 +371,7 @@ struct CinderExpr {
     CinderLoc loc;
     CinderType *type;
     bool is_lvalue;
+    bool name_visible;
     CinderType *queried_type;
     union {
         int64_t integer;
@@ -411,7 +413,17 @@ struct CinderDecl {
     CinderExpr *initializer;
     CINDER_VEC_TYPE(CinderDecl *) params;
     CinderStmt *body;
+    CinderDecl *next;
 };
+
+typedef enum { PARSE_OBJECT, PARSE_TYPEDEF, PARSE_ENUMERATOR, PARSE_TAG } CinderParseBindingKind;
+typedef struct {
+    char *name;
+    CinderType *type;
+    CinderParseBindingKind kind;
+    int64_t value;
+    unsigned scope;
+} CinderParseBinding;
 
 typedef struct {
     CINDER_VEC_TYPE(CinderDecl *) declarations;
@@ -420,11 +432,16 @@ typedef struct {
     CinderTokenStream *tokens;
     CinderDiagnostics *diags;
     size_t cursor;
+    CINDER_VEC_TYPE(CinderParseBinding) bindings;
+    CINDER_VEC_TYPE(CinderExpr *) constant_exprs;
+    unsigned scope_depth;
+    unsigned declarator_depth;
 } CinderAst;
 
 void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream *tokens, CinderDiagnostics *diags);
 void cinder_ast_destroy(CinderAst *ast);
 int cinder_parse(CinderAst *ast);
+bool cinder_constant_integer(CinderAst *ast, const CinderExpr *expr, int64_t *value, CinderType **type);
 void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *out);
 
 /* ---------- semantic analysis ---------- */

@@ -86,17 +86,17 @@ def extra_types(value):
     return text.replace('types 2\n', 'types 3\n', 1).replace('globals 0\n', value + 'globals 0\n', 1)
 
 mutations.update({
-    'pointer-cycle': extra_types('type 2 pointer 0 1 0 0 8 8 2 0 none 0 - params 0 fields 0\n'),
-    'array-cycle': extra_types('type 2 array 0 1 0 0 8 8 2 1 none 0 - params 0 fields 0\n'),
-    'aggregate-value-cycle': extra_types('type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1\nfield x6e657874 2 0 0 0\n'),
-    'aggregate-alignment': extra_types('type 2 struct 0 1 0 0 7 8 none 0 none 0 x6e6f6465 params 0 fields 0\n'),
-    'enum-layout': extra_types('type 2 enum 0 1 0 0 8 8 none 0 none 0 x636f6c6f72 params 0 fields 0\n'),
-    'float-unsigned': extra_types('type 2 float 0 1 1 0 4 4 none 0 none 0 - params 0 fields 0\n'),
+    'pointer-cycle': extra_types('type 2 pointer 0 1 0 0 8 8 2 0 none 0 - params 0 fields 0 identity 100\n'),
+    'array-cycle': extra_types('type 2 array 0 1 0 0 8 8 2 1 none 0 - params 0 fields 0 identity 100\n'),
+    'aggregate-value-cycle': extra_types('type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1 identity 101\nfield x6e657874 2 0 0 0\n'),
+    'aggregate-alignment': extra_types('type 2 struct 0 1 0 0 7 8 none 0 none 0 x6e6f6465 params 0 fields 0 identity 100\n'),
+    'enum-layout': extra_types('type 2 enum 0 1 0 0 8 8 none 0 none 0 x636f6c6f72 params 0 fields 0 identity 100\n'),
+    'float-unsigned': extra_types('type 2 float 0 1 1 0 4 4 none 0 none 0 - params 0 fields 0 identity 100\n'),
     'function-layout': text.replace('function 0 1 0 0 0 1', 'function 0 1 0 0 8 8', 1),
 })
 recursive = text.replace('types 2\n', 'types 4\n', 1).replace('globals 0\n',
-    'type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1\nfield x6e657874 3 0 0 0\n'
-    'type 3 pointer 0 1 0 0 8 8 2 0 none 0 - params 0 fields 0\nglobals 0\n', 1)
+    'type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1 identity 101\nfield x6e657874 3 0 0 0\n'
+    'type 3 pointer 0 1 0 0 8 8 2 0 none 0 - params 0 fields 0 identity 100\nglobals 0\n', 1)
 recursive_path = base / 'recursive-pointer-type.cir'
 recursive_path.write_text(recursive)
 run([irtool, '--verify', recursive_path])

@@ -230,3 +230,23 @@ remainder; an authored undefined-execution regression retains the defect.
 Source round trips and malformed-input mutations are being validated before
 this checkpoint is published. Final acceptance, object memory, full frontend,
 aggregate ABI, bootstrap, debugging, fuzzing, and full workload gates remain open.
+
+Linux run [37164699489](https://github.com/Aneesh495/cinder/actions/runs/37164699489)
+passed `4ea91ab`, including the complete typed IR campaign, native source round
+trips, phi-cycle executions, and native object/assembly probes.
+
+## Declaration continuation
+
+Added scoped typedef/enumerator/tag bindings, stable aggregate identities,
+forward completion, nested and abstract declarators, unnamed prototypes,
+comma-separated declarations, and target-aware integer constant evaluation.
+Later global declarations cannot retroactively resolve an undeclared use.
+Floating globals now emit actual float/double data and SSE loads/stores; integer
+constant conversion to floating globals respects signedness and float32 rounding.
+
+Local strict GCC release and Clang ASan/UBSan checks passed 185 authored positive
+source programs, 43 invalid-constraint cases, and 370 exact source IR round trips
+with 36 malformed-IR rejection mutations. The complete typed IR campaign was
+rerun after the type identity format change. Native validation of this increment
+is pending publication. Addressable storage is the next implementation boundary;
+the full acceptance gates remain incomplete.

@@ -55,6 +55,7 @@ CinderType *cinder_type_new(CinderTypeContext *types, CinderTypeKind kind) {
     CinderType *type = cinder_arena_alloc(&types->arena, sizeof(*type), _Alignof(CinderType));
     memset(type, 0, sizeof(*type));
     type->kind = kind;
+    type->identity = (uint32_t)types->all_types.len + 1U;
     type->align = 1U;
     type->complete = false;
     type->params.data = NULL;
@@ -155,7 +156,7 @@ bool cinder_type_equal(const CinderType *a, const CinderType *b) {
         }
         return true;
     }
-    if (a->kind == TYPE_STRUCT || a->kind == TYPE_UNION || a->kind == TYPE_ENUM) return a->tag != NULL && b->tag != NULL && strcmp(a->tag, b->tag) == 0;
+    if (a->kind == TYPE_STRUCT || a->kind == TYPE_UNION || a->kind == TYPE_ENUM) return a->identity == b->identity;
     return true;
 }
 
@@ -202,7 +203,7 @@ int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, Cin
     size_t align = 1U;
     for (size_t i = 0U; i < type->fields.len; ++i) {
         CinderField *field = &type->fields.data[i];
-        if (field->type == NULL || !field->type->complete) { cinder_diag(diags, CINDER_ERROR, loc, "incomplete field '%s' in aggregate", field->name); continue; }
+        if (field->type == NULL || !field->type->complete || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_ERROR, loc, "field '%s' requires a complete object type", field->name == NULL ? "<unnamed>" : field->name); continue; }
         if (field->type->align > align) align = field->type->align;
         if (type->kind == TYPE_UNION) field->offset = 0U;
         else {

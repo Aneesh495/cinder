@@ -4,6 +4,14 @@ Cinder now parses inline `struct` and `union` definitions, computes target LP64 
 
 This increment deliberately separates layout from aggregate expression lowering. Aggregate declarations can be checked with `-fsyntax-only`; field selection, aggregate assignment/copy, bitfields, flexible members, and aggregate ABI classification remain incomplete until they have typed HIR and native tests.
 
-Constant global objects cross the module and object boundary. Integer initializers enter `.data`; uninitialized complete objects enter `.bss`; character arrays initialized from string literals enter `.rodata` with target-size zero fill. The ELF writer publishes section-aligned data symbols with sizes and section-relative values. A global integer read emits an x86-64 RIP-relative load and an `R_X86_64_PC32` relocation. Global mutation is represented in IR and native output, but the independent interpreter currently classifies mutation as unsupported.
+Constant global objects cross the module and object boundary. Integer constant
+expressions and scalar floating literals enter `.data`; uninitialized complete
+objects enter `.bss`. String-initialized character arrays use writable `.data`
+or `.rodata` according to element qualification, with target-size zero fill.
+Symbols carry section-relative offsets, binding, and sizes. Scalar reads/writes
+use declared widths and RIP-relative relocations. Float32 storage uses actual
+32-bit representation and SSE conversion at the internal value boundary.
+The interpreter shares mutable scalar globals across calls. Address aliases
+and full object memory remain open.
 
 The implementation does not infer layout from host `sizeof`. The object-section test parses the emitted ELF header and section-name table independently and checks `.text`, `.data`, `.rodata`, `.bss`, `.rela.text`, symbol/string tables, and non-executable-stack metadata.

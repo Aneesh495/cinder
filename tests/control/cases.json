@@ -594,5 +594,149 @@
   {
     "source": "ssa_conditional_assignment.c",
     "exit": 0
+  },
+  {
+    "source": "aggregate_anonymous_size.c",
+    "exit": 0
+  },
+  {
+    "source": "aggregate_grouped_fields.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_conditional_unsigned.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_float_cast.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_narrow_cast.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_size_bound.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_unevaluated_branch.c",
+    "exit": 0
+  },
+  {
+    "source": "declarator_abstract_callback.c",
+    "exit": 0
+  },
+  {
+    "source": "declarator_callback_typedef.c",
+    "exit": 0
+  },
+  {
+    "source": "declarator_multidimensional.c",
+    "exit": 0
+  },
+  {
+    "source": "declarator_pointer_array.c",
+    "exit": 0
+  },
+  {
+    "source": "declarator_return_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "enum_arithmetic.c",
+    "exit": 0
+  },
+  {
+    "source": "enum_array_bound.c",
+    "exit": 0
+  },
+  {
+    "source": "enum_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "enum_successors.c",
+    "exit": 0
+  },
+  {
+    "source": "multiple_for_declarations.c",
+    "exit": 0
+  },
+  {
+    "source": "multiple_global_declarations.c",
+    "exit": 0
+  },
+  {
+    "source": "multiple_local_declarations.c",
+    "exit": 0
+  },
+  {
+    "source": "prototype_parenthesized_name.c",
+    "exit": 0
+  },
+  {
+    "source": "prototype_unnamed.c",
+    "exit": 0
+  },
+  {
+    "source": "tag_block_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "tag_forward_completion.c",
+    "exit": 0
+  },
+  {
+    "source": "tag_forward_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "tag_separate_namespace.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_block_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_for_scope.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_object_shadow.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_parenthesized_object.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_qualified_scalar.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_repeated.c",
+    "exit": 0
+  },
+  {
+    "source": "typedef_unsigned.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_global_expression.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_global_float.c",
+    "exit": 0
+  },
+  {
+    "source": "constant_global_integer_to_float.c",
+    "exit": 0
+  },
+  {
+    "source": "float_global_mutation.c",
+    "exit": 0
   }
 ]

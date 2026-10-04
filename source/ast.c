@@ -13,6 +13,9 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
     ast->tokens = tokens;
     ast->diags = diags;
     ast->cursor = 0U;
+    ast->bindings.data = NULL; ast->bindings.len = 0U; ast->bindings.cap = 0U;
+    ast->constant_exprs.data = NULL; ast->constant_exprs.len = 0U; ast->constant_exprs.cap = 0U;
+    ast->scope_depth = 0U; ast->declarator_depth = 0U;
 }
 
 static void free_expr(CinderExpr *expr) {
@@ -66,7 +69,7 @@ static void free_stmt(CinderStmt *stmt) {
             free_stmt(stmt->as.for_stmt.body);
             break;
         case ST_DECL:
-            if (stmt->as.decl != NULL) free_expr(stmt->as.decl->initializer);
+            for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { free_expr(decl->initializer); free(decl->params.data); }
             break;
         case ST_EMPTY:
         case ST_BREAK:
@@ -83,6 +86,9 @@ void cinder_ast_destroy(CinderAst *ast) {
         free(decl->params.data);
     }
     free(ast->declarations.data);
+    free(ast->bindings.data);
+    for (size_t i = 0U; i < ast->constant_exprs.len; ++i) free_expr(ast->constant_exprs.data[i]);
+    free(ast->constant_exprs.data);
     cinder_arena_destroy(&ast->arena);
 }
 
@@ -131,7 +137,9 @@ static void dump_stmt(const CinderStmt *stmt, FILE *out, unsigned depth) {
         case ST_FOR: fputs("for\n", out); dump_stmt(stmt->as.for_stmt.init, out, depth + 1U); dump_expr(stmt->as.for_stmt.condition, out, depth + 1U); dump_expr(stmt->as.for_stmt.step, out, depth + 1U); dump_stmt(stmt->as.for_stmt.body, out, depth + 1U); break;
         case ST_BREAK: fputs("break\n", out); break;
         case ST_CONTINUE: fputs("continue\n", out); break;
-        case ST_DECL: fprintf(out, "decl %s : %s\n", stmt->as.decl->name, cinder_type_name(stmt->as.decl->type)); dump_expr(stmt->as.decl->initializer, out, depth + 1U); break;
+        case ST_DECL:
+            for (const CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { fprintf(out, "decl %s : %s\n", decl->name, cinder_type_name(decl->type)); dump_expr(decl->initializer, out, depth + 1U); }
+            break;
     }
 }
 
@@ -139,8 +147,8 @@ void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *o
     (void)sources;
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         const CinderDecl *decl = ast->declarations.data[i];
-        fprintf(out, "%s %s : %s%s\n", decl->kind == DECL_FUNCTION ? "function" : "object", decl->name, cinder_type_name(decl->type), decl->is_definition ? " definition" : " declaration");
-        for (size_t p = 0U; p < decl->params.len; ++p) fprintf(out, "  param %s : %s\n", decl->params.data[p]->name, cinder_type_name(decl->params.data[p]->type));
+        fprintf(out, "%s %s : %s%s\n", decl->kind == DECL_FUNCTION ? "function" : decl->kind == DECL_TYPEDEF ? "typedef" : "object", decl->name, cinder_type_name(decl->type), decl->is_definition ? " definition" : " declaration");
+        for (size_t p = 0U; p < decl->params.len; ++p) fprintf(out, "  param %s : %s\n", decl->params.data[p]->name == NULL ? "<unnamed>" : decl->params.data[p]->name, cinder_type_name(decl->params.data[p]->type));
         dump_expr(decl->initializer, out, 1U);
         dump_stmt(decl->body, out, 1U);
     }

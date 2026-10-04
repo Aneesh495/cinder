@@ -373,9 +373,12 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
         case ST_EMPTY: break;
         case ST_EXPR: (void)lower_expr(context, stmt->as.expr); break;
         case ST_DECL: {
-            int slot = new_local(context, stmt->as.decl->type);
-            LocalSlot local = {stmt->as.decl->name, slot, stmt->as.decl->type}; cinder_vec_push((CinderVec *)&context->locals, &local);
-            if (stmt->as.decl->initializer != NULL) { CinderValueId value = lower_expr(context, stmt->as.decl->initializer); CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, stmt->loc); store->left = value; store->slot = slot; store->type = stmt->as.decl->type; }
+            for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) {
+                if (decl->kind != DECL_VAR || decl->name == NULL) continue;
+                int slot = new_local(context, decl->type);
+                LocalSlot local = {decl->name, slot, decl->type}; cinder_vec_push((CinderVec *)&context->locals, &local);
+                if (decl->initializer != NULL) { CinderValueId value = lower_expr(context, decl->initializer); CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, decl->loc); store->left = value; store->slot = slot; store->type = decl->type; }
+            }
             break;
         }
         case ST_RETURN: {
@@ -470,7 +473,7 @@ static char *decode_string_literal(CinderArena *arena, const char *raw, size_t *
     return bytes;
 }
 
-static void lower_global_decl(CinderIRModule *module, CinderDecl *decl, CinderDiagnostics *diags) {
+static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags) {
     CinderIRGlobal global;
     memset(&global, 0, sizeof(global));
     global.name = cinder_strndup(decl->name, strlen(decl->name));
@@ -479,11 +482,17 @@ static void lower_global_decl(CinderIRModule *module, CinderDecl *decl, CinderDi
     global.global = !decl->is_static;
     global.is_extern = decl->is_extern;
     global.loc = decl->loc;
-    if (decl->initializer != NULL && (decl->initializer->kind == EX_INT || decl->initializer->kind == EX_CHAR)) { global.integer = decl->initializer->as.integer; global.has_initializer = true; }
+    int64_t constant_integer = 0; CinderType *constant_type = NULL;
+    if (decl->initializer != NULL && cinder_constant_integer(ast, decl->initializer, &constant_integer, &constant_type)) {
+        global.integer = constant_integer; global.has_initializer = true;
+        if (global.type->kind == TYPE_FLOAT) global.floating = constant_type->is_unsigned ? (double)(float)(uint64_t)constant_integer : (double)(float)constant_integer;
+        else if (global.type->kind == TYPE_DOUBLE) global.floating = constant_type->is_unsigned ? (double)(uint64_t)constant_integer : (double)constant_integer;
+    }
+    else if (decl->initializer != NULL && decl->initializer->kind == EX_FLOAT) { global.floating = decl->initializer->as.floating; global.has_initializer = true; }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_STRING) {
         global.bytes = decode_string_literal(&module->arena, decl->initializer->as.string, &global.byte_count);
         global.has_initializer = true;
-        global.read_only = true;
+        global.read_only = global.type->kind == TYPE_ARRAY && (global.type->base->qualifiers & 1U) != 0U;
         if (global.type->kind == TYPE_ARRAY && global.type->array_len == 0U) { global.type->array_len = global.byte_count + 1U; global.type->size = global.type->array_len * global.type->base->size; global.type->complete = true; }
     } else if (decl->initializer != NULL) cinder_diag(diags, CINDER_ERROR, decl->loc, "global initializer for '%s' is not a supported constant", decl->name);
     cinder_vec_push((CinderVec *)&module->globals, &global);
@@ -492,7 +501,7 @@ static void lower_global_decl(CinderIRModule *module, CinderDecl *decl, CinderDi
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags) {
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         CinderDecl *decl = ast->declarations.data[i];
-        if (decl->kind == DECL_VAR) { lower_global_decl(module, decl, diags); continue; }
+        if (decl->kind == DECL_VAR) { lower_global_decl(module, ast, decl, diags); continue; }
         if (decl->kind != DECL_FUNCTION || !decl->is_definition) continue;
         CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.ast = ast; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static;
         for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; cinder_vec_push((CinderVec *)&function.params, &param); }
