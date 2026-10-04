@@ -23,7 +23,13 @@ register classes, spill frame ownership, call clobbers, and preservation masks.
 and rejects 1,000 corrupt allocations. The source/native tests exercise
 branches, loops, calls, SSE pressure, and stack overflow arguments separately.
 
-Aggregate ABI classification, float32 boundary conversions, indirect calls,
-full variadic cursors, instruction scheduling, and physical edge-copy lowering
-remain separate work. Current phis still use the original local slot in native
-lowering, so this increment does not establish complete out-of-SSA support.
+Local objects have a type-derived stack extent and alignment. Narrow scalar
+loads and stores use their declared width; float objects occupy binary32
+storage and convert to the interpreter/register binary64 representation on
+load. Spill slots, preservation slots, and captured incoming arguments follow
+the local object area. The checker reconstructs these extents independently
+and rejects overlaps, undersized frames, and spill locations in reserved areas.
+
+Native phi edges use simultaneous physical transfers, including cycles and
+critical edges. Aggregate ABI classification, indirect calls, full variadic
+cursors, explicit target instruction MIR, and scheduling remain separate work.

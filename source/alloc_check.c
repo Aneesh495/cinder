@@ -37,6 +37,23 @@ int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnosti
     const CinderIRFunction *function = allocation->ir;
     size_t count = function->value_count;
     size_t blocks = function->blocks.len;
+    if (allocation->local_offsets.len != function->local_count || function->local_types.len != function->local_count) {
+        cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation has an invalid local storage table"); return 1;
+    }
+    size_t local_extent = 0U;
+    for (size_t s = 0U; s < function->local_count; ++s) {
+        const CinderType *type = function->local_types.data[s];
+        if (type == NULL || type->align == 0U || type->align > 16U || type->size > 64U * 1024U * 1024U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation has invalid local object storage"); return 1; }
+        size_t size = type->size < 8U ? 8U : type->size, align = type->align < 8U ? 8U : type->align;
+        size_t end = local_extent + size;
+        if (end % align != 0U) end += align - end % align;
+        if (allocation->local_offsets.data[s] >= 0 || -(int64_t)allocation->local_offsets.data[s] != (int64_t)end) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocated local objects overlap or have incorrect extent/alignment");
+        local_extent = end;
+    }
+    if (allocation->local_bytes != local_extent) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocated local area has incorrect size");
+    unsigned preserved = 0U;
+    for (unsigned bit = 0U; bit < 4U; ++bit) if ((allocation->saved_gpr_mask & (1U << bit)) != 0U) ++preserved;
+    if ((allocation->saved_gpr_mask & ~15U) != 0U || allocation->frame_size < local_extent + (allocation->spill_slots + preserved + 14U) * 8U) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation does not own all spill, preservation, and incoming argument storage");
     if ((allocation->frame_size & 15U) != 0U)
         cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation frame is not 16-byte aligned");
     if (count != 0U && blocks > (128U * 1024U * 1024U) / count) {
@@ -60,7 +77,7 @@ int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnosti
             if (!gpr && !sse) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation uses a reserved register");
             if (gpr && (allocation->saved_gpr_mask & (1U << (unsigned)(location->reg - REG_R12))) == 0U)
                 cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocated callee-saved register is not preserved");
-        } else if (location->kind != LOC_STACK || location->stack_offset >= 0 || location->stack_offset % 8 != 0 || -(int64_t)location->stack_offset > (int64_t)allocation->frame_size || -(int64_t)location->stack_offset <= (int64_t)(function->local_count * 8U)) {
+        } else if (location->kind != LOC_STACK || location->stack_offset >= 0 || location->stack_offset % 8 != 0 || -(int64_t)location->stack_offset > (int64_t)(allocation->local_bytes + allocation->spill_slots * 8U) || -(int64_t)location->stack_offset <= (int64_t)allocation->local_bytes) {
             cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation stack slot is outside its owned frame area");
         }
     }

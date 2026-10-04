@@ -35,6 +35,7 @@ set(CINDER_SOURCES
   source/opt.c
   source/mir.c
   source/regalloc.c
+  source/stack_layout.c
   source/liveness.c
   source/alloc_check.c
   source/x86_64.c

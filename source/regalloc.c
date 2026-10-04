@@ -10,9 +10,10 @@ static const char *register_name(CinderRegister reg) {
 
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function) {
     allocation->ir = function; allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; allocation->frame_size = 0U; allocation->spills = 0U; allocation->spill_slots = 0U; allocation->saved_gpr_mask = 0U;
+    allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; allocation->local_bytes = 0U;
 }
 
-void cinder_alloc_destroy(CinderAllocation *allocation) { free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; }
+void cinder_alloc_destroy(CinderAllocation *allocation) { free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; free(allocation->local_offsets.data); allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; }
 
 static void touch(CinderInterval *intervals, size_t count, CinderValueId value, size_t position) {
     if ((size_t)value >= count) return;
@@ -37,6 +38,7 @@ static bool floating_value(const CinderIRFunction *function, CinderValueId value
 
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     const CinderIRFunction *function = allocation->ir;
+    if (cinder_layout_stack(allocation, diags) != 0) return 1;
     CinderLiveness live;
     if (cinder_liveness_build(function, &live, diags) != 0) return 1;
     size_t count = function->value_count;
@@ -120,12 +122,12 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
         while (slot < allocation->spill_slots && slot_end[slot] >= interval->start) ++slot;
         if (slot == allocation->spill_slots) ++allocation->spill_slots;
         slot_end[slot] = interval->end;
-        interval->location.stack_offset = -(int)((function->local_count + slot + 1U) * 8U);
+        interval->location.stack_offset = -(int)(allocation->local_bytes + (slot + 1U) * 8U);
         ++allocation->spills;
     }
     unsigned saved = 0U;
     for (unsigned bit = 0U; bit < 4U; ++bit) if ((allocation->saved_gpr_mask & (1U << bit)) != 0U) ++saved;
-    allocation->frame_size = ((function->local_count + allocation->spill_slots + saved + 14U) * 8U + 15U) & ~(size_t)15U;
+    allocation->frame_size = (allocation->local_bytes + (allocation->spill_slots + saved + 14U) * 8U + 15U) & ~(size_t)15U;
     free(slot_end); free(calls.data); free(intervals); cinder_liveness_destroy(&live);
     return 0;
 }
