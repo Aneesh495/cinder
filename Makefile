@@ -62,6 +62,9 @@ test-storage:
 test-census:
 	@python3 tests/test_census.py
 
+test-evidence:
+	@python3 -B tests/test_evidence.py
+
 test-allocation: build
 	@tests/run_allocation.sh
 
@@ -115,8 +118,7 @@ demo: build
 acceptance: build
 	@tests/acceptance.sh $(BUILD_DIR)/cindercc
 
-verify: build
-	@python3 tools/source_census.py --root . --output .agent-local/source-census.json
+verify:
 	@tests/verify_evidence.sh $(BUILD_DIR)/cindercc
 
 clean:
