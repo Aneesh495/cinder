@@ -65,6 +65,14 @@ static void normalize_integer(CinderMachineObject *object, const CinderType *typ
     }
 }
 
+static void normalize_incoming_scalar(CinderMachineObject *object, const CinderType *type) {
+    /* The ABI specifies only the low byte of a _Bool argument or result.
+     * A C conversion, in contrast, must inspect the entire scalar value. */
+    if (type != NULL && type->kind == TYPE_BOOL) {
+        emit8(object, 0x0FU); emit8(object, 0xB6U); emit8(object, 0xC0U);
+    }
+}
+
 static void load_value_alloc(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, CinderValueId value) {
     const CinderLocation *location = location_for(allocation, value);
     if (location != NULL && location->kind == LOC_REGISTER) emit_mov_reg_reg(object, 0U, register_code(location->reg));
@@ -265,6 +273,7 @@ static void stack_load_rax(CinderMachineObject *object, size_t offset) {
 }
 
 static void emit_call(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst) {
+    if (inst->callee == NULL) { load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 11U, 0U); }
     size_t integer = 0U, floating = 0U, stacked = 0U;
     for (size_t a = 0U; a < inst->args.len; ++a) {
         bool fp = a < inst->arg_floats.len && inst->arg_floats.data[a];
@@ -308,16 +317,22 @@ static void emit_call(CinderMachineObject *object, const CinderIRFunction *funct
     }
     }
     emit8(object, 0xB0U); emit8(object, (uint8_t)(floating < 8U ? floating : 8U));
-    emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U);
-    CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4};
-    cinder_vec_push((CinderVec *)&object->fixups, &fix);
+    if (inst->callee == NULL) { emit8(object, 0x41U); emit8(object, 0xFFU); emit8(object, 0xD3U); }
+    else {
+        emit8(object, 0xE8U); size_t fix_offset = object->text.len; emit32(object, 0U);
+        CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4};
+        cinder_vec_push((CinderVec *)&object->fixups, &fix);
+    }
     if (frame != 0U) { emit8(object, 0x48U); emit8(object, 0x81U); emit8(object, 0xC4U); emit32(object, (uint32_t)frame); }
     if (inst->dst != CINDER_INVALID_VALUE) {
         if (inst->floating_result) {
             if (inst->type->kind == TYPE_FLOAT) { emit8(object, 0xF3U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
             store_float_value(object, function, allocation, inst->dst);
         }
-        else store_value_alloc(object, function, allocation, inst->dst);
+        else {
+            normalize_incoming_scalar(object, inst->type);
+            store_value_alloc(object, function, allocation, inst->dst);
+        }
     }
 }
 
@@ -503,6 +518,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_GLOBAL_STORE: emit_global_store(object, function, allocation, inst); break;
                 case IR_ARG:
                     if (inst->operator_code >= 0 && inst->operator_code < 6) emit_mov_rax_mem(object, -(int)((incoming_base + (size_t)inst->operator_code + 1U) * 8U)); else if (inst->operator_code >= 6) emit_mov_rax_mem(object, (int)argument_stack_offset(function, (size_t)inst->slot));
+                    normalize_incoming_scalar(object, inst->type);
                     store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_FARG:
                     emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x10U); emit8(object, 0x85U);
@@ -522,7 +538,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_LOCAL_ADDRESS:
                     emit8(object, 0x48U); emit8(object, 0x8DU); emit8(object, 0x85U); emit32(object, (uint32_t)local_offset(allocation, inst->slot));
                     store_value_alloc(object, function, allocation, inst->dst); break;
-                case IR_GLOBAL_ADDRESS:
+                case IR_FUNCTION_ADDRESS: case IR_GLOBAL_ADDRESS:
                     emit8(object, 0x48U); emit8(object, 0x8DU); emit8(object, 0x05U); symbol_displacement(object, inst->callee);
                     store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_MEMORY_LOAD:

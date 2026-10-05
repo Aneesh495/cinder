@@ -21,7 +21,7 @@ Updated: 2026-10-05
 - Inline struct/union layout now computes LP64 field offsets and tail padding. Constant integer globals, string-backed character arrays, `.data`, `.rodata`, `.bss`, data symbols, RIP-relative global loads, and `R_X86_64_PC32` relocations are emitted. Multiple input paths can produce separate objects or an owned temporary-object link attempt.
 - Eight authored application fixtures and a deterministic defined-program generator are now part of the local workload suite.
 
-The current native implementation covers scalar integer/float operations and mixed scalar SysV argument lists. Complete C01-C48 coverage, aggregate expression/ABI classification, callbacks, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
+The current native implementation covers scalar integer/float operations, mixed scalar SysV argument lists, and indirect calls. Complete C01-C48 coverage, aggregate expression/ABI classification, the full callback ABI campaign, hosted variadics, DWARF, and self-hosting remain open. Passing incremental suites does not satisfy final acceptance.
 
 ## Commands and results
 
@@ -46,7 +46,7 @@ The current native implementation covers scalar integer/float operations and mix
 | `make selfhost` | incomplete placeholder, not a self-hosting check | `tests/selfhost.sh` |
 | `make benchmark` | pass, two local compile timing samples recorded; performance campaign not claimed | `.agent-local/benchmarks/` |
 | `make demo` | pass, object/IR/token artifacts generated | `.agent-local/demo/` |
-| `make acceptance` | pass, raw smoke evidence and incomplete gate registry generated | `.agent-local/evidence/ACCEPTANCE.json` |
+| `make acceptance` | expected nonzero until all required campaigns have audited reports | `.agent-local/evidence/ACCEPTANCE.json` |
 | `make verify` | expected nonzero, incomplete required gates are rejected | terminal output |
 | deterministic object check | pass, repeated `phi.c` objects had identical SHA-256 bytes | terminal output |
 | altered evidence check | pass, verifier rejected appended evidence bytes | terminal output |
@@ -282,5 +282,21 @@ block/loop lifetimes. `cinderir --classify` exposes the actual outcome as JSON.
 The authored source corpus now includes arrays, nested members, scalar aliases,
 pointer parameters/returns, and branch/loop scope exits. Undefined memory
 cases are classified without native execution. Incremental tests and hosted
-publication validate each checkpoint; aggregate values, callbacks, complete
+publication validate each checkpoint; aggregate values, complete
 initializers, hosted runtime, and the full acceptance campaigns remain open.
+
+## Indirect calls and callbacks
+
+Function designators now lower to explicit function addresses. Indirect calls
+use their typed signatures, preserve the target while staging arguments, and
+emit `call r11`. The interpreter retains function identity through pointers,
+arrays, fields, parameters, returns, and phis; null calls and incompatible
+target signatures produce classified invalid access.
+
+The source suite adds callbacks with integer/SSE overflow arguments, mixed
+arguments, recursion, pointer results, and context objects. GCC and Clang
+sanitizer builds check source execution and canonical IR round trips. The ABI
+boundary test uses independent host assembly to poison unspecified high bits
+of `_Bool` arguments and results. Linux runs compare both optimization levels
+with GCC and Clang. Full aggregate and variadic callback ABI coverage remains
+an open acceptance requirement.

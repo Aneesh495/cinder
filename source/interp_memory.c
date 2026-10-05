@@ -14,10 +14,10 @@ static void pointer_value(InterpValue *value, InterpPointer pointer) {
 }
 
 uint32_t cinder_interp_object(InterpContext *context, const CinderType *type, bool zero, bool readonly, CinderLoc loc) {
-    if (type == NULL || !type->complete || type->size == 0U || type->size > 64U * 1024U * 1024U || context->live_bytes > 64U * 1024U * 1024U - type->size || context->objects.len >= 1000000U) {
+    if (type == NULL || !type->complete || (type->size == 0U && type->kind != TYPE_FUNCTION) || type->size > 64U * 1024U * 1024U || context->live_bytes > 64U * 1024U * 1024U - type->size || context->objects.len >= 1000000U) {
         cinder_interp_fail(context, INTERP_RESOURCE_LIMIT, loc, "object storage limit exceeded"); return 0U;
     }
-    InterpObject object; memset(&object, 0, sizeof(object)); object.type = type; object.size = type->size; object.alive = true; object.readonly = readonly;
+    InterpObject object; memset(&object, 0, sizeof(object)); object.type = type; object.size = type->kind == TYPE_FUNCTION ? 1U : type->size; object.alive = true; object.readonly = readonly;
     object.bytes = cinder_alloc(object.size); object.initialized = cinder_alloc(object.size);
     memset(object.bytes, 0, object.size); memset(object.initialized, zero ? 1 : 0, object.size);
     cinder_vec_push((CinderVec *)&context->objects, &object); context->live_bytes += object.size;

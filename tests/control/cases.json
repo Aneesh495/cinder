@@ -906,5 +906,85 @@
   {
     "source": "../memory/pointer_array_order.c",
     "exit": 3
+  },
+  {
+    "source": "../callbacks/local_pointer.c",
+    "exit": 39
+  },
+  {
+    "source": "../callbacks/explicit_dereference.c",
+    "exit": 31
+  },
+  {
+    "source": "../callbacks/callback_parameter.c",
+    "exit": 42
+  },
+  {
+    "source": "../callbacks/callback_return.c",
+    "exit": 29
+  },
+  {
+    "source": "../callbacks/callback_array.c",
+    "exit": 43
+  },
+  {
+    "source": "../callbacks/callback_member.c",
+    "exit": 37
+  },
+  {
+    "source": "../callbacks/callback_pointer_return.c",
+    "exit": 29
+  },
+  {
+    "source": "../callbacks/callback_void.c",
+    "exit": 41
+  },
+  {
+    "source": "../callbacks/callback_float.c",
+    "exit": 37
+  },
+  {
+    "source": "../callbacks/callback_mixed.c",
+    "exit": 47
+  },
+  {
+    "source": "../callbacks/callback_stack_integer.c",
+    "exit": 55
+  },
+  {
+    "source": "../callbacks/callback_stack_float.c",
+    "exit": 55
+  },
+  {
+    "source": "../callbacks/callback_nested.c",
+    "exit": 43
+  },
+  {
+    "source": "../callbacks/callback_recursive.c",
+    "exit": 45
+  },
+  {
+    "source": "../callbacks/callback_comparison.c",
+    "exit": 3
+  },
+  {
+    "source": "../callbacks/callback_alias.c",
+    "exit": 37
+  },
+  {
+    "source": "../callbacks/callback_phi.c",
+    "exit": 42
+  },
+  {
+    "source": "../callbacks/callback_const.c",
+    "exit": 29
+  },
+  {
+    "source": "../callbacks/callback_context.c",
+    "exit": 39
+  },
+  {
+    "source": "../callbacks/bool_wide_conversion.c",
+    "exit": 3
   }
 ]

@@ -1,0 +1,1 @@
+struct Context { int base; int (*fn)(struct Context *,int); }; int apply(struct Context *c,int x) { return c->base + x; } int main(void) { struct Context c; c.base = 17; c.fn = apply; return c.fn(&c,22); }

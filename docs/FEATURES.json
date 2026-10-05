@@ -139,7 +139,9 @@
       "valid_cases": [
         "tests/memory/pointer_to_pointer.c",
         "tests/memory/void_pointer_roundtrip.c",
-        "tests/memory/qualified_pointer.c"
+        "tests/memory/qualified_pointer.c",
+        "tests/callbacks/local_pointer.c",
+        "tests/callbacks/callback_comparison.c"
       ],
       "boundary_cases": [
         "tests/memory/one_past.c"
@@ -174,7 +176,8 @@
         "tests/control/enum_array_bound.c",
         "tests/memory/array_fill.c",
         "tests/memory/matrix_rows.c",
-        "tests/memory/member_array.c"
+        "tests/memory/member_array.c",
+        "tests/callbacks/callback_array.c"
       ],
       "boundary_cases": [
         "tests/memory/array_sizeof.c",
@@ -209,7 +212,9 @@
         "tests/control/declarator_callback_typedef.c",
         "tests/control/declarator_return_pointer.c",
         "tests/control/prototype_parenthesized_name.c",
-        "tests/control/prototype_unnamed.c"
+        "tests/control/prototype_unnamed.c",
+        "tests/callbacks/callback_return.c",
+        "tests/callbacks/explicit_dereference.c"
       ],
       "boundary_cases": [],
       "negative_cases": [
@@ -260,7 +265,9 @@
         "tests/control/tag_separate_namespace.c",
         "tests/memory/struct_members.c",
         "tests/memory/struct_arrow.c",
-        "tests/memory/nested_members.c"
+        "tests/memory/nested_members.c",
+        "tests/callbacks/callback_member.c",
+        "tests/callbacks/callback_context.c"
       ],
       "boundary_cases": [
         "tests/memory/member_array.c",
@@ -563,7 +570,8 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/conditional_nested.c",
-        "tests/memory/pointer_return.c"
+        "tests/memory/pointer_return.c",
+        "tests/callbacks/callback_phi.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -792,10 +800,15 @@
       "valid_cases": [
         "tests/control/recursive_control.c",
         "tests/control/integer_eight_arguments.c",
-        "tests/memory/parameter_mutation.c"
+        "tests/memory/parameter_mutation.c",
+        "tests/callbacks/callback_parameter.c",
+        "tests/callbacks/callback_recursive.c",
+        "tests/callbacks/callback_nested.c"
       ],
       "boundary_cases": [
-        "tests/memory/pointer_return.c"
+        "tests/memory/pointer_return.c",
+        "tests/memory/callback_null.undefined.c",
+        "tests/memory/callback_wrong_signature.undefined.c"
       ],
       "negative_cases": [],
       "native_evidence": [],
@@ -831,7 +844,10 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/float_across_call.c",
-        "tests/memory/pointer_return.c"
+        "tests/memory/pointer_return.c",
+        "tests/callbacks/callback_pointer_return.c",
+        "tests/callbacks/callback_float.c",
+        "tests/callbacks/callback_mixed.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -883,7 +899,9 @@
       "status": "partial",
       "valid_cases": [
         "tests/memory/bool_alias.c",
-        "tests/memory/pointer_conditions.c"
+        "tests/memory/pointer_conditions.c",
+        "tests/callbacks/bool_wide_conversion.c",
+        "tests/abi/bool_boundary.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],

@@ -91,6 +91,7 @@ test-native-linux: build
 
 test-abi: build
 	@tests/run_abi.sh $(BUILD_DIR)/cindercc
+	@python3 tests/test_abi_boundary.py $(BUILD_DIR)/cindercc
 
 test-object: build
 	@tests/run_object.sh $(BUILD_DIR)/cindercc

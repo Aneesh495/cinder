@@ -98,5 +98,13 @@
   {
     "source": "expired_condition.undefined.c",
     "classification": 10
+  },
+  {
+    "source": "callback_null.undefined.c",
+    "classification": 11
+  },
+  {
+    "source": "callback_wrong_signature.undefined.c",
+    "classification": 11
   }
 ]
