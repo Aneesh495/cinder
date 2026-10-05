@@ -51,3 +51,13 @@ reuse interpreter arithmetic to construct the oracle.
 The schema is under development with the compiler. Artifacts from earlier
 checkpoints are source-bound evidence and must be regenerated after format or
 semantic changes.
+
+`cinderir --classify input.cir` executes `main` and writes a JSON result with
+`valid`, numeric `classification`, stable `class`, integer result, floating
+result flag, and exact floating bits. Classified undefined/resource outcomes
+are successful measurements for this mode; `valid` reports whether execution
+was defined. Ordinary `--interpret` still fails on those outcomes.
+
+Address, typed memory, pointer arithmetic/member, and local lifetime opcodes
+retain their types and operands in canonical text. The parser verifies object
+slots, pointer strides, field offsets, and scalar access widths before use.

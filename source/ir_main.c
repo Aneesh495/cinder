@@ -6,14 +6,15 @@
 
 int main(int argc, char **argv) {
     const char *input = NULL, *output = NULL;
-    bool interpret = false, object = false, assembly = false, verify = false;
+    bool interpret = false, object = false, assembly = false, verify = false, classify = false;
     int level = 0;
     for (int a = 1; a < argc; ++a) {
         if (strcmp(argv[a], "--help") == 0) {
-            fputs("Usage: cinderir [--verify|--interpret|-c|-S] [-O0|-O1|-O2] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
+            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
         }
         if (strcmp(argv[a], "--verify") == 0) verify = true;
         else if (strcmp(argv[a], "--interpret") == 0) interpret = true;
+        else if (strcmp(argv[a], "--classify") == 0) classify = true;
         else if (strcmp(argv[a], "-c") == 0) object = true;
         else if (strcmp(argv[a], "-S") == 0) assembly = true;
         else if (strcmp(argv[a], "-O0") == 0) level = 0;
@@ -23,7 +24,7 @@ int main(int argc, char **argv) {
         else if (argv[a][0] == '-' || input != NULL) { fprintf(stderr, "cinderir: invalid argument '%s'\n", argv[a]); return 2; }
         else input = argv[a];
     }
-    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify > 1U || (object && output == NULL)) {
+    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify + (unsigned)classify > 1U || (object && output == NULL)) {
         fputs("cinderir: one input and one mode are required; -c requires -o\n", stderr); return 2;
     }
     CinderSourceManager sources; cinder_sources_init(&sources);
@@ -37,8 +38,13 @@ int main(int argc, char **argv) {
     CinderOptStats stats;
     if (cinder_optimize(&module, level, &stats, &diags) != 0 || cinder_verify_ir(&module, &diags) != 0) goto done;
     if (verify) { puts("IR verified"); result = 0; goto done; }
-    if (interpret) {
+    if (interpret || classify) {
         CinderInterpResult observed = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags);
+        if (classify) {
+            uint64_t floating_bits; memcpy(&floating_bits, &observed.floating, sizeof(floating_bits));
+            printf("{\"valid\":%s,\"classification\":%u,\"class\":\"%s\",\"integer\":%" PRId64 ",\"floating\":%s,\"floating_bits\":\"%016" PRIx64 "\"}\n", observed.valid ? "true" : "false", (unsigned)observed.classification, cinder_interp_class_name(observed.classification), observed.value, observed.floating_result ? "true" : "false", floating_bits);
+            result = 0; goto done;
+        }
         if (!observed.valid) goto done;
         printf("interpret main => %" PRId64 "\n", observed.value); result = 0; goto done;
     }

@@ -15,8 +15,9 @@ headers dominate their tails are reported as natural backedges.
 iterated dominance-frontier insertion. An explicit undo stack renames definitions
 while walking the dominator tree. Phi inputs are assigned on predecessor edges.
 Unused joins are pruned by live-in facts. Volatile objects stay in memory.
-Address operations are still open; their future lowering must mark addressed
-slots ineligible before promotion.
+Slots referenced by `local.address` stay in memory. A block-entry lifetime
+operation resets promoted locals to explicit undef values, including loop
+reentry; lexical visibility does not preserve a previous iteration value.
 
 Initial reads use `IR_UNDEF`. They never acquire an invented numeric zero in the
 interpreter. Native code may choose an arbitrary representation for undefined
@@ -28,7 +29,10 @@ classes, conversion source types, and complete unique phi predecessor coverage.
 The driver verifies before optimization and after optimization/edge splitting.
 Call signatures, scalar widths, fixed argument classes/ordinals, prototype
 arity, variadic promotions, storage types, and return types are checked explicitly.
-Object-memory contracts remain open verifier work.
+Pointer offsets have a checked pointee stride and direction; member pointers
+carry verified field offsets. Typed memory operations check pointer, access,
+and stored-value types. Local lifetime operations bind to the storage table.
+Explicit memory dependency graphs and aggregate values remain open.
 
 `source/mir.c` splits critical edges carrying phi transfers before allocation.
 The encoder emits edge transfers through the parallel-copy resolver using
@@ -42,8 +46,13 @@ globals, and bounded recursive calls. It snapshots every phi input before writin
 any destination. Execution classifications distinguish signed overflow, division
 by zero, invalid shifts, uninitialized state, conversion range errors, unsupported
 operations, malformed IR, and resource limits. Steps count instructions and
-terminators; call depth is separately bounded. Object-based pointer memory remains
-open and cannot be replaced by host pointers.
+terminators; call depth is separately bounded. Object-based pointer memory is
+implemented in `source/interp_memory.c` using owned byte objects and object IDs.
+Pointer values preserve provenance, offsets, and subobject bounds through
+parameters, returns, phis, and pointer storage. Byte initialization, const
+storage, alignment, typed access, one-past bounds, and lifetime expiry have
+separate checks. Block entry creates a fresh identity; break, continue, return,
+and normal scope exit retire the objects being left.
 
 `make test-ssa` constructs integer, float32, and float64 cyclic phi graphs with
 critical edges and forced physical register cycles. An independent rotation
@@ -70,5 +79,7 @@ shifts, floating operations/conversions, memory joins, and recursive calls.
 Undefined/resource outcomes are inventoried separately from defined execution.
 The harness retains every canonical input and observation, source/tool hashes,
 per-family counts, and artifact hashes under ignored `.agent-local/ir-campaign`.
-This campaign does not cover the pending object-memory instructions or serve as
-final frozen-source acceptance.
+The authored memory suite separately covers pointer/object instructions and
+classifies invalid memory executions without running native undefined programs.
+The generated typed campaign has not yet been expanded to object-memory graphs.
+These incremental suites do not establish final frozen-source acceptance.

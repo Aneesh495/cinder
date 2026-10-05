@@ -738,5 +738,173 @@
   {
     "source": "float_global_mutation.c",
     "exit": 0
+  },
+  {
+    "source": "../memory/local_alias.c",
+    "exit": 29
+  },
+  {
+    "source": "../memory/signed_char_alias.c",
+    "exit": 123
+  },
+  {
+    "source": "../memory/unsigned_char_alias.c",
+    "exit": 3
+  },
+  {
+    "source": "../memory/short_alias.c",
+    "exit": 27
+  },
+  {
+    "source": "../memory/ushort_alias.c",
+    "exit": 3
+  },
+  {
+    "source": "../memory/uint_alias.c",
+    "exit": 19
+  },
+  {
+    "source": "../memory/long_alias.c",
+    "exit": 31
+  },
+  {
+    "source": "../memory/float_alias.c",
+    "exit": 9
+  },
+  {
+    "source": "../memory/double_alias.c",
+    "exit": 15
+  },
+  {
+    "source": "../memory/bool_alias.c",
+    "exit": 1
+  },
+  {
+    "source": "../memory/pointer_to_pointer.c",
+    "exit": 42
+  },
+  {
+    "source": "../memory/parameter_mutation.c",
+    "exit": 39
+  },
+  {
+    "source": "../memory/pointer_return.c",
+    "exit": 26
+  },
+  {
+    "source": "../memory/array_fill.c",
+    "exit": 75
+  },
+  {
+    "source": "../memory/one_past.c",
+    "exit": 23
+  },
+  {
+    "source": "../memory/pointer_difference.c",
+    "exit": 21
+  },
+  {
+    "source": "../memory/reverse_subscript.c",
+    "exit": 37
+  },
+  {
+    "source": "../memory/pointer_postincrement.c",
+    "exit": 42
+  },
+  {
+    "source": "../memory/pointer_compound.c",
+    "exit": 28
+  },
+  {
+    "source": "../memory/lvalue_once.c",
+    "exit": 31
+  },
+  {
+    "source": "../memory/dereference_update_once.c",
+    "exit": 43
+  },
+  {
+    "source": "../memory/matrix_rows.c",
+    "exit": 47
+  },
+  {
+    "source": "../memory/array_sizeof.c",
+    "exit": 32
+  },
+  {
+    "source": "../memory/array_address.c",
+    "exit": 17
+  },
+  {
+    "source": "../memory/struct_members.c",
+    "exit": 38
+  },
+  {
+    "source": "../memory/struct_arrow.c",
+    "exit": 44
+  },
+  {
+    "source": "../memory/nested_members.c",
+    "exit": 51
+  },
+  {
+    "source": "../memory/member_array.c",
+    "exit": 36
+  },
+  {
+    "source": "../memory/member_address.c",
+    "exit": 40
+  },
+  {
+    "source": "../memory/union_bytes.c",
+    "exit": 52
+  },
+  {
+    "source": "../memory/character_representation.c",
+    "exit": 20
+  },
+  {
+    "source": "../memory/void_pointer_roundtrip.c",
+    "exit": 19
+  },
+  {
+    "source": "../memory/pointer_conditions.c",
+    "exit": 35
+  },
+  {
+    "source": "../memory/qualified_pointer.c",
+    "exit": 27
+  },
+  {
+    "source": "../memory/global_address.c",
+    "exit": 39
+  },
+  {
+    "source": "../memory/global_array.c",
+    "exit": 48
+  },
+  {
+    "source": "../memory/global_structure.c",
+    "exit": 46
+  },
+  {
+    "source": "../memory/sibling_scopes.c",
+    "exit": 42
+  },
+  {
+    "source": "../memory/loop_lifetimes.c",
+    "exit": 28
+  },
+  {
+    "source": "../memory/nested_break.c",
+    "exit": 21
+  },
+  {
+    "source": "../memory/pointer_equal_casts.c",
+    "exit": 1
+  },
+  {
+    "source": "../memory/pointer_array_order.c",
+    "exit": 3
   }
 ]

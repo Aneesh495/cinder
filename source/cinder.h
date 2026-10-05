@@ -344,6 +344,9 @@ typedef enum {
     EX_CAST,
     EX_SIZEOF,
     EX_ALIGNOF,
+    EX_DECAY,
+    EX_INDEX,
+    EX_MEMBER,
 } CinderExprKind;
 
 typedef enum {
@@ -385,6 +388,8 @@ struct CinderExpr {
         struct { CinderExpr *list; CinderType *type; } va_arg;
         struct { CinderExpr *condition; CinderExpr *yes; CinderExpr *no; } conditional;
         struct { CinderType *cast_type; CinderExpr *value; } cast;
+        struct { CinderExpr *base; CinderExpr *index; } index;
+        struct { CinderExpr *base; char *name; size_t field; bool arrow; } member;
     } as;
 };
 
@@ -414,6 +419,7 @@ struct CinderDecl {
     CINDER_VEC_TYPE(CinderDecl *) params;
     CinderStmt *body;
     CinderDecl *next;
+    int lowering_slot;
 };
 
 typedef enum { PARSE_OBJECT, PARSE_TYPEDEF, PARSE_ENUMERATOR, PARSE_TAG } CinderParseBindingKind;
@@ -528,6 +534,15 @@ typedef enum {
     IR_CALL,
     IR_PHI,
     IR_CONVERT,
+    IR_LOCAL_ADDRESS,
+    IR_GLOBAL_ADDRESS,
+    IR_MEMORY_LOAD,
+    IR_MEMORY_STORE,
+    IR_POINTER_OFFSET,
+    IR_POINTER_DIFF,
+    IR_POINTER_MEMBER,
+    IR_LOCAL_BEGIN,
+    IR_LOCAL_END,
     IR_UNDEF,
 } CinderIROp;
 
@@ -657,6 +672,10 @@ typedef enum {
     INTERP_UNSUPPORTED,
     INTERP_RESOURCE_LIMIT,
     INTERP_MALFORMED,
+    INTERP_POINTER_BOUNDS,
+    INTERP_OBJECT_LIFETIME,
+    INTERP_INVALID_ACCESS,
+    INTERP_READONLY,
 } CinderInterpClass;
 
 typedef struct {
@@ -666,6 +685,7 @@ typedef struct {
     double floating;
     CinderInterpClass classification;
 } CinderInterpResult;
+const char *cinder_interp_class_name(CinderInterpClass classification);
 CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *function_name, const int64_t *args, size_t arg_count, unsigned step_limit, CinderDiagnostics *diags);
 
 typedef struct {

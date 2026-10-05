@@ -1,0 +1,11 @@
+flowchart TD
+    AST[Typed lvalue or array designator] --> ADDR[Object address and target offset]
+    ADDR --> IR[Typed load, store, offset, or member IR]
+    IR --> CHECK[IR storage and stride verifier]
+    CHECK --> VM[Owned byte object and pointer metadata]
+    CHECK --> X86[Declared-width x86 memory operation]
+    VM --> BOUNDS[Bounds, alignment, initialized bytes, const checks]
+    ENTRY[Block entry] --> FRESH[Fresh object identity]
+    FRESH --> VM
+    EXIT[Scope exit, break, continue, return] --> DEAD[Retired object]
+    DEAD --> LIFETIME[Expired pointer classification]

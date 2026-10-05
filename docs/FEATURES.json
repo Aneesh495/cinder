@@ -136,12 +136,30 @@
       "name": "Pointer types and qualifiers",
       "required_boundary": "Conversion rules, null constants, compatible types",
       "status": "partial",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "valid_cases": [
+        "tests/memory/pointer_to_pointer.c",
+        "tests/memory/void_pointer_roundtrip.c",
+        "tests/memory/qualified_pointer.c"
+      ],
+      "boundary_cases": [
+        "tests/memory/one_past.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/pointer_const_drop.c",
+        "tests/constraints/pointer_nested_qualification.c",
+        "tests/constraints/pointer_incompatible_assign.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -153,15 +171,32 @@
         "tests/control/constant_size_bound.c",
         "tests/control/declarator_multidimensional.c",
         "tests/control/declarator_pointer_array.c",
-        "tests/control/enum_array_bound.c"
+        "tests/control/enum_array_bound.c",
+        "tests/memory/array_fill.c",
+        "tests/memory/matrix_rows.c",
+        "tests/memory/member_array.c"
       ],
-      "boundary_cases": [],
+      "boundary_cases": [
+        "tests/memory/array_sizeof.c",
+        "tests/memory/array_address.c",
+        "tests/memory/one_past.c"
+      ],
       "negative_cases": [
-        "tests/constraints/array_zero_bound.c"
+        "tests/constraints/array_zero_bound.c",
+        "tests/constraints/subscript_floating.c",
+        "tests/constraints/array_assignment.c"
       ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -222,16 +257,33 @@
         "tests/control/tag_block_shadow.c",
         "tests/control/tag_forward_completion.c",
         "tests/control/tag_forward_shadow.c",
-        "tests/control/tag_separate_namespace.c"
+        "tests/control/tag_separate_namespace.c",
+        "tests/memory/struct_members.c",
+        "tests/memory/struct_arrow.c",
+        "tests/memory/nested_members.c"
       ],
-      "boundary_cases": [],
+      "boundary_cases": [
+        "tests/memory/member_array.c",
+        "tests/memory/member_address.c"
+      ],
       "negative_cases": [
         "tests/constraints/duplicate_member.c",
-        "tests/constraints/tag_kind_conflict.c"
+        "tests/constraints/tag_kind_conflict.c",
+        "tests/constraints/member_unknown.c",
+        "tests/constraints/member_dot_pointer.c",
+        "tests/constraints/member_arrow_scalar.c"
       ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -239,12 +291,22 @@
       "name": "Unions",
       "required_boundary": "Layout and supported legal access semantics",
       "status": "partial",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/memory/union_bytes.c"
+      ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -291,25 +353,53 @@
       "name": "Storage duration/linkage",
       "required_boundary": "automatic/static/extern, tentative definitions",
       "status": "partial",
-      "valid_cases": [],
-      "boundary_cases": [],
+      "valid_cases": [
+        "tests/memory/sibling_scopes.c",
+        "tests/memory/loop_lifetimes.c"
+      ],
+      "boundary_cases": [
+        "tests/memory/nested_break.c"
+      ],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
       "id": "C16",
       "name": "Const/volatile/restrict",
       "required_boundary": "Qualified types and conservative optimization semantics",
-      "status": "planned",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/memory/qualified_pointer.c"
+      ],
+      "boundary_cases": [
+        "tests/memory/character_representation.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/member_const_write.c",
+        "tests/constraints/pointer_const_drop.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -317,12 +407,30 @@
       "name": "Lvalues/rvalues",
       "required_boundary": "Addressability, modification rules, and conversions",
       "status": "partial",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "valid_cases": [
+        "tests/memory/local_alias.c",
+        "tests/memory/parameter_mutation.c",
+        "tests/memory/member_address.c"
+      ],
+      "boundary_cases": [
+        "tests/memory/lvalue_once.c",
+        "tests/memory/dereference_update_once.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/array_assignment.c",
+        "tests/constraints/member_const_write.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -357,13 +465,27 @@
       "required_boundary": "Single lvalue evaluation and correct result",
       "status": "partial",
       "valid_cases": [
-        "tests/control/compound_remainder.c"
+        "tests/control/compound_remainder.c",
+        "tests/memory/pointer_compound.c",
+        "tests/memory/float_alias.c"
       ],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "boundary_cases": [
+        "tests/memory/lvalue_once.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/pointer_compound_multiply.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -372,13 +494,26 @@
       "required_boundary": "Prefix/postfix effects and sequencing",
       "status": "partial",
       "valid_cases": [
-        "tests/control/postfix_increment.c"
+        "tests/control/postfix_increment.c",
+        "tests/memory/pointer_postincrement.c"
       ],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "boundary_cases": [
+        "tests/memory/dereference_update_once.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/pointer_incomplete_add.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -401,13 +536,24 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/logical_nested_effects.c",
-        "tests/control/logical_skipped_division.c"
+        "tests/control/logical_skipped_division.c",
+        "tests/memory/pointer_conditions.c"
       ],
       "boundary_cases": [],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/structure_condition.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -416,13 +562,22 @@
       "required_boundary": "Type rules and selected-branch evaluation",
       "status": "partial",
       "valid_cases": [
-        "tests/control/conditional_nested.c"
+        "tests/control/conditional_nested.c",
+        "tests/memory/pointer_return.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -431,13 +586,25 @@
       "required_boundary": "Sequencing, explicit conversion, invalid-cast diagnostics",
       "status": "partial",
       "valid_cases": [
-        "tests/control/comma_sequence.c"
+        "tests/control/comma_sequence.c",
+        "tests/memory/void_pointer_roundtrip.c",
+        "tests/memory/character_representation.c"
       ],
-      "boundary_cases": [],
+      "boundary_cases": [
+        "tests/memory/pointer_equal_casts.c"
+      ],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -445,12 +612,24 @@
       "name": "sizeof/alignment",
       "required_boundary": "Unevaluated operands and target layout",
       "status": "partial",
-      "valid_cases": [],
-      "boundary_cases": [],
+      "valid_cases": [
+        "tests/memory/array_sizeof.c"
+      ],
+      "boundary_cases": [
+        "tests/memory/array_address.c"
+      ],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -532,13 +711,25 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/for_continue.c",
-        "tests/control/do_continue.c"
+        "tests/control/do_continue.c",
+        "tests/memory/array_fill.c",
+        "tests/memory/loop_lifetimes.c"
       ],
-      "boundary_cases": [],
+      "boundary_cases": [
+        "tests/memory/nested_break.c"
+      ],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -561,13 +752,23 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/for_break.c",
-        "tests/control/while_continue.c"
+        "tests/control/while_continue.c",
+        "tests/memory/loop_lifetimes.c",
+        "tests/memory/nested_break.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -590,13 +791,24 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/recursive_control.c",
-        "tests/control/integer_eight_arguments.c"
+        "tests/control/integer_eight_arguments.c",
+        "tests/memory/parameter_mutation.c"
       ],
-      "boundary_cases": [],
+      "boundary_cases": [
+        "tests/memory/pointer_return.c"
+      ],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -618,13 +830,22 @@
       "required_boundary": "Integer/SSE, small aggregate, and indirect large aggregate",
       "status": "partial",
       "valid_cases": [
-        "tests/control/float_across_call.c"
+        "tests/control/float_across_call.c",
+        "tests/memory/pointer_return.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {
@@ -659,13 +880,24 @@
       "id": "C41",
       "name": "_Bool",
       "required_boundary": "Normalization and conversions through memory/ABI",
-      "status": "planned",
-      "valid_cases": [],
+      "status": "partial",
+      "valid_cases": [
+        "tests/memory/bool_alias.c",
+        "tests/memory/pointer_conditions.c"
+      ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+      ],
+      "implementation": [
+        "source/sema.c",
+        "source/ir.c",
+        "source/ir_verify.c",
+        "source/interp_memory.c",
+        "source/ir_interp.c",
+        "source/x86_64.c"
       ]
     },
     {

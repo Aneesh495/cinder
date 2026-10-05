@@ -8,13 +8,13 @@ The default object mode is non-PIC, non-PIE. `-fPIC` is rejected until a complet
 
 ## Supported profile boundary
 
-The current implementation is intentionally staged. Required semantic families are tracked in `docs/FEATURES.json`; a family is only marked complete after source, semantic, native, and negative evidence exists. The initial end-to-end slice includes preprocessing macros, integer literals and expressions, scalar locals, pointers in the type model, function declarations/definitions, calls, returns, conditionals, loops, constant globals, inline struct/union layout, string-backed global arrays, separate object emission, and direct x86-64 integer code generation.
+The current implementation is intentionally staged. Required semantic families are tracked in `docs/FEATURES.json`; a family is only marked complete after source, semantic, native, and negative evidence exists. The initial end-to-end slice includes preprocessing macros, integer literals and expressions, scalar locals, typed pointer and object operations, function declarations/definitions, calls, returns, conditionals, loops, constant globals, inline struct/union layout, string-backed global arrays, separate object emission, and direct x86-64 integer code generation.
 
 Scalar conversions, float32/double operations and scalar ABI boundaries, pruned
 SSA promotion, cyclic phi edge transfers, scoped typedefs/enums/tags, nested
 declarators, fixed array layout, and canonical IR round trips are implemented.
 See `CONVERSIONS.md`, `DECLARATIONS.md`, and `IR.md` for tested boundaries.
-Addressable object memory, aggregate expression lowering/ABI, complete variadic
+Aggregate values/ABI, complete variadic
 state, bitfields, debug information, and advanced C11/C17 constructs remain open.
 Long double, complex, atomics, thread-local execution, variable-length arrays,
 GNU inline assembly/vector extensions, and C++ input are excluded and diagnosed.
