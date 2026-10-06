@@ -17,5 +17,19 @@ remain unsupported by the interpreter unless explicitly modeled.
 
 `make test-control` covers authored callback programs. `make test-abi` includes
 the deliberately poisoned `_Bool` boundary regression with GCC and Clang on
-Linux x86-64. The full aggregate, variadic, and callback interoperability
-campaign is still incomplete.
+Linux x86-64. `make test-abi-callbacks` generates 512 scalar signatures with
+14 return families, integer/SSE overflow, and pointer arguments/results. Every
+signature calls in both directions and sends callbacks in both directions.
+Both references and Cinder O0/O2 results must match independently computed
+integer or floating bits, or pointer identity. Raw commands, source/object/
+executable hashes, outputs, toolchain identity, and real host architecture are
+retained with the source and compiler binding. A macOS run records zero native
+executions. These generated probes do not count toward the authored corpus.
+Aggregate and variadic interoperability remain open requirements.
+
+The poisoned-bit probe uses the published
+[SysV INTEGER argument rule](https://gitlab.com/x86-psABIs/x86-64-ABI/-/blob/master/x86-64-ABI/low-level-sys-info.tex)
+as its independent oracle: bits beyond the type's memory representation are
+unspecified. The local Linux GCC 15/Clang 22 run observed a Clang O2 argument
+deviation while Cinder O0/O2 passed with both host drivers. Reference deviations
+remain in the raw report and are separate from normal C interoperability cases.
