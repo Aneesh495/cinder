@@ -105,7 +105,10 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
         case EX_INT: fprintf(out, "int %lld\n", (long long)expr->as.integer); break;
         case EX_FLOAT: fprintf(out, "double %.17g\n", expr->as.floating); break;
         case EX_CHAR: fprintf(out, "char %lld\n", (long long)expr->as.integer); break;
-        case EX_STRING: fprintf(out, "string %s\n", expr->as.string); break;
+        case EX_STRING:
+            fputs("string bytes=", out);
+            for (size_t i = 0U; i < expr->literal_length; ++i) fprintf(out, "%02x", (unsigned char)expr->as.string[i]);
+            fputc('\n', out); break;
         case EX_NAME: fprintf(out, "name %s : %s%s\n", expr->as.name, cinder_type_name(expr->type), expr->is_lvalue ? " lvalue" : ""); break;
         case EX_BINARY:
             fprintf(out, "binary '%c' : %s\n", expr->as.binary.op, cinder_type_name(expr->type));

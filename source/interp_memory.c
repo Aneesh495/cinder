@@ -136,6 +136,33 @@ bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const Ci
     return true;
 }
 
+bool cinder_interp_object_copy(InterpContext *context, InterpPointer destination, InterpPointer source, const CinderType *type, bool initializing, CinderLoc loc) {
+    InterpObject *from = checked_object(context, source, type->size, loc);
+    InterpObject *to = checked_object(context, destination, type->size, loc);
+    if (from == NULL || to == NULL) return false;
+    size_t read = (size_t)source.offset, write = (size_t)destination.offset;
+    if (type->align == 0U || read % type->align != 0U || write % type->align != 0U || !permits_access(from->type, read, type, false, 0U) || !permits_access(to->type, write, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer is misaligned or incompatible"); return false; }
+    if (to->readonly || (!initializing && const_storage(to->type, write, type->size, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "object transfer modifies read-only storage"); return false; }
+    if (source.object == destination.object && read != write && read < write + type->size && write < read + type->size) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer has partially overlapping storage"); return false; }
+    if (source.object == destination.object && read == write) return true;
+    CINDER_VEC_TYPE(InterpStoredPointer) copied = {NULL, 0U, 0U};
+    for (size_t p = 0U; p < from->pointers.len; ++p) {
+        const InterpStoredPointer *pointer = &from->pointers.data[p];
+        if (pointer->offset >= read && pointer->offset - read <= type->size && 8U <= type->size - (pointer->offset - read)) {
+            InterpStoredPointer value = {write + pointer->offset - read, pointer->pointer}; cinder_vec_push((CinderVec *)&copied, &value);
+        }
+    }
+    for (size_t p = 0U; p < to->pointers.len;) {
+        size_t old = to->pointers.data[p].offset;
+        if (old < write + type->size && write < old + 8U) to->pointers.data[p] = to->pointers.data[--to->pointers.len];
+        else ++p;
+    }
+    memcpy(to->bytes + write, from->bytes + read, type->size);
+    memcpy(to->initialized + write, from->initialized + read, type->size);
+    for (size_t p = 0U; p < copied.len; ++p) cinder_vec_push((CinderVec *)&to->pointers, &copied.data[p]);
+    free(copied.data); return true;
+}
+
 bool cinder_interp_offset(InterpContext *context, InterpPointer pointer, int64_t index, int direction, size_t stride, InterpValue *value, CinderLoc loc) {
     if (checked_object(context, pointer, 0U, loc) == NULL) return false;
     bool negative = (index < 0) != (direction < 0);

@@ -87,6 +87,11 @@ CinderFileId cinder_source_load(CinderSourceManager *sources, const char *path, 
     if (bytes == NULL) {
         return CINDER_NO_FILE;
     }
+    size_t invalid = 0U;
+    if (!cinder_utf8_validate(bytes, size, &invalid)) {
+        fprintf(err, "cinder: error: invalid UTF-8 or embedded NUL at byte %zu in %s\n", invalid, path);
+        free(bytes); return CINDER_NO_FILE;
+    }
     CinderSourceFile file;
     file.id = (CinderFileId)(sources->files.len + 1U);
     file.path = cinder_strndup(path, strlen(path));

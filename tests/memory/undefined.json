@@ -106,5 +106,13 @@
   {
     "source": "callback_wrong_signature.undefined.c",
     "classification": 11
+  },
+  {
+    "source": "literal_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "literal_end.undefined.c",
+    "classification": 9
   }
 ]

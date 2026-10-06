@@ -986,5 +986,209 @@
   {
     "source": "../callbacks/bool_wide_conversion.c",
     "exit": 3
+  },
+  {
+    "source": "../literals/char_newline.c",
+    "exit": 10
+  },
+  {
+    "source": "../literals/char_octal.c",
+    "exit": 65
+  },
+  {
+    "source": "../literals/char_hex.c",
+    "exit": 65
+  },
+  {
+    "source": "../literals/char_backslash.c",
+    "exit": 92
+  },
+  {
+    "source": "../literals/char_quote.c",
+    "exit": 39
+  },
+  {
+    "source": "../literals/char_double_quote.c",
+    "exit": 34
+  },
+  {
+    "source": "../literals/char_question.c",
+    "exit": 63
+  },
+  {
+    "source": "../literals/char_controls.c",
+    "exit": 60
+  },
+  {
+    "source": "../literals/char_octal_three.c",
+    "exit": 83
+  },
+  {
+    "source": "../literals/char_signed_byte.c",
+    "exit": 1
+  },
+  {
+    "source": "../literals/char_nul.c",
+    "exit": 1
+  },
+  {
+    "source": "../literals/empty_size.c",
+    "exit": 1
+  },
+  {
+    "source": "../literals/concatenated_size.c",
+    "exit": 5
+  },
+  {
+    "source": "../literals/concatenated_index.c",
+    "exit": 99
+  },
+  {
+    "source": "../literals/empty_concatenation.c",
+    "exit": 120
+  },
+  {
+    "source": "../literals/literal_terminator.c",
+    "exit": 0
+  },
+  {
+    "source": "../literals/embedded_nul.c",
+    "exit": 25
+  },
+  {
+    "source": "../literals/embedded_nul_size.c",
+    "exit": 4
+  },
+  {
+    "source": "../literals/hex_escape_boundary.c",
+    "exit": 66
+  },
+  {
+    "source": "../literals/octal_escape_boundary.c",
+    "exit": 50
+  },
+  {
+    "source": "../literals/literal_reverse_index.c",
+    "exit": 122
+  },
+  {
+    "source": "../literals/literal_array_address.c",
+    "exit": 9
+  },
+  {
+    "source": "../literals/literal_return.c",
+    "exit": 98
+  },
+  {
+    "source": "../literals/literal_argument.c",
+    "exit": 3
+  },
+  {
+    "source": "../literals/literal_pointer_offset.c",
+    "exit": 99
+  },
+  {
+    "source": "../literals/literal_pointer_difference.c",
+    "exit": 3
+  },
+  {
+    "source": "../literals/local_inferred.c",
+    "exit": 4
+  },
+  {
+    "source": "../literals/local_exact.c",
+    "exit": 99
+  },
+  {
+    "source": "../literals/local_padding.c",
+    "exit": 12
+  },
+  {
+    "source": "../literals/local_mutable.c",
+    "exit": 42
+  },
+  {
+    "source": "../literals/local_const.c",
+    "exit": 14
+  },
+  {
+    "source": "../literals/local_unsigned.c",
+    "exit": 55
+  },
+  {
+    "source": "../literals/local_signed.c",
+    "exit": 1
+  },
+  {
+    "source": "../literals/local_typedef.c",
+    "exit": 6
+  },
+  {
+    "source": "../literals/local_const_typedef.c",
+    "exit": 4
+  },
+  {
+    "source": "../literals/local_array_scope.c",
+    "exit": 24
+  },
+  {
+    "source": "../literals/local_array_callback.c",
+    "exit": 3
+  },
+  {
+    "source": "../literals/global_inferred.c",
+    "exit": 5
+  },
+  {
+    "source": "../literals/global_exact.c",
+    "exit": 98
+  },
+  {
+    "source": "../literals/global_padding.c",
+    "exit": 17
+  },
+  {
+    "source": "../literals/global_embedded_nul.c",
+    "exit": 104
+  },
+  {
+    "source": "../literals/global_empty.c",
+    "exit": 1
+  },
+  {
+    "source": "../literals/global_const.c",
+    "exit": 99
+  },
+  {
+    "source": "../literals/utf8_prefix.c",
+    "exit": 3
+  },
+  {
+    "source": "../literals/utf8_raw_bytes.c",
+    "exit": 5
+  },
+  {
+    "source": "../literals/ucn_two_byte.c",
+    "exit": 3
+  },
+  {
+    "source": "../literals/ucn_four_byte.c",
+    "exit": 5
+  },
+  {
+    "source": "../literals/ucn_last_byte.c",
+    "exit": 8
+  },
+  {
+    "source": "../literals/utf8_concatenated.c",
+    "exit": 5
+  },
+  {
+    "source": "../literals/macro_concatenated.c",
+    "exit": 99
+  },
+  {
+    "source": "../literals/string_escape_quote.c",
+    "exit": 126
   }
 ]

@@ -300,3 +300,15 @@ boundary test uses independent host assembly to poison unspecified high bits
 of `_Bool` arguments and results. Linux runs compare both optimization levels
 with GCC and Clang. Full aggregate and variadic callback ABI coverage remains
 an open acceptance requirement.
+
+## Literal storage and character arrays
+
+Decoded ordinary/UTF-8 literals now preserve escapes and embedded NULs,
+concatenate after macro expansion, retain array type for `sizeof`/addresses,
+and emit private read-only storage. Character array initialization supports
+inferred/exact bounds, zero padding, const elements, and loop lifetimes.
+Explicit object transfer IR reaches the owned-memory interpreter and encoder.
+The authored source suite includes 51 literal programs, malformed encoding and
+profile checks, and independent object-contract mutations. See `LITERALS.md`.
+Initializer lists, designators, compound literals, static addresses, and the
+remaining language/ABI acceptance work are still incomplete.

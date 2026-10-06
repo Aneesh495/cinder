@@ -123,9 +123,23 @@
       "name": "Character/string literals",
       "required_boundary": "Escapes, concatenation, array type and storage",
       "status": "partial",
-      "valid_cases": [],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "valid_cases": [
+        "tests/literals/char_octal.c",
+        "tests/literals/char_hex.c",
+        "tests/literals/concatenated_index.c",
+        "tests/literals/embedded_nul.c",
+        "tests/literals/ucn_four_byte.c",
+        "tests/literals/utf8_prefix.c"
+      ],
+      "boundary_cases": [
+        "tests/memory/literal_write.undefined.c",
+        "tests/memory/literal_end.undefined.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/literal_hex_range.c",
+        "tests/constraints/literal_ucn_surrogate.c",
+        "tests/constraints/literal_ucn_short.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -177,7 +191,9 @@
         "tests/memory/array_fill.c",
         "tests/memory/matrix_rows.c",
         "tests/memory/member_array.c",
-        "tests/callbacks/callback_array.c"
+        "tests/callbacks/callback_array.c",
+        "tests/literals/local_inferred.c",
+        "tests/literals/literal_array_address.c"
       ],
       "boundary_cases": [
         "tests/memory/array_sizeof.c",
@@ -387,7 +403,8 @@
       "required_boundary": "Qualified types and conservative optimization semantics",
       "status": "partial",
       "valid_cases": [
-        "tests/memory/qualified_pointer.c"
+        "tests/memory/qualified_pointer.c",
+        "tests/literals/local_const_typedef.c"
       ],
       "boundary_cases": [
         "tests/memory/character_representation.c"
@@ -621,7 +638,8 @@
       "required_boundary": "Unevaluated operands and target layout",
       "status": "partial",
       "valid_cases": [
-        "tests/memory/array_sizeof.c"
+        "tests/memory/array_sizeof.c",
+        "tests/literals/concatenated_size.c"
       ],
       "boundary_cases": [
         "tests/memory/array_address.c"
@@ -645,7 +663,11 @@
       "name": "Initializers",
       "required_boundary": "Scalar, nested aggregate, string, and zero filling",
       "status": "planned",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/literals/local_exact.c",
+        "tests/literals/local_padding.c",
+        "tests/literals/local_array_scope.c"
+      ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
@@ -688,7 +710,9 @@
         "tests/control/constant_global_expression.c",
         "tests/control/constant_global_float.c",
         "tests/control/constant_global_integer_to_float.c",
-        "tests/control/float_global_mutation.c"
+        "tests/control/float_global_mutation.c",
+        "tests/literals/global_embedded_nul.c",
+        "tests/literals/global_const.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],

@@ -59,6 +59,7 @@ typedef struct {
 
 typedef struct {
     CinderIRFunction *function;
+    CinderIRModule *module;
     CinderDiagnostics *diags;
     CinderBlockId current;
     CINDER_VEC_TYPE(LocalSlot) locals;
@@ -203,7 +204,27 @@ static void store_slot(LowerContext *context, int slot, CinderValueId value, Cin
     store->slot = slot;
 }
 
+static char *literal_storage(LowerContext *context, CinderType *type, const CinderExpr *literal) {
+    if (type->size == 0U || type->size > 64U * 1024U * 1024U) { cinder_diag(context->diags, CINDER_ERROR, literal->loc, "literal storage exceeds the target object limit"); return NULL; }
+    CinderIRGlobal global; memset(&global, 0, sizeof(global));
+    char name[64]; int length = snprintf(name, sizeof(name), ".LCS.%zu", context->module->globals.len);
+    if (length < 0 || (size_t)length >= sizeof(name)) { cinder_diag(context->diags, CINDER_FATAL, literal->loc, "literal symbol exceeds storage"); return NULL; }
+    global.name = cinder_strndup(name, (size_t)length); global.type = type;
+    global.read_only = true; global.has_initializer = true; global.loc = literal->loc;
+    global.byte_count = type->size; global.bytes = cinder_arena_alloc(&context->module->arena, type->size, _Alignof(char));
+    memset(global.bytes, 0, type->size);
+    size_t count = literal->literal_length + 1U; if (count > type->size) count = type->size;
+    memcpy(global.bytes, literal->as.string, count);
+    cinder_vec_push((CinderVec *)&context->module->globals, &global); return global.name;
+}
+
 static CinderValueId lower_address(LowerContext *context, CinderExpr *target) {
+    if (target->kind == EX_STRING) {
+        char *name = literal_storage(context, target->type, target); if (name == NULL) return CINDER_INVALID_VALUE;
+        CinderIRInst *address = add_inst_ptr(context->function, context->current, IR_GLOBAL_ADDRESS, target->loc);
+        address->dst = new_value(context->function); address->type = cinder_type_pointer(context->function->types, target->type);
+        address->callee = cinder_strndup(name, strlen(name)); return address->dst;
+    }
     if (target->kind == EX_NAME) {
         int slot = find_local(context, target->as.name);
         CinderIRInst *address = add_inst_ptr(context->function, context->current, target->type->kind == TYPE_FUNCTION ? IR_FUNCTION_ADDRESS : slot >= 0 ? IR_LOCAL_ADDRESS : IR_GLOBAL_ADDRESS, target->loc);
@@ -455,7 +476,17 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
                 if (decl->lowering_slot < 0) begin_declarations(context, decl);
                 int slot = decl->lowering_slot;
                 LocalSlot local = {decl->name, slot, decl->type}; cinder_vec_push((CinderVec *)&context->locals, &local);
-                if (decl->initializer != NULL) { CinderValueId value = lower_expr(context, decl->initializer); CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, decl->loc); store->left = value; store->slot = slot; store->type = decl->type; }
+                if (decl->initializer != NULL && decl->initializer->kind == EX_STRING && decl->type->kind == TYPE_ARRAY) {
+                    char *name = literal_storage(context, decl->type, decl->initializer); if (name == NULL) continue;
+                    CinderIRInst *destination = add_inst_ptr(context->function, context->current, IR_LOCAL_ADDRESS, decl->loc);
+                    destination->dst = new_value(context->function); destination->slot = slot; destination->type = cinder_type_pointer(context->function->types, decl->type);
+                    CinderValueId destination_value = destination->dst;
+                    CinderIRInst *source = add_inst_ptr(context->function, context->current, IR_GLOBAL_ADDRESS, decl->loc);
+                    source->dst = new_value(context->function); source->type = cinder_type_pointer(context->function->types, decl->type); source->callee = cinder_strndup(name, strlen(name));
+                    CinderValueId source_value = source->dst;
+                    CinderIRInst *copy = add_inst_ptr(context->function, context->current, IR_OBJECT_INIT, decl->loc);
+                    copy->type = decl->type; copy->left = destination_value; copy->right = source_value;
+                } else if (decl->initializer != NULL) { CinderValueId value = lower_expr(context, decl->initializer); CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, decl->loc); store->left = value; store->slot = slot; store->type = decl->type; }
             }
             break;
         }
@@ -540,23 +571,6 @@ static void destroy_function(CinderIRFunction *function) {
 
 void cinder_ir_destroy(CinderIRModule *module) { for (size_t i = 0U; i < module->functions.len; ++i) destroy_function(&module->functions.data[i]); for (size_t i = 0U; i < module->globals.len; ++i) free(module->globals.data[i].name); free(module->globals.data); free(module->functions.data); cinder_arena_destroy(&module->arena); }
 
-static char *decode_string_literal(CinderArena *arena, const char *raw, size_t *length) {
-    size_t raw_len = strlen(raw);
-    size_t start = raw_len > 0U && raw[0] == '"' ? 1U : 0U;
-    size_t end = raw_len > start && raw[raw_len - 1U] == '"' ? raw_len - 1U : raw_len;
-    char *bytes = cinder_arena_alloc(arena, end - start + 1U, _Alignof(char));
-    size_t out = 0U;
-    for (size_t i = start; i < end; ++i) {
-        if (raw[i] == '\\' && i + 1U < end) {
-            ++i;
-            switch (raw[i]) { case 'n': bytes[out++] = '\n'; break; case 'r': bytes[out++] = '\r'; break; case 't': bytes[out++] = '\t'; break; case '0': bytes[out++] = '\0'; break; default: bytes[out++] = raw[i]; break; }
-        } else bytes[out++] = raw[i];
-    }
-    bytes[out] = '\0';
-    *length = out;
-    return bytes;
-}
-
 static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags) {
     CinderIRGlobal global;
     memset(&global, 0, sizeof(global));
@@ -574,7 +588,9 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
     }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_FLOAT) { global.floating = decl->initializer->as.floating; global.has_initializer = true; }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_STRING) {
-        global.bytes = decode_string_literal(&module->arena, decl->initializer->as.string, &global.byte_count);
+        global.byte_count = decl->initializer->literal_length + 1U;
+        if (global.byte_count > global.type->size) global.byte_count = global.type->size;
+        global.bytes = cinder_arena_strndup(&module->arena, decl->initializer->as.string, global.byte_count);
         global.has_initializer = true;
         global.read_only = global.type->kind == TYPE_ARRAY && (global.type->base->qualifiers & 1U) != 0U;
         if (global.type->kind == TYPE_ARRAY && global.type->array_len == 0U) { global.type->array_len = global.byte_count + 1U; global.type->size = global.type->array_len * global.type->base->size; global.type->complete = true; }
@@ -590,7 +606,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
         CinderIRFunction function; memset(&function, 0, sizeof(function)); function.name = cinder_strndup(decl->name, strlen(decl->name)); function.type = decl->type; function.ast = ast; function.params.data = NULL; function.params.len = 0U; function.params.cap = 0U; function.blocks.data = NULL; function.blocks.len = 0U; function.blocks.cap = 0U; function.value_count = 0U; function.local_count = 0U; function.float_param_count = 0U; function.types = module->types; function.global = !decl->is_static;
         for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; cinder_vec_push((CinderVec *)&function.params, &param); }
         CinderIRBlock entry = make_block(&function, "entry"); cinder_vec_push((CinderVec *)&function.blocks, &entry);
-        LowerContext context; memset(&context, 0, sizeof(context)); context.function = &function; context.diags = diags; context.current = 0U; context.locals.data = NULL; context.locals.len = 0U; context.locals.cap = 0U; context.break_blocks.data = NULL; context.break_blocks.len = 0U; context.break_blocks.cap = 0U; context.continue_blocks.data = NULL; context.continue_blocks.len = 0U; context.continue_blocks.cap = 0U; context.va_index = 0U;
+        LowerContext context; memset(&context, 0, sizeof(context)); context.function = &function; context.module = module; context.diags = diags; context.current = 0U; context.locals.data = NULL; context.locals.len = 0U; context.locals.cap = 0U; context.break_blocks.data = NULL; context.break_blocks.len = 0U; context.break_blocks.cap = 0U; context.continue_blocks.data = NULL; context.continue_blocks.len = 0U; context.continue_blocks.cap = 0U; context.va_index = 0U;
         size_t integer_param_count = 0U;
         for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; cinder_vec_push((CinderVec *)&context.locals, &local); bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_STORE, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
         lower_stmt(&context, decl->body);
@@ -609,7 +625,7 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
 }
 
 const char *cinder_ir_op_name(CinderIROp op) {
-    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","function.address","undef"};
+    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","function.address","object.copy","object.init","undef"};
     return op < CINDER_ARRAY_LEN(names) ? names[op] : "unknown";
 }
 

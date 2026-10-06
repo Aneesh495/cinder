@@ -74,6 +74,6 @@ for index, (seed, opcode, edits) in enumerate(mutations):
         command = [str(irtool), mode, str(invalid)]
         if mode == '-c': command += ['-o', str(prior)]
         result = subprocess.run(command, capture_output=True, timeout=10)
-        assert result.returncode != 0 and (b'error:' in result.stderr or b'fatal:' in result.stderr), (seed, opcode, edits, mode, result)
+        assert result.returncode > 0 and (b'error:' in result.stderr or b'fatal:' in result.stderr) and b'runtime error:' not in result.stderr and b'Sanitizer' not in result.stderr, (seed, opcode, edits, mode, result)
         assert prior.read_bytes() == b'prior complete output'
 print(f'memory verifier: {len(mutations)} malformed instruction contracts rejected')

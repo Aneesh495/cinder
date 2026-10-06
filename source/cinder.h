@@ -230,6 +230,8 @@ void cinder_tokens_destroy(CinderTokenStream *tokens);
 int cinder_preprocess(CinderSourceManager *sources, const char *path, const char *const *include_dirs, size_t include_count, const char *const *defines, size_t define_count, CinderDiagnostics *diags);
 int cinder_lex(CinderSourceManager *sources, CinderTokenStream *tokens, CinderDiagnostics *diags);
 int cinder_parse_number(CinderToken *token, CinderDiagnostics *diags);
+bool cinder_utf8_validate(const char *bytes, size_t length, size_t *invalid);
+char *cinder_literal_decode(CinderArena *arena, const CinderToken *token, size_t *length, CinderDiagnostics *diags);
 const char *cinder_token_name(CinderTokenKind kind);
 void cinder_dump_tokens(const CinderTokenStream *tokens, CinderSourceManager *sources, FILE *out);
 
@@ -376,6 +378,7 @@ struct CinderExpr {
     bool is_lvalue;
     bool name_visible;
     CinderType *queried_type;
+    size_t literal_length;
     union {
         int64_t integer;
         double floating;
@@ -544,6 +547,8 @@ typedef enum {
     IR_LOCAL_BEGIN,
     IR_LOCAL_END,
     IR_FUNCTION_ADDRESS,
+    IR_OBJECT_COPY,
+    IR_OBJECT_INIT,
     IR_UNDEF,
 } CinderIROp;
 
