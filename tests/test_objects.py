@@ -48,13 +48,16 @@ def inspect(path, strict=True):
         if symbol['name'].startswith('.LCF'): assert symbol['binding'] == 0 and symbol['size'] == 8, (path, symbol)
         if symbol['name'] == 'private_helper': assert symbol['binding'] == 0 and symbol['kind'] == 2, (path, symbol)
         if symbol['name'] == 'narrow': assert symbol['binding'] == 0 and symbol['size'] == 2, (path, symbol)
-    reloc = by_name['.rela.text']
-    assert reloc[9] == 24 and reloc[5] % 24 == 0, path
     relocations = []
-    for i in range(reloc[5] // 24):
-        offset, info, addend = struct.unpack_from('<QQq', data, reloc[4] + i * 24)
-        assert offset + 4 <= by_name['.text'][5] and info >> 32 < len(symbols) and (info & 0xffffffff) in (2, 4) and (not strict or addend == -4), path
-        relocations.append(dict(offset=offset, symbol=symbols[info >> 32]['name'], type=info & 0xffffffff, addend=addend))
+    for name, target, width, kinds in (('.rela.text', '.text', 4, (2, 4)), ('.rela.data', '.data', 8, (1,)), ('.rela.rodata', '.rodata', 8, (1,))):
+        if name not in by_name: continue
+        reloc = by_name[name]
+        assert reloc[9] == 24 and reloc[5] % 24 == 0, path
+        assert sections[reloc[6]] == symtab and sections[reloc[7]] == by_name[target], (path, name)
+        for i in range(reloc[5] // 24):
+            offset, info, addend = struct.unpack_from('<QQq', data, reloc[4] + i * 24)
+            assert offset + width <= by_name[target][5] and info >> 32 < len(symbols) and (info & 0xffffffff) in kinds and (name != '.rela.text' or not strict or addend == -4), path
+            relocations.append(dict(section=target, offset=offset, symbol=symbols[info >> 32]['name'], type=info & 0xffffffff, addend=addend))
     return dict(sha256=digest(path), sections={name: dict(size=value[5], alignment=value[8]) for name, value in by_name.items()}, symbols=symbols, relocations=relocations)
 
 

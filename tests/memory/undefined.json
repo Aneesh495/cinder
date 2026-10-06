@@ -122,5 +122,29 @@
   {
     "source": "pointer_word_changed.undefined.c",
     "classification": 11
+  },
+  {
+    "source": "pointer_unsigned_add.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "pointer_unsigned_sub.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "static_pointer_one_past.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "static_pointer_outside.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "static_literal_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "static_null_callback.undefined.c",
+    "classification": 11
   }
 ]

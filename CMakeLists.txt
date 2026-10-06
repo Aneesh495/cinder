@@ -26,6 +26,7 @@ set(CINDER_SOURCES
   source/ast.c
   source/parser.c
   source/const_eval.c
+  source/static_address.c
   source/sema.c
   source/ir.c
   source/ir_verify.c

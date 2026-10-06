@@ -33,9 +33,9 @@ void cinder_interp_retire(InterpContext *context, uint32_t id) {
     object->bytes = NULL; object->initialized = NULL; object->pointers.data = NULL; object->pointers.len = 0U; object->pointers.cap = 0U;
 }
 
-InterpValue cinder_interp_address(const InterpContext *context, uint32_t id) {
-    InterpValue value; pointer_value(&value, (InterpPointer){id, 0, 0U, id == 0U ? 0U : context->objects.data[id - 1U].size}); return value;
-}
+InterpValue cinder_interp_pointer_value(InterpPointer pointer) { InterpValue value; pointer_value(&value, pointer); return value; }
+
+InterpValue cinder_interp_address(const InterpContext *context, uint32_t id) { return cinder_interp_pointer_value((InterpPointer){id, 0, 0U, id == 0U ? 0U : context->objects.data[id - 1U].size}); }
 
 static InterpObject *checked_object(InterpContext *context, InterpPointer pointer, size_t size, CinderLoc loc) {
     if (pointer.object == 0U || (size_t)pointer.object > context->objects.len) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "null or invalid object pointer"); return NULL; }

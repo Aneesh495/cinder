@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-memory test-literals test-linkage test-constraints test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-generated test-apps test-native-linux test-abi test-abi-callbacks test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-memory test-literals test-linkage test-static-addresses test-constraints test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-generated test-apps test-native-linux test-abi test-abi-callbacks test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -67,6 +67,9 @@ test-literals: build
 
 test-linkage: build
 	@python3 tests/test_linkage.py $(BUILD_DIR)/cindercc
+
+test-static-addresses: build
+	@python3 tests/test_static_addresses.py $(BUILD_DIR)/cindercc
 
 test-census:
 	@python3 tests/test_census.py

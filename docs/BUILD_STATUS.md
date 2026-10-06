@@ -323,3 +323,14 @@ instead of accepting an earlier use because a tag was defined later.
 Authored source constraints and actual ELF binding/extent checks cover the
 increment. Block-scope static/extern storage and static address initializers
 still need their duration/linkage and relocation implementation.
+
+## Static address relocations
+
+Named object/function addresses, string pointers, array/member offsets, casts,
+and null initialization now reach typed address records, owned ELF data
+relocations, equivalent assembly, and independent global pointer initialization.
+Canonical IR schema 2 retains domains and actual target signatures. Tests
+inspect writable/read-only relocations and link two owned translation units.
+Unsigned pointer indexes retain their signedness rather than being narrowed to
+signed long. General initializer lists and block static/extern storage remain
+open, along with the remaining ABI, runtime, debug, and acceptance requirements.

@@ -200,7 +200,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
                     CinderType *swap_type = left; left = right; right = swap_type;
                 }
                 if ((add || sub) && pointer_step_type(left, expr->parse_index) && integer_type(right)) {
-                    expr->as.binary.right = convert_expr(sema, expr->as.binary.right, sema->types->long_type); expr->type = left; return left;
+                    expr->as.binary.right = convert_expr(sema, expr->as.binary.right, cinder_integer_promote(sema->types, right)); expr->type = left; return left;
                 }
                 if (sub && pointer_step_type(left, expr->parse_index) && pointer_compatible(left, right)) { expr->type = sema->types->long_type; return expr->type; }
                 bool compare = op == TOK_EQEQ || op == TOK_NEQ || op == '<' || op == '>' || op == TOK_LE || op == TOK_GE;
@@ -256,7 +256,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             if (expr->as.assign.op == '=' && !assignment_compatible(sema, target, expr->as.assign.value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment types are incompatible");
             if (expr->as.assign.op == '=') expr->as.assign.value = convert_expr(sema, expr->as.assign.value, target);
             else if (target->kind == TYPE_POINTER && pointer_step_type(target, expr->parse_index) && integer_type(value) && (expr->as.assign.op == TOK_PLUSEQ || expr->as.assign.op == TOK_MINUSEQ)) {
-                expr->as.assign.operation_type = target; expr->as.assign.value = convert_expr(sema, expr->as.assign.value, sema->types->long_type);
+                expr->as.assign.operation_type = target; expr->as.assign.value = convert_expr(sema, expr->as.assign.value, cinder_integer_promote(sema->types, value));
             } else if (numeric_type(target) && numeric_type(value)) {
                 bool shift = expr->as.assign.op == TOK_LSHIFT_EQ || expr->as.assign.op == TOK_RSHIFT_EQ;
                 bool bits = shift || expr->as.assign.op == TOK_PERCENTEQ || expr->as.assign.op == TOK_ANDEQ || expr->as.assign.op == TOK_OREQ || expr->as.assign.op == TOK_XOREQ;
@@ -309,7 +309,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             CinderType *base = sema_value(sema, &expr->as.index.base, scope), *index = sema_value(sema, &expr->as.index.index, scope);
             if (integer_type(base) && index->kind == TYPE_POINTER) { CinderExpr *swap = expr->as.index.base; expr->as.index.base = expr->as.index.index; expr->as.index.index = swap; CinderType *t = base; base = index; index = t; }
             if (!pointer_step_type(base, expr->parse_index) || !integer_type(index)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "subscript requires a complete object pointer and integer index"); expr->type = sema->types->error_type; }
-            else { expr->type = base->base; expr->as.index.index = convert_expr(sema, expr->as.index.index, sema->types->long_type); }
+            else { expr->type = base->base; expr->as.index.index = convert_expr(sema, expr->as.index.index, cinder_integer_promote(sema->types, index)); }
             expr->is_lvalue = true; return expr->type;
         }
         case EX_MEMBER: {
