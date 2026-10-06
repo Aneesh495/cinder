@@ -113,7 +113,7 @@ static void check_types(const CinderIRInst *inst, CinderType *const *types, Cind
 static bool same_value_type(const CinderType *left, const CinderType *right) {
     if (left == NULL || right == NULL) return false;
     CinderType a = *left, b = *right; a.qualifiers = 0U; b.qualifiers = 0U;
-    return cinder_type_equal(&a, &b);
+    return cinder_type_compatible(&a, &b);
 }
 
 static void check_storage(const CinderIRModule *module, const CinderIRFunction *function, const CinderIRInst *inst, CinderType *const *types, CinderDiagnostics *diags) {
@@ -122,7 +122,7 @@ static void check_storage(const CinderIRModule *module, const CinderIRFunction *
     if (inst->op == IR_GLOBAL_ADDRESS) {
         const CinderIRGlobal *global = NULL;
         for (size_t g = 0U; g < module->globals.len; ++g) if (strcmp(module->globals.data[g].name, inst->callee) == 0) global = &module->globals.data[g];
-        if (global == NULL || inst->type->kind != TYPE_POINTER || !cinder_type_equal(inst->type->base, global->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "global address has an unknown symbol or incorrect object type");
+        if (global == NULL || inst->type->kind != TYPE_POINTER || !cinder_type_compatible(inst->type->base, global->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "global address has an unknown symbol or incorrect object type");
     }
     if (inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE) {
         const CinderType *slot_type = function->local_types.data[inst->slot];

@@ -40,7 +40,7 @@ static bool pointer_compatible(const CinderType *target, const CinderType *value
     const CinderType *a = target->base, *b = value->base;
     if ((b->qualifiers & ~a->qualifiers) != 0U) return false;
     CinderType x = *a, y = *b; x.qualifiers = 0U; y.qualifiers = 0U;
-    if (cinder_type_equal(&x, &y)) return true;
+    if (cinder_type_compatible(&x, &y)) return true;
     return (a->kind == TYPE_VOID && b->kind != TYPE_FUNCTION) || (b->kind == TYPE_VOID && a->kind != TYPE_FUNCTION);
 }
 static bool value_compatible(const CinderType *target, const CinderType *value) {
@@ -52,7 +52,7 @@ static bool value_compatible(const CinderType *target, const CinderType *value) 
 static CinderExpr *convert_expr(CinderSema *sema, CinderExpr *value, CinderType *type) {
     if (value == NULL || cinder_type_equal(value->type, type)) return value;
     CinderExpr *cast = cinder_arena_alloc(&sema->ast->arena, sizeof(*cast), _Alignof(CinderExpr));
-    memset(cast, 0, sizeof(*cast)); cast->kind = EX_CAST; cast->loc = value->loc; cast->type = type;
+    memset(cast, 0, sizeof(*cast)); cast->kind = EX_CAST; cast->loc = value->loc; cast->type = type; cast->parse_index = value->parse_index;
     cast->as.cast.cast_type = type; cast->as.cast.value = value;
     return cast;
 }
@@ -87,8 +87,8 @@ static bool null_constant(CinderSema *sema, const CinderExpr *expr) {
 static bool assignment_compatible(CinderSema *sema, const CinderType *target, const CinderExpr *value) {
     return value_compatible(target, value->type) || (target->kind == TYPE_POINTER && null_constant(sema, value));
 }
-static bool pointer_step_type(const CinderType *type) {
-    return type->kind == TYPE_POINTER && type->base->complete && type->base->size != 0U && type->base->kind != TYPE_FUNCTION && type->base->kind != TYPE_VOID;
+static bool pointer_step_type(const CinderType *type, size_t position) {
+    return type->kind == TYPE_POINTER && type->base->complete && type->base->completion_index <= position && type->base->size != 0U && type->base->kind != TYPE_FUNCTION && type->base->kind != TYPE_VOID;
 }
 
 static bool string_array_initializer(CinderSema *sema, CinderDecl *decl) {
@@ -98,7 +98,7 @@ static bool string_array_initializer(CinderSema *sema, CinderDecl *decl) {
     if (!decl->type->complete && decl->type->array_len == 0U) {
         decl->type->array_len = value->literal_length + 1U;
         decl->type->size = decl->type->array_len;
-        decl->type->complete = true;
+        decl->type->complete = true; decl->type->completion_index = decl->initializer_index;
     }
     if (decl->type->array_len < value->literal_length) cinder_diag(sema->diags, CINDER_ERROR, value->loc, "string initializer exceeds character array bound");
     return true;
@@ -109,7 +109,7 @@ static void sema_local_decl(CinderSema *sema, CinderDecl *first, CinderScope *sc
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
         bool string_array = string_array_initializer(sema, decl);
         if (decl->kind == DECL_VAR && (decl->is_static || decl->is_extern)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "block-scope static/extern object storage is not implemented");
-        if (decl->kind == DECL_VAR && (decl->type->kind == TYPE_VOID || !decl->type->complete)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "local object requires a complete object type");
+        if (decl->kind == DECL_VAR && (decl->type->kind == TYPE_VOID || (!decl->declaration_complete && !string_array))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "local object requires a complete object type");
         CinderSymbol *old = scope_here(scope, decl->name);
         if (old != NULL || (parameter_scope != NULL && scope_here(parameter_scope, decl->name) != NULL)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
         else scope_add(scope, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
@@ -181,7 +181,8 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         case EX_NAME: {
             CinderSymbol *symbol = cinder_scope_lookup(scope, expr->as.name);
             if (symbol == NULL || !expr->name_visible) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "use of undeclared identifier '%s'", expr->as.name); expr->type = sema->types->error_type; return expr->type; }
-            expr->type = symbol->type; expr->is_lvalue = !symbol->is_function; return expr->type;
+            if (expr->type == NULL) expr->type = symbol->type;
+            expr->is_lvalue = !symbol->is_function; return expr->type;
         }
         case EX_BINARY: {
             CinderType *left = sema_value(sema, &expr->as.binary.left, scope);
@@ -198,13 +199,13 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
                     CinderExpr *swap = expr->as.binary.left; expr->as.binary.left = expr->as.binary.right; expr->as.binary.right = swap;
                     CinderType *swap_type = left; left = right; right = swap_type;
                 }
-                if ((add || sub) && pointer_step_type(left) && integer_type(right)) {
+                if ((add || sub) && pointer_step_type(left, expr->parse_index) && integer_type(right)) {
                     expr->as.binary.right = convert_expr(sema, expr->as.binary.right, sema->types->long_type); expr->type = left; return left;
                 }
-                if (sub && pointer_step_type(left) && pointer_compatible(left, right)) { expr->type = sema->types->long_type; return expr->type; }
+                if (sub && pointer_step_type(left, expr->parse_index) && pointer_compatible(left, right)) { expr->type = sema->types->long_type; return expr->type; }
                 bool compare = op == TOK_EQEQ || op == TOK_NEQ || op == '<' || op == '>' || op == TOK_LE || op == TOK_GE;
                 bool equal = op == TOK_EQEQ || op == TOK_NEQ;
-                if (compare && left->kind == TYPE_POINTER && right->kind == TYPE_POINTER && (pointer_compatible(left, right) || pointer_compatible(right, left)) && (equal || (pointer_step_type(left) && pointer_step_type(right)))) {
+                if (compare && left->kind == TYPE_POINTER && right->kind == TYPE_POINTER && (pointer_compatible(left, right) || pointer_compatible(right, left)) && (equal || (pointer_step_type(left, expr->parse_index) && pointer_step_type(right, expr->parse_index)))) {
                     CinderType *common = pointer_compatible(left, right) ? left : right;
                     expr->as.binary.left = convert_expr(sema, expr->as.binary.left, common); expr->as.binary.right = convert_expr(sema, expr->as.binary.right, common);
                     expr->type = sema->types->int_type; return expr->type;
@@ -234,7 +235,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             CinderType *value = op == '&' || op == TOK_PLUSPLUS || op == TOK_MINUSMINUS ? sema_expr(sema, expr->as.unary.value, scope) : sema_value(sema, &expr->as.unary.value, scope);
             bool update = op == TOK_PLUSPLUS || op == TOK_MINUSMINUS;
             if ((op == '&' || update) && !expr->as.unary.value->is_lvalue && !(op == '&' && value->kind == TYPE_FUNCTION)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "unary operator requires an assignable lvalue");
-            if (update && !numeric_type(value) && !pointer_step_type(value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "increment requires arithmetic or a complete object pointer");
+            if (update && !numeric_type(value) && !pointer_step_type(value, expr->parse_index)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "increment requires arithmetic or a complete object pointer");
             if (update && (value->qualifiers & 1U) != 0U) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "increment cannot modify a const-qualified object");
             if (op == '&') expr->type = cinder_type_pointer(sema->types, value);
             else if (op == '*') {
@@ -254,7 +255,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             if (!expr->as.assign.target->is_lvalue || target->kind == TYPE_ARRAY || target->kind == TYPE_FUNCTION || (target->qualifiers & 1U) != 0U) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment requires a modifiable lvalue");
             if (expr->as.assign.op == '=' && !assignment_compatible(sema, target, expr->as.assign.value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "assignment types are incompatible");
             if (expr->as.assign.op == '=') expr->as.assign.value = convert_expr(sema, expr->as.assign.value, target);
-            else if (target->kind == TYPE_POINTER && pointer_step_type(target) && integer_type(value) && (expr->as.assign.op == TOK_PLUSEQ || expr->as.assign.op == TOK_MINUSEQ)) {
+            else if (target->kind == TYPE_POINTER && pointer_step_type(target, expr->parse_index) && integer_type(value) && (expr->as.assign.op == TOK_PLUSEQ || expr->as.assign.op == TOK_MINUSEQ)) {
                 expr->as.assign.operation_type = target; expr->as.assign.value = convert_expr(sema, expr->as.assign.value, sema->types->long_type);
             } else if (numeric_type(target) && numeric_type(value)) {
                 bool shift = expr->as.assign.op == TOK_LSHIFT_EQ || expr->as.assign.op == TOK_RSHIFT_EQ;
@@ -307,14 +308,14 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         case EX_INDEX: {
             CinderType *base = sema_value(sema, &expr->as.index.base, scope), *index = sema_value(sema, &expr->as.index.index, scope);
             if (integer_type(base) && index->kind == TYPE_POINTER) { CinderExpr *swap = expr->as.index.base; expr->as.index.base = expr->as.index.index; expr->as.index.index = swap; CinderType *t = base; base = index; index = t; }
-            if (!pointer_step_type(base) || !integer_type(index)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "subscript requires a complete object pointer and integer index"); expr->type = sema->types->error_type; }
+            if (!pointer_step_type(base, expr->parse_index) || !integer_type(index)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "subscript requires a complete object pointer and integer index"); expr->type = sema->types->error_type; }
             else { expr->type = base->base; expr->as.index.index = convert_expr(sema, expr->as.index.index, sema->types->long_type); }
             expr->is_lvalue = true; return expr->type;
         }
         case EX_MEMBER: {
             CinderType *base = expr->as.member.arrow ? sema_value(sema, &expr->as.member.base, scope) : sema_expr(sema, expr->as.member.base, scope);
             if (expr->as.member.arrow) base = base->kind == TYPE_POINTER ? base->base : sema->types->error_type;
-            if ((base->kind != TYPE_STRUCT && base->kind != TYPE_UNION) || !base->complete) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "member access requires a complete structure or union"); expr->type = sema->types->error_type; return expr->type; }
+            if ((base->kind != TYPE_STRUCT && base->kind != TYPE_UNION) || (!base->complete || base->completion_index > expr->parse_index)) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "member access requires a complete structure or union"); expr->type = sema->types->error_type; return expr->type; }
             for (size_t field = 0U; field < base->fields.len; ++field) if (base->fields.data[field].name != NULL && strcmp(base->fields.data[field].name, expr->as.member.name) == 0) {
                 expr->as.member.field = field; expr->type = cinder_type_qualified(sema->types, base->fields.data[field].type, base->fields.data[field].type->qualifiers | base->qualifiers);
                 expr->is_lvalue = expr->as.member.arrow || expr->as.member.base->is_lvalue; return expr->type;
@@ -324,7 +325,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
         case EX_ALIGNOF: case EX_SIZEOF: {
             CinderType *queried = expr->queried_type;
             if (queried == NULL) queried = sema_expr(sema, expr->as.unary.value, scope);
-            if (queried == NULL || !queried->complete || queried->kind == TYPE_VOID || queried->kind == TYPE_FUNCTION) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "size/alignment requires a complete object type");
+            if (queried == NULL || !queried->complete || queried->completion_index > expr->parse_index || queried->kind == TYPE_VOID || queried->kind == TYPE_FUNCTION) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "size/alignment requires a complete object type");
             expr->queried_type = queried; expr->type = sema->types->ulong_type; return expr->type;
         }
     }
@@ -334,11 +335,30 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
 int cinder_sema_run(CinderSema *sema) {
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
+        if (decl->kind == DECL_VAR) (void)string_array_initializer(sema, decl);
+    }
+    for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
+        CinderDecl *decl = sema->ast->declarations.data[i];
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
         if (decl->kind == DECL_VAR && decl->type->kind == TYPE_VOID) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "global object cannot have void type");
+        if (decl->kind == DECL_VAR && decl->is_static && !decl->is_extern && decl->initializer == NULL && !decl->declaration_complete) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "internal tentative definition requires a complete type");
         CinderSymbol *old = cinder_scope_lookup(&sema->globals, decl->name);
-        if (old != NULL && !cinder_type_compatible(old->type, decl->type)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting declaration of '%s'", decl->name);
-        else if (old == NULL) scope_add(&sema->globals, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
+        if (old != NULL && !cinder_type_compatible(old->type, decl->type)) { cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting declaration of '%s'", decl->name); continue; }
+        CinderDecl *canonical = old == NULL ? decl : old->decl;
+        decl->canonical = canonical;
+        bool definition = decl->kind == DECL_FUNCTION ? decl->is_definition : decl->initializer != NULL;
+        if (old == NULL) {
+            scope_add(&sema->globals, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
+            canonical->emission = decl;
+        } else {
+            if ((decl->is_static && !canonical->is_static) || (decl->kind == DECL_VAR && canonical->is_static && !decl->is_static && !decl->is_extern)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting linkage for '%s'", decl->name);
+            if (definition && canonical->has_definition) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "multiple definitions of '%s'", decl->name);
+            canonical->type = cinder_type_composite(sema->types, canonical->type, decl->type); old->type = canonical->type;
+            if (definition) canonical->emission = decl;
+            if (decl->kind == DECL_FUNCTION && canonical->is_static) decl->is_static = true;
+        }
+        canonical->has_definition = canonical->has_definition || definition;
+        canonical->tentative = canonical->tentative || (decl->kind == DECL_VAR && !decl->is_extern && decl->initializer == NULL);
     }
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
@@ -356,6 +376,12 @@ int cinder_sema_run(CinderSema *sema) {
             sema->function_body = NULL;
             for (size_t p = 0U; p < scope.symbols.len; ++p) free(scope.symbols.data[p].name);
             free(scope.symbols.data);
+        }
+    }
+    for (size_t i = 0U; i < sema->globals.symbols.len; ++i) {
+        CinderSymbol *symbol = &sema->globals.symbols.data[i]; CinderDecl *decl = symbol->decl;
+        if (decl->kind == DECL_VAR && decl->tentative && !decl->has_definition && !decl->type->complete && decl->type->kind == TYPE_ARRAY && decl->type->base->complete) {
+            decl->type = cinder_type_array(sema->types, decl->type->base, 1U); symbol->type = decl->type;
         }
     }
     return sema->diags->errors == 0U ? 0 : 1;

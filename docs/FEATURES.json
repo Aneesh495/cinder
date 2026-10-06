@@ -9,7 +9,8 @@
       "status": "partial",
       "valid_cases": [
         "tests/preprocessor/include_guard.c",
-        "tests/preprocessor/include_macro.c"
+        "tests/preprocessor/include_macro.c",
+        "tests/linkage/repeated_extern.c"
       ],
       "boundary_cases": [],
       "negative_cases": [
@@ -155,7 +156,8 @@
         "tests/memory/void_pointer_roundtrip.c",
         "tests/memory/qualified_pointer.c",
         "tests/callbacks/local_pointer.c",
-        "tests/callbacks/callback_comparison.c"
+        "tests/callbacks/callback_comparison.c",
+        "tests/linkage/pointer_array_composite.c"
       ],
       "boundary_cases": [
         "tests/memory/one_past.c"
@@ -193,7 +195,9 @@
         "tests/memory/member_array.c",
         "tests/callbacks/callback_array.c",
         "tests/literals/local_inferred.c",
-        "tests/literals/literal_array_address.c"
+        "tests/literals/literal_array_address.c",
+        "tests/linkage/incomplete_tentative_array.c",
+        "tests/linkage/prior_bound_string_definition.c"
       ],
       "boundary_cases": [
         "tests/memory/array_sizeof.c",
@@ -230,7 +234,8 @@
         "tests/control/prototype_parenthesized_name.c",
         "tests/control/prototype_unnamed.c",
         "tests/callbacks/callback_return.c",
-        "tests/callbacks/explicit_dereference.c"
+        "tests/callbacks/explicit_dereference.c",
+        "tests/linkage/function_array_parameter_composite.c"
       ],
       "boundary_cases": [],
       "negative_cases": [
@@ -252,7 +257,8 @@
         "tests/control/typedef_object_shadow.c",
         "tests/control/typedef_parenthesized_object.c",
         "tests/control/typedef_repeated.c",
-        "tests/control/typedef_unsigned.c"
+        "tests/control/typedef_unsigned.c",
+        "tests/linkage/typedef_incomplete_local_bounds.c"
       ],
       "boundary_cases": [],
       "negative_cases": [
@@ -283,7 +289,8 @@
         "tests/memory/struct_arrow.c",
         "tests/memory/nested_members.c",
         "tests/callbacks/callback_member.c",
-        "tests/callbacks/callback_context.c"
+        "tests/callbacks/callback_context.c",
+        "tests/linkage/tag_member_after_definition.c"
       ],
       "boundary_cases": [
         "tests/memory/member_array.c",
@@ -294,7 +301,8 @@
         "tests/constraints/tag_kind_conflict.c",
         "tests/constraints/member_unknown.c",
         "tests/constraints/member_dot_pointer.c",
-        "tests/constraints/member_arrow_scalar.c"
+        "tests/constraints/member_arrow_scalar.c",
+        "tests/constraints/global_member_before_tag_complete.c"
       ],
       "native_evidence": [],
       "open_requirements": [
@@ -378,12 +386,19 @@
       "status": "partial",
       "valid_cases": [
         "tests/memory/sibling_scopes.c",
-        "tests/memory/loop_lifetimes.c"
+        "tests/memory/loop_lifetimes.c",
+        "tests/linkage/extern_then_definition.c",
+        "tests/linkage/repeated_tentative.c",
+        "tests/linkage/static_then_extern.c"
       ],
       "boundary_cases": [
         "tests/memory/nested_break.c"
       ],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/global_multiple_initializers.c",
+        "tests/constraints/global_external_then_static.c",
+        "tests/constraints/global_static_incomplete_tentative.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -639,7 +654,8 @@
       "status": "partial",
       "valid_cases": [
         "tests/memory/array_sizeof.c",
-        "tests/literals/concatenated_size.c"
+        "tests/literals/concatenated_size.c",
+        "tests/linkage/inline_tag_size.c"
       ],
       "boundary_cases": [
         "tests/memory/array_address.c"
@@ -712,7 +728,8 @@
         "tests/control/constant_global_integer_to_float.c",
         "tests/control/float_global_mutation.c",
         "tests/literals/global_embedded_nul.c",
-        "tests/literals/global_const.c"
+        "tests/literals/global_const.c",
+        "tests/linkage/extern_initializer.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -894,7 +911,8 @@
       "required_boundary": "Visibility and separate compilation",
       "status": "partial",
       "valid_cases": [
-        "tests/test_objects.py"
+        "tests/test_objects.py",
+        "tests/linkage/function_static_inheritance.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],

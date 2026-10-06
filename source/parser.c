@@ -14,7 +14,7 @@ static CinderToken *expect(CinderAst *ast, CinderTokenKind kind, const char *wha
 }
 
 static void *node_alloc(CinderAst *ast, size_t size) { return cinder_arena_alloc(&ast->arena, size, _Alignof(max_align_t)); }
-static CinderExpr *new_expr(CinderAst *ast, CinderExprKind kind, CinderLoc loc) { CinderExpr *expr = node_alloc(ast, sizeof(*expr)); memset(expr, 0, sizeof(*expr)); expr->kind = kind; expr->loc = loc; return expr; }
+static CinderExpr *new_expr(CinderAst *ast, CinderExprKind kind, CinderLoc loc) { CinderExpr *expr = node_alloc(ast, sizeof(*expr)); memset(expr, 0, sizeof(*expr)); expr->kind = kind; expr->loc = loc; expr->parse_index = ast->cursor; return expr; }
 static CinderStmt *new_stmt(CinderAst *ast, CinderStmtKind kind, CinderLoc loc) { CinderStmt *stmt = node_alloc(ast, sizeof(*stmt)); memset(stmt, 0, sizeof(*stmt)); stmt->kind = kind; stmt->loc = loc; return stmt; }
 static CinderDecl *new_decl(CinderAst *ast, CinderDeclKind kind, CinderLoc loc) { CinderDecl *decl = node_alloc(ast, sizeof(*decl)); memset(decl, 0, sizeof(*decl)); decl->kind = kind; decl->loc = loc; decl->lowering_slot = -1; decl->params.data = NULL; decl->params.len = 0U; decl->params.cap = 0U; return decl; }
 
@@ -37,6 +37,17 @@ static void bind_name(CinderAst *ast, char *name, CinderType *type, CinderParseB
     }
     CinderParseBinding binding = {name, type, kind, value, ast->scope_depth};
     cinder_vec_push((CinderVec *)&ast->bindings, &binding);
+}
+
+static CinderType *file_composite_type(CinderAst *ast, const char *name, CinderType *type) {
+    if (name == NULL || ast->scope_depth != 0U) return type;
+    for (size_t i = ast->bindings.len; i > 0U; --i) {
+        const CinderParseBinding *binding = &ast->bindings.data[i - 1U];
+        if (binding->scope == 0U && binding->kind == PARSE_OBJECT && strcmp(binding->name, name) == 0) {
+            return cinder_type_compatible(type, binding->type) ? cinder_type_composite(ast->types, type, binding->type) : type;
+        }
+    }
+    return type;
 }
 
 static bool type_keyword(CinderTokenKind kind) {
@@ -87,10 +98,12 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
     (void)expect(ast, '}', "'}'");
     (void)keyword;
     (void)cinder_type_layout_aggregate(type, ast->diags, type->tag == NULL ? cinder_loc(CINDER_NO_FILE, 0U, 0U) : peek(ast)->loc);
+    type->completion_index = ast->cursor;
     for (size_t t = 0U; t < ast->types->all_types.len; ++t) {
         CinderType *copy = ast->types->all_types.data[t];
         if (copy == type || copy->identity != type->identity) continue;
         copy->complete = type->complete; copy->size = type->size; copy->align = type->align;
+        copy->completion_index = type->completion_index;
         copy->fields.len = 0U;
         for (size_t f = 0U; f < type->fields.len; ++f) cinder_vec_push((CinderVec *)&copy->fields, &type->fields.data[f]);
     }
@@ -128,7 +141,7 @@ static CinderType *parse_enum_specifier(CinderAst *ast) {
         ++next;
         if (!take(ast, ',')) break;
     }
-    (void)expect(ast, '}', "'}'"); type->size = 4U; type->align = 4U; type->complete = true;
+    (void)expect(ast, '}', "'}'"); type->size = 4U; type->align = 4U; type->complete = true; type->completion_index = ast->cursor;
     return type;
 }
 
@@ -428,6 +441,7 @@ static CinderExpr *parse_unary(CinderAst *ast) {
             ++ast->cursor; expr->queried_type = parse_type_name(ast); (void)expect(ast, ')', "')'");
         } else if (kind == TOK_KW_ALIGNOF) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "_Alignof requires a type name");
         else expr->as.unary.value = parse_unary(ast);
+        expr->parse_index = ast->cursor;
         return expr;
     }
     if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast, &ast->tokens->tokens.data[ast->cursor + 1U])) {
@@ -536,10 +550,12 @@ static CinderDecl *parse_local_decl(CinderAst *ast) {
     do {
         char *name = NULL; CinderLoc name_loc;
         CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
+        if (!alias && type == base && type->kind == TYPE_ARRAY && !type->complete) { type = cinder_type_array(ast->types, type->base, 0U); type->complete = false; }
         CinderDecl *decl = new_decl(ast, alias ? DECL_TYPEDEF : type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
         decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
+        decl->declaration_complete = type->complete;
         bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
-        if (take(ast, '=')) { decl->initializer = parse_assignment(ast); if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer"); }
+        if (take(ast, '=')) { decl->initializer = parse_assignment(ast); decl->initializer_index = ast->cursor; if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer"); }
         if (tail == NULL) first = decl; else tail->next = decl;
         tail = decl;
     } while (take(ast, ','));
@@ -611,8 +627,11 @@ int cinder_parse(CinderAst *ast) {
         do {
             char *name = NULL; CinderLoc name_loc;
             CinderType *type = parse_declarator(ast, base, &name, &name_loc, NULL);
+            if (!alias && type == base && type->kind == TYPE_ARRAY && !type->complete) { type = cinder_type_array(ast->types, type->base, 0U); type->complete = false; }
+            if (!alias) type = file_composite_type(ast, name, type);
             CinderDecl *decl = new_decl(ast, alias ? DECL_TYPEDEF : type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
             decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
+            decl->declaration_complete = type->complete;
             bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
             if (decl->kind == DECL_FUNCTION) {
                 for (size_t i = 0U; i < type->params.len; ++i) {
@@ -631,6 +650,7 @@ int cinder_parse(CinderAst *ast) {
                 }
             } else if (take(ast, '=')) {
                 decl->initializer = parse_assignment(ast);
+                decl->initializer_index = ast->cursor;
                 if (alias) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef cannot have an initializer");
             }
             cinder_vec_push((CinderVec *)&ast->declarations, &decl);

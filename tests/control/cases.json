@@ -1246,5 +1246,161 @@
   {
     "source": "../memory/pointer_word_dead_integer.c",
     "exit": 1
+  },
+  {
+    "source": "../linkage/extern_then_definition.c",
+    "exit": 37
+  },
+  {
+    "source": "../linkage/definition_then_extern.c",
+    "exit": 29
+  },
+  {
+    "source": "../linkage/repeated_extern.c",
+    "exit": 31
+  },
+  {
+    "source": "../linkage/repeated_tentative.c",
+    "exit": 23
+  },
+  {
+    "source": "../linkage/tentative_then_definition.c",
+    "exit": 41
+  },
+  {
+    "source": "../linkage/definition_then_tentative.c",
+    "exit": 43
+  },
+  {
+    "source": "../linkage/extern_initializer.c",
+    "exit": 17
+  },
+  {
+    "source": "../linkage/static_then_extern.c",
+    "exit": 19
+  },
+  {
+    "source": "../linkage/repeated_static.c",
+    "exit": 13
+  },
+  {
+    "source": "../linkage/static_definition_then_extern.c",
+    "exit": 11
+  },
+  {
+    "source": "../linkage/extern_const_definition.c",
+    "exit": 47
+  },
+  {
+    "source": "../linkage/float_redeclaration.c",
+    "exit": 10
+  },
+  {
+    "source": "../linkage/double_redeclaration.c",
+    "exit": 15
+  },
+  {
+    "source": "../linkage/incomplete_array_definition.c",
+    "exit": 9
+  },
+  {
+    "source": "../linkage/complete_then_incomplete.c",
+    "exit": 4
+  },
+  {
+    "source": "../linkage/incomplete_decay_before_definition.c",
+    "exit": 98
+  },
+  {
+    "source": "../linkage/incomplete_tentative_array.c",
+    "exit": 41
+  },
+  {
+    "source": "../linkage/array_tentative_then_bound.c",
+    "exit": 29
+  },
+  {
+    "source": "../linkage/array_bound_then_tentative.c",
+    "exit": 20
+  },
+  {
+    "source": "../linkage/repeated_char_array_definition.c",
+    "exit": 99
+  },
+  {
+    "source": "../linkage/const_array_redeclaration.c",
+    "exit": 98
+  },
+  {
+    "source": "../linkage/pointer_redeclaration.c",
+    "exit": 53
+  },
+  {
+    "source": "../linkage/pointer_array_composite.c",
+    "exit": 57
+  },
+  {
+    "source": "../linkage/function_static_inheritance.c",
+    "exit": 61
+  },
+  {
+    "source": "../linkage/function_repeated_prototype.c",
+    "exit": 65
+  },
+  {
+    "source": "../linkage/function_after_definition.c",
+    "exit": 67
+  },
+  {
+    "source": "../linkage/parameter_qualification_prototype.c",
+    "exit": 69
+  },
+  {
+    "source": "../linkage/function_array_parameter_composite.c",
+    "exit": 71
+  },
+  {
+    "source": "../linkage/function_pointer_composite.c",
+    "exit": 73
+  },
+  {
+    "source": "../linkage/tentative_aggregate.c",
+    "exit": 79
+  },
+  {
+    "source": "../linkage/prior_bound_string_definition.c",
+    "exit": 17
+  },
+  {
+    "source": "../linkage/static_bound_then_incomplete.c",
+    "exit": 12
+  },
+  {
+    "source": "../linkage/definition_names_after_prototype.c",
+    "exit": 83
+  },
+  {
+    "source": "../linkage/prior_function_bound_definition.c",
+    "exit": 89
+  },
+  {
+    "source": "../linkage/typedef_incomplete_local_bounds.c",
+    "exit": 7
+  },
+  {
+    "source": "../linkage/typedef_incomplete_global_bounds.c",
+    "exit": 7
+  },
+  {
+    "source": "../linkage/tag_member_after_definition.c",
+    "exit": 91
+  },
+  {
+    "source": "../linkage/inline_tag_size.c",
+    "exit": 4
+  },
+  {
+    "source": "../linkage/inline_tag_alignment.c",
+    "exit": 8
   }
 ]
