@@ -1190,5 +1190,61 @@
   {
     "source": "../literals/string_escape_quote.c",
     "exit": 126
+  },
+  {
+    "source": "../memory/pointer_word_local.c",
+    "exit": 42
+  },
+  {
+    "source": "../memory/pointer_word_signed.c",
+    "exit": 37
+  },
+  {
+    "source": "../memory/pointer_word_alias.c",
+    "exit": 31
+  },
+  {
+    "source": "../memory/pointer_word_array.c",
+    "exit": 27
+  },
+  {
+    "source": "../memory/pointer_word_member.c",
+    "exit": 19
+  },
+  {
+    "source": "../memory/pointer_word_parameter.c",
+    "exit": 23
+  },
+  {
+    "source": "../memory/pointer_word_return.c",
+    "exit": 35
+  },
+  {
+    "source": "../memory/pointer_word_global.c",
+    "exit": 41
+  },
+  {
+    "source": "../memory/pointer_word_null.c",
+    "exit": 1
+  },
+  {
+    "source": "../memory/pointer_word_phi.c",
+    "exit": 17
+  },
+  {
+    "source": "../memory/pointer_word_function.c",
+    "exit": 33
+  },
+  {
+    "source": "../memory/pointer_word_one_past.c",
+    "exit": 1
+  },
+  {
+    "source": "../memory/pointer_word_void.c",
+    "exit": 29
+  },
+  {
+    "source": "../memory/pointer_word_dead_integer.c",
+    "exit": 1
   }
 ]

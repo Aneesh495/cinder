@@ -37,3 +37,12 @@ Aggregate values/copy, bitfields, general initializer lists, compound literals,
 allocated storage/library models, restrict contracts, and goto scope entry
 remain open. The abstract VM does not expose host addresses or padding values
 as differential equality oracles.
+
+Pointer conversions through 64-bit integer storage retain exact provenance
+when the stored bits are unchanged. This applies to local/global words,
+aliases, arrays, fields, parameters, returns, and phis, including callbacks.
+Integer comparisons use integer semantics even when a word retains a tag.
+Converting back to a pointer still observes the target object's lifetime.
+Partial byte writes invalidate stored word tags. General character copying of
+pointer representations and arithmetic reconstruction of addresses need
+additional modeling; exact address bits are outside the differential oracle.

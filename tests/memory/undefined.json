@@ -114,5 +114,13 @@
   {
     "source": "literal_end.undefined.c",
     "classification": 9
+  },
+  {
+    "source": "pointer_word_dead.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "pointer_word_changed.undefined.c",
+    "classification": 11
   }
 ]
