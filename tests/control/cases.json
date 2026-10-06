@@ -1534,5 +1534,149 @@
   {
     "source": "../static_addresses/global_conditional_function.c",
     "exit": 131
+  },
+  {
+    "source": "../initializers/global_bool_integer.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_bool_negative.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_bool_fraction.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_bool_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "../initializers/global_int_fraction.c",
+    "exit": 3
+  },
+  {
+    "source": "../initializers/global_int_negative_fraction.c",
+    "exit": 4
+  },
+  {
+    "source": "../initializers/global_char_fraction.c",
+    "exit": 123
+  },
+  {
+    "source": "../initializers/global_unsigned_char_fraction.c",
+    "exit": 53
+  },
+  {
+    "source": "../initializers/global_short_fraction.c",
+    "exit": 34
+  },
+  {
+    "source": "../initializers/global_unsigned_fraction_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "../initializers/global_float_sum.c",
+    "exit": 15
+  },
+  {
+    "source": "../initializers/global_double_product.c",
+    "exit": 16
+  },
+  {
+    "source": "../initializers/global_float_rounding.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_cast_float_rounding.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_float_step_rounding.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_conditional_float.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_conditional_double.c",
+    "exit": 10
+  },
+  {
+    "source": "../initializers/global_float_comparison.c",
+    "exit": 5
+  },
+  {
+    "source": "../initializers/global_float_comparison_unsigned.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_float_cast_expression.c",
+    "exit": 3
+  },
+  {
+    "source": "../initializers/global_float_negation.c",
+    "exit": 13
+  },
+  {
+    "source": "../initializers/global_float_logical.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_float_short_circuit.c",
+    "exit": 0
+  },
+  {
+    "source": "../initializers/global_bool_object_address.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_bool_function_address.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_bool_null_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../initializers/global_unsigned_wrap.c",
+    "exit": 2
+  },
+  {
+    "source": "../initializers/global_signed_narrow.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_integer_shift.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_const_numeric.c",
+    "exit": 3
+  },
+  {
+    "source": "../initializers/global_mixed_expression.c",
+    "exit": 25
+  },
+  {
+    "source": "../initializers/global_negative_zero_division.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_unsigned_float_midpoint.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_signed_float_midpoint.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_negative_float_midpoint.c",
+    "exit": 1
+  },
+  {
+    "source": "../initializers/global_float_literal_midpoint.c",
+    "exit": 1
   }
 ]

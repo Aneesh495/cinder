@@ -110,7 +110,9 @@
       "status": "partial",
       "valid_cases": [
         "tests/control/float_nan_ordering.c",
-        "tests/control/float_negative_zero.c"
+        "tests/control/float_negative_zero.c",
+        "tests/initializers/global_float_step_rounding.c",
+        "tests/initializers/global_cast_float_rounding.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -483,7 +485,9 @@
       "name": "Integer promotions",
       "required_boundary": "Small types, enum/bitfield policy, mixed ranks",
       "status": "planned",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/initializers/global_unsigned_wrap.c"
+      ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
@@ -496,7 +500,10 @@
       "name": "Arithmetic conversions",
       "required_boundary": "Signed/unsigned mixes and float conversions",
       "status": "planned",
-      "valid_cases": [],
+      "valid_cases": [
+        "tests/initializers/global_mixed_expression.c",
+        "tests/initializers/global_int_fraction.c"
+      ],
       "boundary_cases": [],
       "negative_cases": [],
       "native_evidence": [],
@@ -738,7 +745,9 @@
         "tests/linkage/extern_initializer.c",
         "tests/static_addresses/global_array_element.c",
         "tests/static_addresses/global_function_const_pointer.c",
-        "tests/static_addresses/global_conditional_address.c"
+        "tests/static_addresses/global_conditional_address.c",
+        "tests/initializers/global_float_sum.c",
+        "tests/initializers/global_float_cast_expression.c"
       ],
       "boundary_cases": [
         "tests/memory/static_pointer_one_past.undefined.c",
@@ -958,7 +967,9 @@
         "tests/memory/bool_alias.c",
         "tests/memory/pointer_conditions.c",
         "tests/callbacks/bool_wide_conversion.c",
-        "tests/abi/bool_boundary.c"
+        "tests/abi/bool_boundary.c",
+        "tests/initializers/global_bool_integer.c",
+        "tests/initializers/global_bool_function_address.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
