@@ -1,0 +1,13 @@
+{
+  "static_assert_zero.c": [
+    "required width"
+  ],
+  "static_assert_joined_failure.c": [
+    "first second"
+  ],
+  "static_assert_embedded_nul.c": [
+    "first",
+    "second",
+    "\\x00"
+  ]
+}

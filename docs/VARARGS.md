@@ -40,3 +40,10 @@ and the C11/C17 variadic rules in section 7.16 of
 [N1570](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf).
 
 The editable state diagram is `diagrams/variadic-state.mmd`.
+
+Cinder checks `va_start`'s declaration context even in unevaluated operands.
+The source-rejection runner records host diagnostic differences for library
+Description rules that do not require a diagnostic. Those entries are bound
+to exact source hashes; Cinder still must reject the invalid builtin context
+and preserve prior output. The unevaluated nonvariadic case is retained from
+Linux run 37695954175, where GCC 13 accepted it without a diagnostic.
