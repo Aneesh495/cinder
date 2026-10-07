@@ -6,6 +6,7 @@ import pathlib
 import platform
 import subprocess
 import sys
+from native_profile import configure_stack
 
 compiler = pathlib.Path(sys.argv[1]).resolve()
 irtool = compiler.parent / 'cinderir'
@@ -13,6 +14,7 @@ identity = hashlib.sha256(compiler.read_bytes() + irtool.read_bytes()).hexdigest
 base = pathlib.Path('.agent-local/ir-text') / identity
 base.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
+stack_profile = configure_stack()
 cases = json.loads(pathlib.Path('tests/control/cases.json').read_text())
 
 def run(argv):
@@ -39,7 +41,7 @@ for index, case in enumerate(cases):
         run([irtool, '-c', first, '-o', parsed])
         assert direct.read_bytes() == parsed.read_bytes(), (source, level)
         record = {'source': str(source), 'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'level': level,
-                  'ir_sha256': hashlib.sha256(first.read_bytes()).hexdigest(), 'object_sha256': hashlib.sha256(parsed.read_bytes()).hexdigest(), 'native': native}
+                  'ir_sha256': hashlib.sha256(first.read_bytes()).hexdigest(), 'object_sha256': hashlib.sha256(parsed.read_bytes()).hexdigest(), 'native': native, 'stack_profile': stack_profile}
         if native:
             binary = prefix.with_suffix('.native')
             run(['cc', '-no-pie', parsed, '-o', binary])

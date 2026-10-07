@@ -8,12 +8,14 @@ import re
 import subprocess
 import sys
 from reference_policy import identify, adjudicate
+from native_profile import configure_stack
 
 
 def main():
     compiler = str(pathlib.Path(sys.argv[1]).resolve())
     root = pathlib.Path(__file__).resolve().parent / 'control'
     native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
+    stack_profile = configure_stack()
     cases = json.loads((root / 'cases.json').read_text())
     observations = []
     compiler_hash = hashlib.sha256(pathlib.Path(compiler).read_bytes()).hexdigest()
@@ -29,7 +31,7 @@ def main():
         result = subprocess.run([str(reference)], capture_output=True, timeout=5)
         assert result.stdout == b'' and result.stderr == b'', (path, result)
         verdict = adjudicate(path, case['exit'], result.returncode, reference_identity)
-        record = dict(case, source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), reference=reference_identity, reference_exit=result.returncode, reference_verdict=verdict, native=native)
+        record = dict(case, source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), reference=reference_identity, reference_exit=result.returncode, reference_verdict=verdict, native=native, stack_profile=stack_profile)
         for level in ('-O0', '-O2'):
             result = subprocess.run([compiler, level, '-fverify-each', '--interpret', str(path)], capture_output=True, text=True, timeout=10)
             match = re.search(r'interpret main => (-?\d+)', result.stdout)
