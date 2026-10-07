@@ -310,6 +310,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
             bool ordinary = false;
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 const CinderIRInst *inst = &block->instructions.data[i];
+                if (inst->noreturn_call && inst->op != IR_CALL) cinder_diag(diags, CINDER_FATAL, inst->loc, "noreturn contract is valid only on a call instruction");
                 if (inst->op < IR_NOP || inst->op > IR_UNDEF) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid IR opcode");
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
@@ -363,7 +364,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                     if (term->value != CINDER_INVALID_VALUE) {
                         check_use(term->value, (CinderBlockId)b, block->instructions.len, function, definitions, positions, &cfg, term->loc, diags);
                         if (diags->errors == 0U && !same_value_type(types[term->value], function->type->return_type)) cinder_diag(diags, CINDER_FATAL, term->loc, "IR return type disagrees with function");
-                    } else if (aggregate_value(function->type->return_type)) {
+                    } else if (!function->is_noreturn && aggregate_value(function->type->return_type)) {
                         bool copied = false;
                         for (size_t i = 0U; i < block->instructions.len; ++i) {
                             CinderIROp op = block->instructions.data[i].op;
@@ -371,7 +372,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                             if (op == IR_AGG_RETURN) copied = true;
                         }
                         if (!copied) cinder_diag(diags, CINDER_FATAL, term->loc, "aggregate return has no value transfer");
-                    } else if (function->type->return_type->kind != TYPE_VOID) cinder_diag(diags, CINDER_FATAL, term->loc, "non-void IR return has no value");
+                    } else if (!function->is_noreturn && function->type->return_type->kind != TYPE_VOID) cinder_diag(diags, CINDER_FATAL, term->loc, "non-void IR return has no value");
                 }
             }
         }

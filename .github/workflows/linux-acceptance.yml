@@ -38,6 +38,8 @@ jobs:
         run: make test-generic
       - name: Object and member alignment
         run: make test-alignment
+      - name: Nonreturning function contracts
+        run: make test-noreturn
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -80,6 +82,8 @@ jobs:
             .agent-local/generic
             .agent-local/alignment
             .agent-local/alignment-contracts
+            .agent-local/noreturn
+            .agent-local/noreturn-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks

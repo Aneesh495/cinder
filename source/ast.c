@@ -202,6 +202,7 @@ void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *o
     for (size_t i = 0U; i < ast->declarations.len; ++i) {
         const CinderDecl *decl = ast->declarations.data[i];
         fprintf(out, "%s %s : %s%s\n", decl->kind == DECL_FUNCTION ? "function" : decl->kind == DECL_TYPEDEF ? "typedef" : "object", decl->name, cinder_type_name(decl->type), decl->is_definition ? " definition" : " declaration");
+        if (decl->is_noreturn || (decl->canonical != NULL && decl->canonical->is_noreturn)) fputs("  contract _Noreturn\n", out);
         for (size_t p = 0U; p < decl->params.len; ++p) fprintf(out, "  param %s : %s\n", decl->params.data[p]->name == NULL ? "<unnamed>" : decl->params.data[p]->name, cinder_type_name(decl->params.data[p]->type));
         dump_expr(decl->initializer, out, 1U);
         dump_stmt(decl->body, out, 1U);

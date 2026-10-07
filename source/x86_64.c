@@ -366,6 +366,7 @@ static int emit_call(CinderMachineObject *object, const CinderIRFunction *functi
         CinderFixup fix = {fix_offset, cinder_strndup(inst->callee, strlen(inst->callee)), R_X86_64_PLT32, -4, 0U};
         cinder_vec_push((CinderVec *)&object->fixups, &fix);
     }
+    if (inst->noreturn_call) { emit8(object, 0x0FU); emit8(object, 0x0BU); }
     stack_adjust(object, frame, false);
     if (inst->dst != CINDER_INVALID_VALUE) {
         if (aggregate_type(inst->callee_type->return_type)) {
@@ -798,6 +799,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         }
         switch (block->terminator.kind) {
             case TERM_RETURN:
+                if (function->is_noreturn) { emit8(object, 0x0FU); emit8(object, 0x0BU); break; }
                 if (block->terminator.value != CINDER_INVALID_VALUE) { if (function->type->return_type->kind == TYPE_FLOAT || function->type->return_type->kind == TYPE_DOUBLE) load_float_value(object, function, allocation, block->terminator.value, 0U); else load_value_alloc(object, function, allocation, block->terminator.value); }
                 if (function->type->return_type->kind == TYPE_FLOAT) { emit8(object, 0xF2U); emit8(object, 0x0FU); emit8(object, 0x5AU); emit8(object, 0xC0U); }
                 saved = 0U;

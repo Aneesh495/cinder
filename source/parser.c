@@ -273,6 +273,8 @@ static CinderType *parse_type_specifier(CinderAst *ast) { return parse_declarati
 static void declaration_attributes(CinderAst *ast, CinderDecl *decl, const DeclarationSpec *spec) {
     decl->alignment = spec->alignment;
     decl->has_alignment = spec->alignment != 0U;
+    decl->is_noreturn = (spec->function_specifiers & 2U) != 0U;
+    if (decl->kind == DECL_FUNCTION && (spec->storage & (STORAGE_AUTO | STORAGE_REGISTER)) != 0U) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "function declaration cannot have auto or register storage");
     if (spec->alignment_specified && (decl->kind != DECL_VAR || (spec->storage & STORAGE_REGISTER) != 0U)) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "alignment cannot apply to a typedef, function, or register object");
     if (spec->function_specifiers != 0U && (decl->kind != DECL_FUNCTION || (decl->name != NULL && strcmp(decl->name, "main") == 0))) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "function specifier requires a function other than main");
 }

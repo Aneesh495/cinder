@@ -234,12 +234,22 @@ static void sema_local_decl(CinderSema *sema, CinderDecl *first, CinderScope *sc
     for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
         if (decl->kind == DECL_VAR && !cinder_object_alignment_valid(decl->type, decl->alignment)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "object alignment is invalid or weaker than its type");
+        if (decl->kind == DECL_FUNCTION) {
+            CinderSymbol *global = cinder_scope_lookup(&sema->globals, decl->name);
+            if (decl->is_static) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "block-scope function declaration cannot be static");
+            if (global != NULL && !cinder_type_compatible(global->type, decl->type)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting block-scope function declaration of '%s'", decl->name);
+            if (global == NULL) global = scope_add(&sema->globals, decl->name, decl->type, decl, true);
+            decl->canonical = global->is_function ? global->decl : decl;
+            if (decl->canonical != NULL) decl->canonical->is_noreturn = decl->canonical->is_noreturn || decl->is_noreturn;
+        }
         bool string_array = string_array_initializer(sema, decl);
         bool list = decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST;
         if (decl->kind == DECL_VAR && (decl->is_static || decl->is_extern)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "block-scope static/extern object storage is not implemented");
         if (decl->kind == DECL_VAR && (decl->type->kind == TYPE_VOID || (!decl->declaration_complete && !string_array && !(list && decl->type->kind == TYPE_ARRAY && decl->type->base->complete)))) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "local object requires a complete object type");
         CinderSymbol *old = scope_here(scope, decl->name);
-        if (old != NULL || (parameter_scope != NULL && scope_here(parameter_scope, decl->name) != NULL)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
+        bool compatible_function = old != NULL && old->is_function && decl->kind == DECL_FUNCTION && cinder_type_compatible(old->type, decl->type);
+        if ((old != NULL && !compatible_function) || (parameter_scope != NULL && scope_here(parameter_scope, decl->name) != NULL)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "redeclaration of '%s'", decl->name);
+        else if (compatible_function) old->type = cinder_type_composite(sema->types, old->type, decl->type);
         else scope_add(scope, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
         if (list || (decl->initializer != NULL && (decl->type->kind == TYPE_STRUCT || decl->type->kind == TYPE_UNION))) sema_init_object(sema, decl, &decl->initializer, decl->type, 0U, scope, 0U);
         else if (decl->initializer != NULL && !string_array) {
@@ -350,6 +360,7 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             CinderSymbol *symbol = cinder_scope_lookup(scope, expr->as.name);
             if (symbol == NULL || !expr->name_visible) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "use of undeclared identifier '%s'", expr->as.name); expr->type = sema->types->error_type; return expr->type; }
             if (expr->type == NULL) expr->type = symbol->type;
+            expr->function_decl = symbol->is_function ? symbol->decl : NULL;
             expr->is_lvalue = !symbol->is_function; return expr->type;
         }
         case EX_BINARY: {
@@ -614,6 +625,7 @@ int cinder_sema_run(CinderSema *sema) {
         if (old != NULL && !cinder_type_compatible(old->type, decl->type)) { cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting declaration of '%s'", decl->name); continue; }
         CinderDecl *canonical = old == NULL ? decl : old->decl;
         decl->canonical = canonical;
+        if (decl->kind == DECL_FUNCTION) canonical->is_noreturn = canonical->is_noreturn || decl->is_noreturn;
         if (decl->kind == DECL_VAR) {
             if (!cinder_object_alignment_valid(decl->type, decl->alignment)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "object alignment is invalid or weaker than its type");
             if (decl->alignment != 0U && canonical->alignment != 0U && decl->alignment != canonical->alignment) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting object alignment declarations");

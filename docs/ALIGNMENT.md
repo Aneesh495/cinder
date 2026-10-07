@@ -23,7 +23,7 @@ reaches checked frame layout; requested global alignment reaches original
 ELF offsets. Data, readonly, and BSS sections have 16-byte alignment.
 Assembly output preserves section alignment, bytes, and relocations.
 
-Canonical CIR schema 3 retains requested field, global, and local alignment.
+Canonical CIR retains requested field, global, and local alignment.
 The decoder rejects malformed requests and inconsistent non-bitfield
 aggregate layout. The allocator and its independent checker validate local
 requests and aligned frame extents.

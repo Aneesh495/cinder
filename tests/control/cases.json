@@ -2878,5 +2878,113 @@
   {
     "source": "../alignment/bare_tag_no_effect.c",
     "exit": 0
+  },
+  {
+    "source": "../noreturn/static_for.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/while_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/do_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/repeated_specifier.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/interspersed_specifier.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/preceding_redeclaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/following_redeclaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/extern_declaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/static_redeclaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/typedef_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/function_typedef.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/pointer_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/float_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/double_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/aggregate_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/variadic_declaration.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/qualified_parameter.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/global_function_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/function_pointer_argument.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/generic_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/generic_pointer_type.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/shadow_function_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/block_prototype.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/dead_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/header_macro.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/block_repeated.c",
+    "exit": 0
+  },
+  {
+    "source": "../noreturn/block_external_identity.c",
+    "exit": 0
   }
 ]

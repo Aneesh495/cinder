@@ -1,6 +1,6 @@
 # Canonical typed IR
 
-The schema header is `cinder-ir 3 lp64-le sysv-x86-64`. The format uses whitespace
+The schema header is `cinder-ir 4 lp64-le sysv-x86-64`. The format uses whitespace
 separated tokens and optional `#` comments between tokens. The writer emits a
 deterministic order. Type IDs follow first reachable use; recursive aggregate
 identities are collected before their members. Integers and floating values use
@@ -17,13 +17,13 @@ Globals record symbol binding, extern/initializer/read-only state, exact scalar
 bits, initial bytes, requested object alignment, typed symbolic address records, and source location.
 An address records its destination offset, symbol, exact signed addend,
 pointer/target types, domain begin/end, and function identity flag.
-Functions record signature, binding,
+Functions record signature, binding, the nonreturning contract,
 value/local counts, local storage types and requested alignments, parameters, and blocks. Blocks contain
 reciprocal predecessor/successor tables, instructions, and one terminator.
 
 Each instruction records opcode, result/source/callee types, destination and
 operands, literal bits, local slot and operator metadata, optional symbol,
-floating call result, call/phi arguments, argument register classes, phi incoming
+floating call result, nonreturning call contract, call/phi arguments, argument register classes, phi incoming
 blocks, and location. Terminators record return value, jump/branch targets,
 condition, and location. Every block/function/module has an explicit end marker.
 
@@ -85,3 +85,10 @@ These requests affect storage, leaving scalar type layout unchanged. The
 reader verifies canonical field offsets and tail padding for complete
 aggregates without bitfields, as well as requested member alignment and
 local/global storage constraints. Earlier schema headers are rejected.
+
+`noreturn 0` or `noreturn 1` records the declaration contract on each function
+and the known contract on call instructions. A returning function with that
+contract is classified as `noreturn_return` by the interpreter. The original
+encoder emits `UD2` if a marked function returns, or a marked call resumes.
+Non-call instructions cannot carry this contract. Both call and function
+records retain it across canonical round trips; unknown booleans are rejected.
