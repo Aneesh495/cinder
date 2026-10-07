@@ -615,10 +615,18 @@ mutations, 100,000 generated IR comparisons, 1,000 SSA cases, and the
 10,000-graph allocation campaign with 1,000 corrupt allocations.
 
 Aligned aggregate interchange passed 32 generated signatures and 256 native
-executions with GCC and Clang in both directions. Variadic aligned interchange
-is being validated separately. The initial aligned aggregate attempt exposed
+executions with GCC and Clang in both directions. Variadic aligned interchange also passed 32 signatures and 256 native
+executions in both directions. The initial aligned aggregate attempt exposed
 an invalid generated oracle: an out-of-range plain-char return was compared
 against its unconverted integer. The generator now keeps byte-valued results
 representable. The failed original input and observations are retained under
 `.agent-local/abi-aggregates`; no equality checks or campaign sizes were reduced.
 See `docs/ALIGNMENT.md`. Full acceptance remains incomplete.
+
+
+Hosted alignment run [37701357316](https://github.com/Aneesh495/cinder/actions/runs/37701357316)
+passed all 720 native source cases, 1,440 native CIR comparisons, the full IR
+and SSA campaigns, and 10,000 allocation graphs. It then exposed a standalone
+parallel-copy probe missing the new type/alignment helper from its link inputs.
+The probe now links that authored helper explicitly. The compiler's normal
+build had already linked it correctly. Full hosted validation will rerun.
