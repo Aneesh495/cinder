@@ -596,3 +596,29 @@ declared hosted reference is now Clang 22, which passed the unchanged
 regressions with GCC on the Linux development VM. Original failed evidence
 is retained. See `docs/NATIVE_TEST_PROFILE.md`; full hosted validation will
 run after publication. Full acceptance remains incomplete.
+
+
+## Alignment and hosted validation
+
+The generic-selection checkpoint `bf7c7f4` passed the complete hosted Linux
+workflow [37698288413](https://github.com/Aneesh495/cinder/actions/runs/37698288413).
+Its raw records include 1,374 native CIR comparisons, all 48 generic cases,
+and 512 signatures in each scalar, aggregate, and variadic callback campaign.
+
+Object and member alignment now reaches parser constraints, target aggregate
+layout, local frame checks, global offsets, ELF section alignment, and CIR
+schema 3. GCC Release and Clang ASan/UBSan passed 33 authored programs against
+both reference compilers at O0/O2 and all 190 constraint rejections. All 66
+owned alignment objects passed x86 Linux execution in the development VM.
+The sanitizer build passed 1,440 source CIR comparisons, 36 malformed CIR
+mutations, 100,000 generated IR comparisons, 1,000 SSA cases, and the
+10,000-graph allocation campaign with 1,000 corrupt allocations.
+
+Aligned aggregate interchange passed 32 generated signatures and 256 native
+executions with GCC and Clang in both directions. Variadic aligned interchange
+is being validated separately. The initial aligned aggregate attempt exposed
+an invalid generated oracle: an out-of-range plain-char return was compared
+against its unconverted integer. The generator now keeps byte-valued results
+representable. The failed original input and observations are retained under
+`.agent-local/abi-aggregates`; no equality checks or campaign sizes were reduced.
+See `docs/ALIGNMENT.md`. Full acceptance remains incomplete.

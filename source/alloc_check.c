@@ -40,14 +40,15 @@ int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnosti
     }
     size_t count = function->value_count;
     size_t blocks = function->blocks.len;
-    if (allocation->local_offsets.len != function->local_count || function->local_types.len != function->local_count) {
+    if (allocation->local_offsets.len != function->local_count || function->local_types.len != function->local_count || (function->local_alignments.len != 0U && function->local_alignments.len != function->local_count)) {
         cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation has an invalid local storage table"); return 1;
     }
     size_t local_extent = 0U;
     for (size_t s = 0U; s < function->local_count; ++s) {
         const CinderType *type = function->local_types.data[s];
-        if (type == NULL || type->align == 0U || type->align > 16U || type->size > 64U * 1024U * 1024U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation has invalid local object storage"); return 1; }
-        size_t size = type->size < 8U ? 8U : type->size, align = type->align < 8U ? 8U : type->align;
+        size_t alignment = cinder_ir_local_alignment(function, s);
+        if (!cinder_object_alignment_valid(type, alignment) || type->size > 64U * 1024U * 1024U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation has invalid local object storage"); return 1; }
+        size_t size = type->size < 8U ? 8U : type->size, align = alignment < 8U ? 8U : alignment;
         size_t end = local_extent + size;
         if (end % align != 0U) end += align - end % align;
         if (allocation->local_offsets.data[s] >= 0 || -(int64_t)allocation->local_offsets.data[s] != (int64_t)end) cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocated local objects overlap or have incorrect extent/alignment");

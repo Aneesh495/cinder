@@ -245,6 +245,11 @@ const char *cinder_type_name(const CinderType *type) {
 }
 
 
+bool cinder_object_alignment_valid(const CinderType *type, size_t alignment) {
+    if (type == NULL || type->align == 0U || type->align > 16U || (type->align & (type->align - 1U)) != 0U) return false;
+    return alignment == 0U || (alignment >= type->align && alignment <= 16U && (alignment & (alignment - 1U)) == 0U);
+}
+
 static size_t type_align_up(size_t value, size_t align) {
     if (align == 0U) return value;
     size_t mask = align - 1U;
@@ -258,10 +263,12 @@ int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, Cin
     for (size_t i = 0U; i < type->fields.len; ++i) {
         CinderField *field = &type->fields.data[i];
         if (field->type == NULL || !field->type->complete || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_ERROR, loc, "field '%s' requires a complete object type", field->name == NULL ? "<unnamed>" : field->name); continue; }
-        if (field->type->align > align) align = field->type->align;
+        if (!cinder_object_alignment_valid(field->type, field->alignment)) { cinder_diag(diags, CINDER_ERROR, loc, "member alignment is invalid or weaker than its type"); continue; }
+        size_t field_align = field->alignment == 0U ? field->type->align : field->alignment;
+        if (field_align > align) align = field_align;
         if (type->kind == TYPE_UNION) field->offset = 0U;
         else {
-            size = type_align_up(size, field->type->align);
+            size = type_align_up(size, field_align);
             field->offset = size;
             if (field->type->size > SIZE_MAX - size) { cinder_diag(diags, CINDER_ERROR, loc, "aggregate layout size overflow"); size = SIZE_MAX; }
             else size += field->type->size;

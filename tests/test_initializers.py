@@ -16,7 +16,7 @@ from native_profile import configure_stack
 compiler = pathlib.Path(sys.argv[1]).resolve()
 identity = hashlib.sha256(compiler.read_bytes()).hexdigest()
 group = sys.argv[2] if len(sys.argv) > 2 else 'initializers'
-assert group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic')
+assert group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment')
 base = pathlib.Path('.agent-local') / group / identity
 base.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
@@ -62,6 +62,8 @@ def probe(item):
         assert result.returncode == 0, result
         actual = inspect(obj)
         assembled = inspect(oracle, strict=False)
+        for section in ('.text', '.data', '.rodata', '.bss'):
+            assert actual['sections'][section] == assembled['sections'][section], (source, level, section, 'section size/alignment disagrees')
         def relocations(record):
             values = []
             sections = list(record['sections'])

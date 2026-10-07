@@ -196,9 +196,9 @@ int cinder_write_elf64(const CinderMachineObject *object, const char *path, Cind
     memset(sections, 0, sizeof(sections));
     sections[0] = (Section){"", 0U, 0U, 0U, NULL, 0U, 0U, 0U, 0U, section_name_offsets[0], 0U};
     sections[1] = (Section){".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR, 16U, object->text.data, object->text.len, 0U, 0U, 0U, section_name_offsets[1], 0U};
-    sections[2] = (Section){".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE, 8U, object->data.data, object->data.len, 0U, 0U, 0U, section_name_offsets[2], 0U};
-    sections[3] = (Section){".rodata", SHT_PROGBITS, SHF_ALLOC, 8U, object->rodata.data, object->rodata.len, 0U, 0U, 0U, section_name_offsets[3], 0U};
-    sections[4] = (Section){".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE, 8U, NULL, object->bss_size, 0U, 0U, 0U, section_name_offsets[4], 0U};
+    sections[2] = (Section){".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE, 16U, object->data.data, object->data.len, 0U, 0U, 0U, section_name_offsets[2], 0U};
+    sections[3] = (Section){".rodata", SHT_PROGBITS, SHF_ALLOC, 16U, object->rodata.data, object->rodata.len, 0U, 0U, 0U, section_name_offsets[3], 0U};
+    sections[4] = (Section){".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE, 16U, NULL, object->bss_size, 0U, 0U, 0U, section_name_offsets[4], 0U};
     sections[5] = (Section){".rela.text", SHT_RELA, 0U, 8U, relabytes[0].data, relabytes[0].len, 9U, 1U, ELF_RELA_SIZE, section_name_offsets[5], 0U};
     sections[6] = (Section){".rela.data", SHT_RELA, 0U, 8U, relabytes[1].data, relabytes[1].len, 9U, 2U, ELF_RELA_SIZE, section_name_offsets[6], 0U};
     sections[7] = (Section){".rela.rodata", SHT_RELA, 0U, 8U, relabytes[2].data, relabytes[2].len, 9U, 3U, ELF_RELA_SIZE, section_name_offsets[7], 0U};

@@ -851,7 +851,7 @@ int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *obje
         symbol.global = global->global;
         if (global->bytes != NULL) {
             CinderBytes *bytes = global->read_only ? &object->rodata : &object->data;
-            bytes_align(bytes, global->type->align);
+            bytes_align(bytes, global->alignment == 0U ? global->type->align : global->alignment);
             symbol.section_kind = global->read_only ? CINDER_RODATA_SECTION : CINDER_DATA_SECTION;
             symbol.offset = bytes->len;
             size_t total = global->type->size;
@@ -860,7 +860,7 @@ int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *obje
             symbol.size = total;
         } else if (global->has_initializer || global->read_only) {
             CinderBytes *bytes = global->read_only ? &object->rodata : &object->data;
-            bytes_align(bytes, global->type->align);
+            bytes_align(bytes, global->alignment == 0U ? global->type->align : global->alignment);
             symbol.section_kind = global->read_only ? CINDER_RODATA_SECTION : CINDER_DATA_SECTION;
             symbol.offset = bytes->len;
             if (global->type->kind == TYPE_FLOAT) { float value = (float)global->floating; uint32_t bits; memcpy(&bits, &value, sizeof(bits)); cinder_bytes_put32(bytes, bits); }
@@ -869,7 +869,7 @@ int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *obje
             while (bytes->len < symbol.offset + global->type->size) cinder_bytes_put8(bytes, 0U);
             symbol.size = global->type->size;
         } else {
-            object->bss_size = data_align_up(object->bss_size, global->type->align);
+            object->bss_size = data_align_up(object->bss_size, global->alignment == 0U ? global->type->align : global->alignment);
             symbol.section_kind = CINDER_BSS_SECTION;
             symbol.offset = object->bss_size;
             object->bss_size += global->type->size;

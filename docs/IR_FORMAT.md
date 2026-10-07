@@ -1,6 +1,6 @@
 # Canonical typed IR
 
-The schema header is `cinder-ir 2 lp64-le sysv-x86-64`. The format uses whitespace
+The schema header is `cinder-ir 3 lp64-le sysv-x86-64`. The format uses whitespace
 separated tokens and optional `#` comments between tokens. The writer emits a
 deterministic order. Type IDs follow first reachable use; recursive aggregate
 identities are collected before their members. Integers and floating values use
@@ -10,15 +10,15 @@ followed by hexadecimal bytes; `-` is absent. `none` is an absent reference.
 The type table records kind, qualifiers, completeness, signedness, plain-char
 identity, target size/alignment, pointee/element type, array length, return type,
 variadic state, tag, stable type identity, parameters, and aggregate fields including offsets and bit
-positions. Scalar layouts must match the target. By-value aggregate cycles are
+positions and requested member alignment. Scalar layouts must match the target. By-value aggregate cycles are
 rejected; pointers to recursive aggregate identities are valid.
 
 Globals record symbol binding, extern/initializer/read-only state, exact scalar
-bits, initial bytes, typed symbolic address records, and source location.
+bits, initial bytes, requested object alignment, typed symbolic address records, and source location.
 An address records its destination offset, symbol, exact signed addend,
 pointer/target types, domain begin/end, and function identity flag.
 Functions record signature, binding,
-value/local counts, local storage types, parameters, and blocks. Blocks contain
+value/local counts, local storage types and requested alignments, parameters, and blocks. Blocks contain
 reciprocal predecessor/successor tables, instructions, and one terminator.
 
 Each instruction records opcode, result/source/callee types, destination and
@@ -77,3 +77,11 @@ list pointer on the left; copy has a second list pointer on the right.
 that type and use no storage slot. Aggregate reads return a pointer to the
 requested type and name a compatible local result slot. Runtime state remains
 explicit across loops and calls; no syntactic argument ordinal is retained.
+
+Requested alignments are written as `align N` on field, global, and local
+records. Zero inherits the declared type alignment. Nonzero requests must
+be supported powers of two, at least the natural alignment, and at most 16.
+These requests affect storage, leaving scalar type layout unchanged. The
+reader verifies canonical field offsets and tail padding for complete
+aggregates without bitfields, as well as requested member alignment and
+local/global storage constraints. Earlier schema headers are rejected.

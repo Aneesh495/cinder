@@ -1,0 +1,1 @@
+struct P{char a; _Alignas(16) double x; int z;}; struct P f(struct P p){p.x+=2;p.z+=3;return p;} int main(void){struct P p=f((struct P){3,1.5,7}); return p.a!=3 || p.x!=3.5 || p.z!=10 || sizeof p!=32;}

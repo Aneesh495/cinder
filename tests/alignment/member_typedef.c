@@ -1,0 +1,1 @@
+struct P{_Alignas(16) char x;}; typedef struct P P; struct Q{char before; P p; char after;}; int main(void){struct Q q={1,{3},5}; return _Alignof(P)!=16 || sizeof(P)!=16 || sizeof q!=48 || _Alignof(struct Q)!=16 || q.p.x!=3;}

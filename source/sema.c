@@ -233,6 +233,7 @@ static void sema_init_object(CinderSema *sema, CinderDecl *decl, CinderExpr **ex
 static void sema_local_decl(CinderSema *sema, CinderDecl *first, CinderScope *scope, CinderScope *parameter_scope) {
     for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
+        if (decl->kind == DECL_VAR && !cinder_object_alignment_valid(decl->type, decl->alignment)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "object alignment is invalid or weaker than its type");
         bool string_array = string_array_initializer(sema, decl);
         bool list = decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST;
         if (decl->kind == DECL_VAR && (decl->is_static || decl->is_extern)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "block-scope static/extern object storage is not implemented");
@@ -613,6 +614,11 @@ int cinder_sema_run(CinderSema *sema) {
         if (old != NULL && !cinder_type_compatible(old->type, decl->type)) { cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting declaration of '%s'", decl->name); continue; }
         CinderDecl *canonical = old == NULL ? decl : old->decl;
         decl->canonical = canonical;
+        if (decl->kind == DECL_VAR) {
+            if (!cinder_object_alignment_valid(decl->type, decl->alignment)) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "object alignment is invalid or weaker than its type");
+            if (decl->alignment != 0U && canonical->alignment != 0U && decl->alignment != canonical->alignment) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "conflicting object alignment declarations");
+            if (decl->alignment > canonical->alignment) canonical->alignment = decl->alignment;
+        }
         bool definition = decl->kind == DECL_FUNCTION ? decl->is_definition : decl->initializer != NULL;
         if (old == NULL) {
             scope_add(&sema->globals, decl->name, decl->type, decl, decl->kind == DECL_FUNCTION);
@@ -630,6 +636,7 @@ int cinder_sema_run(CinderSema *sema) {
     for (size_t i = 0U; i < sema->ast->declarations.len; ++i) {
         CinderDecl *decl = sema->ast->declarations.data[i];
         if (decl->kind == DECL_TYPEDEF || decl->name == NULL) continue;
+        if (decl->kind == DECL_VAR && !decl->is_extern && decl->canonical != NULL && decl->canonical->alignment != 0U && !decl->has_alignment) cinder_diag(sema->diags, CINDER_ERROR, decl->loc, "aligned object definition must specify its alignment");
         bool string_array = string_array_initializer(sema, decl);
         if (decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST) { /* Planned before declaration composition. */ }
         else if (decl->initializer != NULL && !string_array) {

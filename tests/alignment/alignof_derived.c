@@ -1,0 +1,1 @@
+struct P{char a;double x;}; enum E{A=1}; int main(void){return _Alignof(const int)!=4 || _Alignof(int*)!=8 || _Alignof(int[3])!=4 || _Alignof(int(*)(int))!=8 || _Alignof(struct P)!=8 || _Alignof(enum E)!=4;}

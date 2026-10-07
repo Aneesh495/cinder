@@ -284,6 +284,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
     for (size_t g = 0U; g < module->globals.len; ++g) {
         const CinderIRGlobal *global = &module->globals.data[g];
         if (global->name == NULL || global->name[0] == '\0' || global->type == NULL || (!global->is_extern && !global->type->complete)) cinder_diag(diags, CINDER_FATAL, global->loc, "IR global has no complete declaration");
+        if (!cinder_object_alignment_valid(global->type, global->alignment)) cinder_diag(diags, CINDER_FATAL, global->loc, "IR global has invalid object alignment");
         if (global->type != NULL && global->byte_count > global->type->size) cinder_diag(diags, CINDER_FATAL, global->loc, "IR global initializer exceeds object storage");
         if (global->type != NULL) verify_addresses(module, global, diags);
         for (size_t previous = 0U; previous < g && global->name != NULL; ++previous)
@@ -292,8 +293,9 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
     for (size_t f = 0U; f < module->functions.len && diags->errors == 0U; ++f) {
         const CinderIRFunction *function = &module->functions.data[f];
         if (function->name == NULL || function->type == NULL || function->type->kind != TYPE_FUNCTION || function->type->return_type == NULL || function->params.len != function->type->params.len || function->local_types.len != function->local_count || function->value_count > 1000000U || function->blocks.len > 65536U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "IR function declaration or resource bounds are invalid"); continue; }
-        bool declarations_valid = true;
+        bool declarations_valid = function->local_alignments.len == 0U || function->local_alignments.len == function->local_count;
         for (size_t l = 0U; l < function->local_types.len; ++l) if (function->local_types.data[l] == NULL || function->local_types.data[l]->kind == TYPE_VOID || !function->local_types.data[l]->complete) declarations_valid = false;
+        for (size_t l = 0U; l < function->local_alignments.len && l < function->local_types.len; ++l) if (!cinder_object_alignment_valid(function->local_types.data[l], function->local_alignments.data[l])) declarations_valid = false;
         for (size_t p = 0U; p < function->params.len; ++p) if (function->params.data[p] == NULL || !same_value_type(function->params.data[p]->type, function->type->params.data[p].type)) declarations_valid = false;
         if (!declarations_valid) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "IR storage declarations disagree with function types"); continue; }
         if (function->blocks.len == 0U) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "IR function has no entry block"); continue; }

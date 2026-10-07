@@ -264,6 +264,7 @@ struct CinderField {
     size_t offset;
     unsigned bit_offset;
     unsigned bit_width;
+    size_t alignment;
 };
 struct CinderParam {
     char *name;
@@ -321,6 +322,7 @@ CinderType *cinder_type_pointer(CinderTypeContext *types, CinderType *base);
 CinderType *cinder_type_array(CinderTypeContext *types, CinderType *base, size_t length);
 CinderType *cinder_type_function(CinderTypeContext *types, CinderType *ret, const CinderParamVec *params);
 CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, unsigned qualifiers);
+bool cinder_object_alignment_valid(const CinderType *type, size_t alignment);
 CinderType *cinder_integer_promote(CinderTypeContext *types, CinderType *type);
 CinderType *cinder_arithmetic_type(CinderTypeContext *types, CinderType *left, CinderType *right);
 bool cinder_type_equal(const CinderType *a, const CinderType *b);
@@ -447,6 +449,8 @@ struct CinderDecl {
     bool is_static;
     bool is_extern;
     bool is_definition;
+    size_t alignment;
+    bool has_alignment;
     CinderExpr *initializer;
     CINDER_VEC_TYPE(CinderDecl *) params;
     CinderStmt *body;
@@ -488,6 +492,7 @@ typedef struct {
     unsigned scope_depth;
     unsigned declarator_depth;
     unsigned generic_depth;
+    unsigned alignment_depth;
     CinderStmt *literal_scope;
     size_t literal_count;
     CinderDecl *current_function;
@@ -671,6 +676,7 @@ typedef struct {
     size_t float_param_count;
     CinderTypeContext *types;
     CINDER_VEC_TYPE(CinderType *) local_types;
+    CINDER_VEC_TYPE(size_t) local_alignments;
     bool global;
     CinderAst *ast;
 } CinderIRFunction;
@@ -692,6 +698,7 @@ typedef struct {
     int64_t integer;
     double floating;
     char *bytes;
+    size_t alignment;
     CINDER_VEC_TYPE(CinderIRAddress) addresses;
     size_t byte_count;
     bool read_only;
@@ -711,6 +718,7 @@ typedef struct {
 void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types);
 void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
+size_t cinder_ir_local_alignment(const CinderIRFunction *function, size_t slot);
 bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderExpr *expr, CinderIRAddress *address, CinderDiagnostics *diags);
 bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags);
 bool cinder_constant_scalar(CinderAst *ast, const CinderExpr *expr, CinderType *target, int64_t *integer, double *floating);

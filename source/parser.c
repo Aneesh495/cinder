@@ -59,7 +59,23 @@ static bool is_type_start(CinderAst *ast, const CinderToken *token) {
     return type_keyword(token->kind) || (binding != NULL && binding->kind == PARSE_TYPEDEF);
 }
 
+typedef struct {
+    unsigned storage;
+    unsigned function_specifiers;
+    size_t alignment;
+    bool alignment_specified;
+} DeclarationSpec;
+
+enum { STORAGE_TYPEDEF = 1U, STORAGE_STATIC = 2U, STORAGE_EXTERN = 4U, STORAGE_AUTO = 8U, STORAGE_REGISTER = 16U };
+
+static bool declaration_start(CinderAst *ast, const CinderToken *token) {
+    CinderTokenKind kind = token->kind;
+    return is_type_start(ast, token) || kind == TOK_KW_ALIGNAS || kind == TOK_KW_TYPEDEF || kind == TOK_KW_STATIC || kind == TOK_KW_EXTERN || kind == TOK_KW_AUTO || kind == TOK_KW_REGISTER || kind == TOK_KW_INLINE || kind == TOK_KW_NORETURN;
+}
+
 static CinderType *parse_type_specifier(CinderAst *ast);
+static CinderType *parse_declaration_specifiers(CinderAst *ast, DeclarationSpec *spec);
+static CinderType *parse_type_name(CinderAst *ast);
 static CinderType *parse_declarator(CinderAst *ast, CinderType *base, char **name, CinderLoc *name_loc, CinderDecl **function_decl);
 static CinderExpr *parse_conditional(CinderAst *ast);
 static void parse_static_assert(CinderAst *ast);
@@ -86,11 +102,13 @@ static CinderType *parse_aggregate_specifier(CinderAst *ast, bool is_union) {
     if (is(ast, '}')) cinder_diag(ast->diags, CINDER_ERROR, keyword->loc, "aggregate definition requires a member");
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
         if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); continue; }
-        CinderType *field_base = parse_type_specifier(ast);
+        DeclarationSpec spec = {0};
+        CinderType *field_base = parse_declaration_specifiers(ast, &spec);
+        if (spec.storage != 0U || spec.function_specifiers != 0U) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "member declaration cannot have storage or function specifiers");
         do {
             char *field_name = NULL; CinderLoc field_loc = peek(ast)->loc;
             CinderType *field_type = parse_declarator(ast, field_base, &field_name, &field_loc, NULL);
-            CinderField field = {field_name, field_type, 0U, 0U, 0U};
+            CinderField field = {field_name, field_type, 0U, 0U, 0U, spec.alignment};
             for (size_t f = 0U; f < type->fields.len; ++f)
                 if (field_name != NULL && type->fields.data[f].name != NULL && strcmp(field_name, type->fields.data[f].name) == 0) cinder_diag(ast->diags, CINDER_ERROR, field_loc, "duplicate aggregate member '%s'", field_name);
             cinder_vec_push((CinderVec *)&type->fields, &field);
@@ -147,7 +165,35 @@ static CinderType *parse_enum_specifier(CinderAst *ast) {
     return type;
 }
 
-static CinderType *parse_type_specifier(CinderAst *ast) {
+static size_t parse_alignment(CinderAst *ast) {
+    CinderLoc loc = previous(ast)->loc;
+    if (ast->alignment_depth >= 64U) {
+        cinder_diag(ast->diags, CINDER_ERROR, loc, "alignment specifier nesting exceeds the profile limit");
+        size_t nesting = 0U;
+        while (!is(ast, TOK_EOF)) {
+            if (take(ast, '(')) ++nesting;
+            else if (take(ast, ')')) { if (nesting == 0U || --nesting == 0U) break; }
+            else ++ast->cursor;
+        }
+        return 0U;
+    }
+    ++ast->alignment_depth;
+    (void)expect(ast, '(', "'('");
+    CinderExpr *expr;
+    if (is_type_start(ast, peek(ast))) {
+        expr = new_expr(ast, EX_ALIGNOF, loc); expr->queried_type = parse_type_name(ast); expr->parse_index = ast->cursor;
+    } else expr = parse_conditional(ast);
+    (void)expect(ast, ')', "')'"); --ast->alignment_depth;
+    int64_t value = 0; CinderType *type;
+    bool constant = cinder_constant_integer(ast, expr, &value, &type);
+    CinderConstantExpr retained = {expr, ast->current_function, value}; cinder_vec_push((CinderVec *)&ast->constant_exprs, &retained);
+    if (!constant || value < 0 || value > 16 || (value != 0 && ((uint64_t)value & ((uint64_t)value - 1U)) != 0U)) {
+        cinder_diag(ast->diags, CINDER_ERROR, loc, "alignment requires zero or a supported power-of-two integer constant up to 16"); return 0U;
+    }
+    return (size_t)value;
+}
+
+static CinderType *parse_declaration_specifiers(CinderAst *ast, DeclarationSpec *spec) {
     CinderTypeContext *types = ast->types;
     unsigned qualifiers = 0U, longs = 0U;
     int sign = 0;
@@ -157,7 +203,21 @@ static CinderType *parse_type_specifier(CinderAst *ast) {
     bool consumed = false;
     while (true) {
         CinderTokenKind kind = peek(ast)->kind;
-        if (kind == TOK_KW_CONST || kind == TOK_KW_VOLATILE || kind == TOK_KW_RESTRICT) {
+        if (kind == TOK_KW_ALIGNAS) {
+            CinderLoc loc = peek(ast)->loc; ++ast->cursor;
+            size_t alignment = parse_alignment(ast);
+            if (spec == NULL) cinder_diag(ast->diags, CINDER_ERROR, loc, "alignment specifier is not allowed in a type name");
+            else { spec->alignment_specified = true; if (alignment > spec->alignment) spec->alignment = alignment; }
+        } else if (kind == TOK_KW_TYPEDEF || kind == TOK_KW_STATIC || kind == TOK_KW_EXTERN || kind == TOK_KW_AUTO || kind == TOK_KW_REGISTER) {
+            unsigned storage = kind == TOK_KW_TYPEDEF ? STORAGE_TYPEDEF : kind == TOK_KW_STATIC ? STORAGE_STATIC : kind == TOK_KW_EXTERN ? STORAGE_EXTERN : kind == TOK_KW_AUTO ? STORAGE_AUTO : STORAGE_REGISTER;
+            if (spec == NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "storage class is not allowed in a type name");
+            else { if (spec->storage != 0U) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "duplicate or conflicting storage classes"); spec->storage |= storage; }
+            ++ast->cursor;
+        } else if (kind == TOK_KW_INLINE || kind == TOK_KW_NORETURN) {
+            if (spec == NULL) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "function specifier is not allowed in a type name");
+            else spec->function_specifiers |= kind == TOK_KW_INLINE ? 1U : 2U;
+            ++ast->cursor;
+        } else if (kind == TOK_KW_CONST || kind == TOK_KW_VOLATILE || kind == TOK_KW_RESTRICT) {
             qualifiers |= kind == TOK_KW_CONST ? 1U : kind == TOK_KW_VOLATILE ? 2U : 4U;
             ++ast->cursor;
         } else if (kind == TOK_KW_SIGNED || kind == TOK_KW_UNSIGNED) {
@@ -206,6 +266,15 @@ static CinderType *parse_type_specifier(CinderAst *ast) {
     }
     if ((qualifiers & 4U) != 0U && type->kind != TYPE_POINTER) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "restrict requires an object pointer type");
     return cinder_type_qualified(types, type, qualifiers);
+}
+
+static CinderType *parse_type_specifier(CinderAst *ast) { return parse_declaration_specifiers(ast, NULL); }
+
+static void declaration_attributes(CinderAst *ast, CinderDecl *decl, const DeclarationSpec *spec) {
+    decl->alignment = spec->alignment;
+    decl->has_alignment = spec->alignment != 0U;
+    if (spec->alignment_specified && (decl->kind != DECL_VAR || (spec->storage & STORAGE_REGISTER) != 0U)) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "alignment cannot apply to a typedef, function, or register object");
+    if (spec->function_specifiers != 0U && (decl->kind != DECL_FUNCTION || (decl->name != NULL && strcmp(decl->name, "main") == 0))) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "function specifier requires a function other than main");
 }
 
 typedef enum { DECLARATOR_NAME, DECLARATOR_POINTER, DECLARATOR_ARRAY, DECLARATOR_FUNCTION } DeclaratorKind;
@@ -305,8 +374,9 @@ static DeclaratorNode *parse_declarator_node(CinderAst *ast, char **name, Cinder
             if (is(ast, TOK_KW_VOID) && ast->cursor + 1U < ast->tokens->tokens.len && ast->tokens->tokens.data[ast->cursor + 1U].kind == ')') ++ast->cursor;
             else if (!is(ast, ')')) do {
                 if (take(ast, TOK_ELLIPSIS)) { if (fn->params == NULL) cinder_diag(ast->diags, CINDER_ERROR, previous(ast)->loc, "variadic prototype requires a named parameter"); fn->variadic = true; break; }
-                (void)take(ast, TOK_KW_REGISTER);
-                CinderType *base = parse_type_specifier(ast); char *param_name = NULL; CinderLoc loc = peek(ast)->loc;
+                DeclarationSpec spec = {0};
+                CinderType *base = parse_declaration_specifiers(ast, &spec); char *param_name = NULL; CinderLoc loc = peek(ast)->loc;
+                if (spec.alignment_specified || spec.function_specifiers != 0U || (spec.storage & ~(unsigned)STORAGE_REGISTER) != 0U) cinder_diag(ast->diags, CINDER_ERROR, loc, "parameter has a forbidden alignment, function, or storage specifier");
                 CinderType *type = declarator_type(ast, base, &param_name, &loc, true);
                 if (type->kind == TYPE_ARRAY) type = cinder_type_pointer(ast->types, type->base);
                 else if (type->kind == TYPE_FUNCTION) type = cinder_type_pointer(ast->types, type);
@@ -658,7 +728,7 @@ static CinderStmt *parse_compound(CinderAst *ast) {
 }
 
 static CinderStmt *parse_associated(CinderAst *ast) {
-    if (is_type_start(ast, peek(ast)) || is(ast, TOK_KW_STATIC_ASSERT) || is(ast, TOK_KW_TYPEDEF) || is(ast, TOK_KW_STATIC) || is(ast, TOK_KW_EXTERN) || is(ast, TOK_KW_AUTO) || is(ast, TOK_KW_REGISTER)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "associated substatement cannot be a declaration");
+    if (declaration_start(ast, peek(ast)) || is(ast, TOK_KW_STATIC_ASSERT)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "associated substatement cannot be a declaration");
     if (is(ast, '{')) return parse_compound(ast);
     CinderStmt *scope = new_stmt(ast, ST_BLOCK, peek(ast)->loc);
     CinderStmt *outer = ast->literal_scope; ast->literal_scope = scope;
@@ -671,11 +741,13 @@ static CinderStmt *parse_associated(CinderAst *ast) {
 
 static CinderDecl *parse_local_decl(CinderAst *ast) {
     CinderLoc loc = peek(ast)->loc;
-    bool alias = take(ast, TOK_KW_TYPEDEF);
-    bool is_static = take(ast, TOK_KW_STATIC), is_extern = take(ast, TOK_KW_EXTERN);
-    (void)take(ast, TOK_KW_AUTO); (void)take(ast, TOK_KW_REGISTER);
-    CinderType *base = parse_type_specifier(ast);
-    if (is(ast, ';') && (base->kind == TYPE_STRUCT || base->kind == TYPE_UNION || base->kind == TYPE_ENUM)) { ++ast->cursor; return NULL; }
+    DeclarationSpec spec = {0}; CinderType *base = parse_declaration_specifiers(ast, &spec);
+    bool alias = (spec.storage & STORAGE_TYPEDEF) != 0U, is_static = (spec.storage & STORAGE_STATIC) != 0U, is_extern = (spec.storage & STORAGE_EXTERN) != 0U;
+    if (is(ast, ';') && (base->kind == TYPE_STRUCT || base->kind == TYPE_UNION || base->kind == TYPE_ENUM)) {
+        if (spec.alignment_specified) cinder_diag(ast->diags, CINDER_WARNING, loc, "alignment specifier has no object or member to align");
+        if (spec.function_specifiers != 0U) cinder_diag(ast->diags, CINDER_ERROR, loc, "function specifier requires a declarator");
+        ++ast->cursor; return NULL;
+    }
     CinderDecl *first = NULL, *tail = NULL;
     do {
         char *name = NULL; CinderLoc name_loc;
@@ -683,6 +755,7 @@ static CinderDecl *parse_local_decl(CinderAst *ast) {
         if (!alias && type == base && type->kind == TYPE_ARRAY && !type->complete) { type = cinder_type_array(ast->types, type->base, 0U); type->complete = false; }
         CinderDecl *decl = new_decl(ast, alias ? DECL_TYPEDEF : type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
         decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
+        declaration_attributes(ast, decl, &spec);
         decl->declaration_complete = type->complete;
         bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
         if (take(ast, '=')) {
@@ -702,7 +775,7 @@ static CinderStmt *parse_statement(CinderAst *ast) {
     if (is(ast, '{')) return parse_compound(ast);
     if (take(ast, ';')) return new_stmt(ast, ST_EMPTY, token->loc);
     if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); return new_stmt(ast, ST_EMPTY, token->loc); }
-    if (is_type_start(ast, token) || token->kind == TOK_KW_TYPEDEF || token->kind == TOK_KW_STATIC || token->kind == TOK_KW_EXTERN || token->kind == TOK_KW_AUTO || token->kind == TOK_KW_REGISTER) {
+    if (declaration_start(ast, token)) {
         CinderStmt *stmt = new_stmt(ast, ST_DECL, token->loc); stmt->as.decl = parse_local_decl(ast);
         if (stmt->as.decl == NULL) stmt->kind = ST_EMPTY;
         return stmt;
@@ -741,7 +814,7 @@ static CinderStmt *parse_statement(CinderAst *ast) {
         CinderStmt *stmt = new_stmt(ast, ST_FOR, token->loc); (void)expect(ast, '(', "'('");
         CinderStmt *outer = ast->literal_scope; ast->literal_scope = stmt;
         size_t saved = ast->bindings.len; ++ast->scope_depth;
-        if (is_type_start(ast, peek(ast))) stmt->as.for_stmt.init = new_stmt(ast, ST_DECL, peek(ast)->loc), stmt->as.for_stmt.init->as.decl = parse_local_decl(ast);
+        if (declaration_start(ast, peek(ast))) stmt->as.for_stmt.init = new_stmt(ast, ST_DECL, peek(ast)->loc), stmt->as.for_stmt.init->as.decl = parse_local_decl(ast);
         else if (!is(ast, ';')) { stmt->as.for_stmt.init = new_stmt(ast, ST_EXPR, peek(ast)->loc); stmt->as.for_stmt.init->as.expr = parse_expression(ast); (void)expect(ast, ';', "';'"); }
         else { take(ast, ';'); stmt->as.for_stmt.init = NULL; }
         stmt->as.for_stmt.condition = is(ast, ';') ? NULL : parse_expression(ast); (void)expect(ast, ';', "';'");
@@ -756,19 +829,18 @@ static CinderStmt *parse_statement(CinderAst *ast) {
 int cinder_parse(CinderAst *ast) {
     while (!is(ast, TOK_EOF)) {
         if (is(ast, TOK_KW_STATIC_ASSERT)) { parse_static_assert(ast); continue; }
-        bool is_static = false, is_extern = false, alias = false;
-        while (is(ast, TOK_KW_STATIC) || is(ast, TOK_KW_EXTERN) || is(ast, TOK_KW_TYPEDEF) || is(ast, TOK_KW_INLINE) || is(ast, TOK_KW_NORETURN)) {
-            CinderTokenKind kind = peek(ast)->kind; ++ast->cursor;
-            if (kind == TOK_KW_STATIC) is_static = true;
-            else if (kind == TOK_KW_EXTERN) is_extern = true;
-            else if (kind == TOK_KW_TYPEDEF) alias = true;
-        }
-        if ((unsigned)is_static + (unsigned)is_extern + (unsigned)alias > 1U) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "conflicting storage classes");
-        if (!is_type_start(ast, peek(ast))) {
+        if (!declaration_start(ast, peek(ast))) {
             cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "expected a declaration"); ++ast->cursor; continue;
         }
-        CinderLoc loc = peek(ast)->loc; CinderType *base = parse_type_specifier(ast);
-        if ((base->kind == TYPE_STRUCT || base->kind == TYPE_UNION || base->kind == TYPE_ENUM) && take(ast, ';')) continue;
+        CinderLoc loc = peek(ast)->loc; DeclarationSpec spec = {0};
+        CinderType *base = parse_declaration_specifiers(ast, &spec);
+        bool alias = (spec.storage & STORAGE_TYPEDEF) != 0U, is_static = (spec.storage & STORAGE_STATIC) != 0U, is_extern = (spec.storage & STORAGE_EXTERN) != 0U;
+        if ((spec.storage & (STORAGE_AUTO | STORAGE_REGISTER)) != 0U) cinder_diag(ast->diags, CINDER_ERROR, loc, "file declaration cannot have automatic/register storage");
+        if ((base->kind == TYPE_STRUCT || base->kind == TYPE_UNION || base->kind == TYPE_ENUM) && take(ast, ';')) {
+            if (spec.alignment_specified) cinder_diag(ast->diags, CINDER_WARNING, loc, "alignment specifier has no object or member to align");
+            if (spec.function_specifiers != 0U) cinder_diag(ast->diags, CINDER_ERROR, loc, "function specifier requires a declarator");
+            continue;
+        }
         bool definition = false;
         do {
             char *name = NULL; CinderLoc name_loc;
@@ -777,6 +849,7 @@ int cinder_parse(CinderAst *ast) {
             if (!alias) type = file_composite_type(ast, name, type);
             CinderDecl *decl = new_decl(ast, alias ? DECL_TYPEDEF : type->kind == TYPE_FUNCTION ? DECL_FUNCTION : DECL_VAR, loc);
             decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
+            declaration_attributes(ast, decl, &spec);
             decl->declaration_complete = type->complete;
             bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
             if (decl->kind == DECL_FUNCTION) {

@@ -80,7 +80,7 @@ static void write_type(FILE *out, const TypeTable *table, size_t id) {
     for (size_t f = 0U; f < type->fields.len; ++f) {
         const CinderField *field = &type->fields.data[f];
         fputs("field ", out); write_string(out, field->name); fputc(' ', out); write_type_ref(out, table, field->type);
-        fprintf(out, " %zu %u %u\n", field->offset, field->bit_offset, field->bit_width);
+        fprintf(out, " %zu %u %u align %zu\n", field->offset, field->bit_offset, field->bit_width, field->alignment);
     }
 }
 
@@ -101,7 +101,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
     if (cinder_verify_ir(module, diags) != 0) return 1;
     TypeTable table = {NULL, 0U, 0U};
     if (!collect_module(&table, module)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR serialization type graph exceeds limits"); free(table.data); return 1; }
-    fprintf(out, "cinder-ir 2 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
+    fprintf(out, "cinder-ir 3 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
     for (size_t t = 0U; t < table.len; ++t) write_type(out, &table, t);
     fprintf(out, "globals %zu\n", module->globals.len);
     for (size_t g = 0U; g < module->globals.len; ++g) {
@@ -109,6 +109,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
         fputs("global ", out); write_string(out, global->name); fputc(' ', out); write_type_ref(out, &table, global->type);
         fprintf(out, " %016" PRIx64 " %016" PRIx64 " %u %u %u %u %zu ", (uint64_t)global->integer, float_bits(global->floating), global->read_only ? 1U : 0U, global->global ? 1U : 0U, global->is_extern ? 1U : 0U, global->has_initializer ? 1U : 0U, global->byte_count);
         write_hex(out, global->bytes, global->byte_count);
+        fprintf(out, " align %zu", global->alignment);
         fprintf(out, " addresses %zu", global->addresses.len);
         for (size_t a = 0U; a < global->addresses.len; ++a) {
             const CinderIRAddress *address = &global->addresses.data[a];
@@ -124,7 +125,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
         const CinderIRFunction *function = &module->functions.data[f];
         fputs("function ", out); write_string(out, function->name); fputc(' ', out); write_type_ref(out, &table, function->type);
         fprintf(out, " %u %zu %zu %zu params %zu blocks %zu\n", function->global ? 1U : 0U, function->value_count, function->local_count, function->float_param_count, function->params.len, function->blocks.len);
-        for (size_t l = 0U; l < function->local_types.len; ++l) { fputs("local ", out); write_type_ref(out, &table, function->local_types.data[l]); fputc('\n', out); }
+        for (size_t l = 0U; l < function->local_types.len; ++l) { fputs("local ", out); write_type_ref(out, &table, function->local_types.data[l]); fprintf(out, " align %zu\n", function->local_alignments.len == 0U ? 0U : function->local_alignments.data[l]); }
         for (size_t p = 0U; p < function->params.len; ++p) { fputs("param ", out); write_string(out, function->params.data[p]->name); fputc(' ', out); write_type_ref(out, &table, function->params.data[p]->type); fputc('\n', out); }
         for (size_t b = 0U; b < function->blocks.len; ++b) {
             const CinderIRBlock *block = &function->blocks.data[b];
@@ -294,6 +295,7 @@ static void read_types(Reader *reader) {
         for (size_t f = 0U; f < fields && !reader->failed; ++f) {
             expect(reader, "field"); CinderField field; field.name = string(reader, false, false); field.type = type_ref(reader);
             field.offset = (size_t)number(reader, IR_TEXT_LIMIT); field.bit_offset = (unsigned)number(reader, 63U); field.bit_width = (unsigned)number(reader, 64U);
+            expect(reader, "align"); field.alignment = (size_t)number(reader, 16U);
             if (field.type == NULL) parse_error(reader, "field has no type");
             cinder_vec_push((CinderVec *)&type->fields, &field);
         }
@@ -331,13 +333,26 @@ static bool validate_type(Reader *reader, const CinderType *type, bool *active, 
      * is separately checked against the declared object extent below. */
     if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
         if (type->base != NULL || type->return_type != NULL || type->variadic || (type->complete && (type->size == 0U || type->size % type->align != 0U)) || (!type->complete && (type->size != 0U || type->fields.len != 0U))) { parse_error(reader, "invalid aggregate layout or attributes"); return false; }
+        bool plain = true;
+        for (size_t f = 0U; f < type->fields.len; ++f) if (type->fields.data[f].bit_width != 0U) plain = false;
+        size_t extent = 0U, aggregate_align = 1U;
         for (size_t f = 0U; f < type->fields.len; ++f) {
             const CinderField *field = &type->fields.data[f];
+            if (!cinder_object_alignment_valid(field->type, field->alignment)) { parse_error(reader, "invalid declared member alignment"); return false; }
+            size_t alignment = field->alignment == 0U ? field->type->align : field->alignment;
+            if (alignment > aggregate_align) aggregate_align = alignment;
+            if (plain) {
+                size_t expected = type->kind == TYPE_UNION ? 0U : (extent + alignment - 1U) & ~(alignment - 1U);
+                if (field->offset != expected) { parse_error(reader, "member offset disagrees with target alignment layout"); return false; }
+                size_t end = expected + field->type->size;
+                if (end > extent) extent = end;
+            }
             if (!field->type->complete || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION || field->offset > type->size || field->type->size > type->size - field->offset || field->bit_offset + field->bit_width > field->type->size * 8U || (type->kind == TYPE_UNION && field->offset != 0U)) { parse_error(reader, "field is outside aggregate extent or has an invalid object type"); return false; }
-            if ((field->bit_width != 0U && !integer_type(field->type)) || (field->bit_width == 0U && (field->bit_offset != 0U || field->type->align == 0U || field->offset % field->type->align != 0U))) { parse_error(reader, "invalid member alignment or bitfield type"); return false; }
+            if (type->align < alignment || (field->bit_width != 0U && (!integer_type(field->type) || field->alignment != 0U)) || (field->bit_width == 0U && (field->bit_offset != 0U || field->offset % alignment != 0U))) { parse_error(reader, "invalid member alignment or bitfield type"); return false; }
             for (size_t previous = 0U; previous < f; ++previous)
                 if (field->name != NULL && type->fields.data[previous].name != NULL && strcmp(field->name, type->fields.data[previous].name) == 0) { parse_error(reader, "duplicate aggregate member"); return false; }
         }
+        if (type->complete && plain && (type->fields.len == 0U || type->align != aggregate_align || type->size != ((extent + aggregate_align - 1U) & ~(aggregate_align - 1U)))) { parse_error(reader, "aggregate extent or alignment disagrees with target layout"); return false; }
         return finite_object(reader, type, active, depth);
     }
     active[index] = true;
@@ -363,6 +378,7 @@ static void read_globals(Reader *reader) {
         global.read_only = boolean(reader); global.global = boolean(reader); global.is_extern = boolean(reader); global.has_initializer = boolean(reader);
         global.byte_count = (size_t)number(reader, IR_TEXT_LIMIT); size_t actual; global.bytes = hex_bytes(reader, &actual);
         if (actual != global.byte_count || global.type == NULL) parse_error(reader, "global storage does not match its declaration");
+        expect(reader, "align"); global.alignment = (size_t)number(reader, 16U);
         expect(reader, "addresses"); size_t addresses = (size_t)number(reader, IR_TABLE_LIMIT);
         for (size_t a = 0U; a < addresses && !reader->failed; ++a) {
             expect(reader, "address"); CinderIRAddress address; memset(&address, 0, sizeof(address));
@@ -415,6 +431,8 @@ static void read_functions(Reader *reader) {
             expect(reader, "local"); CinderType *type = type_ref(reader);
             if (type == NULL) parse_error(reader, "local has no type");
             cinder_vec_push((CinderVec *)&published->local_types, &type);
+            expect(reader, "align"); size_t alignment = (size_t)number(reader, 16U);
+            cinder_vec_push((CinderVec *)&published->local_alignments, &alignment);
         }
         for (size_t p = 0U; p < params && !reader->failed; ++p) {
             expect(reader, "param"); CinderDecl *param = cinder_arena_alloc(&reader->module->arena, sizeof(*param), _Alignof(CinderDecl));
@@ -442,7 +460,7 @@ static void read_functions(Reader *reader) {
 int cinder_parse_ir(CinderIRModule *module, const char *text, size_t length, CinderDiagnostics *diags) {
     Reader reader; memset(&reader, 0, sizeof(reader)); reader.text = text; reader.length = length; reader.line = 1U; reader.module = module; reader.diags = diags;
     if (length > IR_TEXT_LIMIT || memchr(text, '\0', length) != NULL || module->functions.len != 0U || module->globals.len != 0U) { parse_error(&reader, "invalid input extent or nonempty destination module"); return 1; }
-    expect(&reader, "cinder-ir"); if (number(&reader, 2U) != 2U) parse_error(&reader, "unsupported IR schema version");
+    expect(&reader, "cinder-ir"); if (number(&reader, 3U) != 3U) parse_error(&reader, "unsupported IR schema version");
     expect(&reader, "lp64-le"); expect(&reader, "sysv-x86-64"); read_types(&reader);
     bool *active = cinder_alloc((reader.types.len == 0U ? 1U : reader.types.len) * sizeof(*active)); memset(active, 0, reader.types.len * sizeof(*active));
     for (size_t t = 0U; t < reader.types.len && !reader.failed; ++t) (void)validate_type(&reader, reader.types.data[t], active, 0U);
