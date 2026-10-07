@@ -222,5 +222,21 @@
   {
     "source": "aggregate_return_temporary_expired.undefined.c",
     "classification": 10
+  },
+  {
+    "source": "aggregate_return_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_call_temporary_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "aggregate_call_temporary_readonly.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "aggregate_argument_uninitialized.undefined.c",
+    "classification": 4
   }
 ]

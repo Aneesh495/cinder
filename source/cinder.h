@@ -582,6 +582,8 @@ typedef enum {
     IR_MEMORY_INIT,
     IR_ZERO_INIT,
     IR_LOCAL_FREEZE,
+    IR_AGG_ARG,
+    IR_AGG_RETURN,
     IR_UNDEF,
 } CinderIROp;
 
@@ -848,6 +850,22 @@ void cinder_machine_init(CinderMachineObject *object);
 void cinder_machine_destroy(CinderMachineObject *object);
 int cinder_lower_globals(const CinderIRModule *module, CinderMachineObject *object, CinderDiagnostics *diags);
 int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocation, CinderMachineObject *object, bool assembly, FILE *asm_out, CinderDiagnostics *diags);
+typedef enum { ABI_NONE, ABI_INTEGER, ABI_SSE, ABI_MEMORY } CinderABIClass;
+typedef struct {
+    CinderABIClass classes[2];
+    size_t size;
+    size_t align;
+    unsigned count;
+    bool memory;
+} CinderABIValue;
+typedef struct { unsigned gpr; unsigned sse; size_t stack; } CinderABIState;
+typedef struct {
+    CinderABIValue value;
+    unsigned registers[2];
+    size_t stack_offset;
+} CinderABIArgument;
+bool cinder_abi_classify(const CinderType *type, CinderABIValue *value);
+bool cinder_abi_place(const CinderType *type, CinderABIState *state, CinderABIArgument *argument);
 int cinder_write_elf64(const CinderMachineObject *object, const char *path, CinderDiagnostics *diags);
 int cinder_write_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags);
 

@@ -905,14 +905,47 @@
         "tests/callbacks/callback_recursive.c",
         "tests/callbacks/callback_nested.c",
         "tests/static_addresses/global_function_float.c",
-        "tests/static_addresses/global_function_mixed.c"
+        "tests/static_addresses/global_function_mixed.c",
+        "tests/aggregate_abi/argument_copy.c",
+        "tests/aggregate_abi/indirect_memory.c",
+        "tests/aggregate_abi/indirect_small.c",
+        "tests/aggregate_abi/integer_rollback.c",
+        "tests/aggregate_abi/integer_sse.c",
+        "tests/aggregate_abi/large_memory.c",
+        "tests/aggregate_abi/large_recursive.c",
+        "tests/aggregate_abi/mixed_rollback.c",
+        "tests/aggregate_abi/multiple_results.c",
+        "tests/aggregate_abi/nested_arrays.c",
+        "tests/aggregate_abi/nine_bytes.c",
+        "tests/aggregate_abi/one_byte.c",
+        "tests/aggregate_abi/pointer_parameter.c",
+        "tests/aggregate_abi/recursive_return.c",
+        "tests/aggregate_abi/return_member.c",
+        "tests/aggregate_abi/sret_registers.c",
+        "tests/aggregate_abi/sse_integer.c",
+        "tests/aggregate_abi/sse_rollback.c",
+        "tests/aggregate_abi/stack_order.c",
+        "tests/aggregate_abi/three_bytes.c",
+        "tests/aggregate_abi/two_double.c",
+        "tests/aggregate_abi/two_float.c",
+        "tests/aggregate_abi/two_integer.c",
+        "tests/aggregate_abi/union_merge.c"
       ],
       "boundary_cases": [
         "tests/memory/pointer_return.c",
         "tests/memory/callback_null.undefined.c",
-        "tests/memory/callback_wrong_signature.undefined.c"
+        "tests/memory/callback_wrong_signature.undefined.c",
+        "tests/memory/aggregate_return_expired.undefined.c",
+        "tests/memory/aggregate_call_temporary_expired.undefined.c",
+        "tests/memory/aggregate_call_temporary_readonly.undefined.c",
+        "tests/memory/aggregate_argument_uninitialized.undefined.c"
       ],
-      "negative_cases": [],
+      "negative_cases": [
+        "tests/constraints/aggregate_call_wrong_type.c",
+        "tests/constraints/aggregate_return_wrong_type.c",
+        "tests/constraints/aggregate_return_scalar.c",
+        "tests/constraints/aggregate_argument_const_member.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -923,7 +956,8 @@
         "source/ir_verify.c",
         "source/interp_memory.c",
         "source/ir_interp.c",
-        "source/x86_64.c"
+        "source/x86_64.c",
+        "source/abi.c"
       ]
     },
     {
@@ -949,10 +983,44 @@
         "tests/memory/pointer_return.c",
         "tests/callbacks/callback_pointer_return.c",
         "tests/callbacks/callback_float.c",
-        "tests/callbacks/callback_mixed.c"
+        "tests/callbacks/callback_mixed.c",
+        "tests/aggregate_abi/argument_copy.c",
+        "tests/aggregate_abi/indirect_memory.c",
+        "tests/aggregate_abi/indirect_small.c",
+        "tests/aggregate_abi/integer_rollback.c",
+        "tests/aggregate_abi/integer_sse.c",
+        "tests/aggregate_abi/large_memory.c",
+        "tests/aggregate_abi/large_recursive.c",
+        "tests/aggregate_abi/mixed_rollback.c",
+        "tests/aggregate_abi/multiple_results.c",
+        "tests/aggregate_abi/nested_arrays.c",
+        "tests/aggregate_abi/nine_bytes.c",
+        "tests/aggregate_abi/one_byte.c",
+        "tests/aggregate_abi/pointer_parameter.c",
+        "tests/aggregate_abi/recursive_return.c",
+        "tests/aggregate_abi/return_member.c",
+        "tests/aggregate_abi/sret_registers.c",
+        "tests/aggregate_abi/sse_integer.c",
+        "tests/aggregate_abi/sse_rollback.c",
+        "tests/aggregate_abi/stack_order.c",
+        "tests/aggregate_abi/three_bytes.c",
+        "tests/aggregate_abi/two_double.c",
+        "tests/aggregate_abi/two_float.c",
+        "tests/aggregate_abi/two_integer.c",
+        "tests/aggregate_abi/union_merge.c"
       ],
-      "boundary_cases": [],
-      "negative_cases": [],
+      "boundary_cases": [
+        "tests/memory/aggregate_return_expired.undefined.c",
+        "tests/memory/aggregate_call_temporary_expired.undefined.c",
+        "tests/memory/aggregate_call_temporary_readonly.undefined.c",
+        "tests/memory/aggregate_argument_uninitialized.undefined.c"
+      ],
+      "negative_cases": [
+        "tests/constraints/aggregate_call_wrong_type.c",
+        "tests/constraints/aggregate_return_wrong_type.c",
+        "tests/constraints/aggregate_return_scalar.c",
+        "tests/constraints/aggregate_argument_const_member.c"
+      ],
       "native_evidence": [],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
@@ -963,7 +1031,8 @@
         "source/ir_verify.c",
         "source/interp_memory.c",
         "source/ir_interp.c",
-        "source/x86_64.c"
+        "source/x86_64.c",
+        "source/abi.c"
       ]
     },
     {

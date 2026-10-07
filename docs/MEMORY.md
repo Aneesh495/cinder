@@ -33,10 +33,17 @@ reference execution, IR interpretation, emitted objects, and native Linux
 execution. `make test-memory` records separate UB classes through serialized
 IR and never executes emitted undefined programs.
 
-Aggregate expression results/ABI, bitfields, compound literals,
+Bitfields, compound literals,
 allocated storage/library models, restrict contracts, and goto scope entry
 remain open. The abstract VM does not expose host addresses or padding values
 as differential equality oracles.
+
+Aggregate parameters receive independent mutable object copies, including
+pointer tags and initialization state. Return transfers finish while callee
+storage remains alive; pointers inside returned objects still observe the
+original pointee's lifetime. Aggregate call results are immutable expression
+temporaries and expire at their enclosing full expression. Native small-object
+packing reads exactly the declared bytes, including a partial final eightbyte.
 
 Pointer conversions through 64-bit integer storage retain exact provenance
 when the stored bits are unchanged. This applies to local/global words,

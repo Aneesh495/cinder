@@ -15,7 +15,7 @@ from reference_policy import identify, adjudicate
 compiler = pathlib.Path(sys.argv[1]).resolve()
 identity = hashlib.sha256(compiler.read_bytes()).hexdigest()
 group = sys.argv[2] if len(sys.argv) > 2 else 'initializers'
-assert group in ('initializers', 'aggregates')
+assert group in ('initializers', 'aggregates', 'aggregate_abi')
 base = pathlib.Path('.agent-local') / group / identity
 base.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'

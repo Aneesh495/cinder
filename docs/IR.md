@@ -32,13 +32,21 @@ arity, variadic promotions, storage types, and return types are checked explicit
 Pointer offsets have a checked pointee stride and direction; member pointers
 carry verified field offsets. Typed memory operations check pointer, access,
 and stored-value types. Local lifetime operations bind to the storage table.
-Explicit memory dependency graphs and aggregate argument/return ABI lowering
-remain open. Aggregate expression values use typed object addresses and explicit
+Explicit memory dependency graphs remain open. Aggregate expression values use typed object addresses and explicit
 object transfers. They do not occupy scalar integer or floating SSA values.
 Assignment, conditional, and comma results materialize object snapshots;
 `local.freeze` marks completed snapshots immutable in the independent interpreter.
 `local.end` ends them at their containing full expression. Both are effect-only
 instructions with an exact aggregate local type and no value operands.
+
+`aggregate.arg` copies a source parameter into its own local object. Its slot
+names local storage and its operator field names the source parameter index.
+`aggregate.return` transfers an object into caller-owned result storage before
+the callee retires its objects. The transfer must be the last operation in a
+return block apart from lifetime ends and no-ops. A struct/union call result is
+a pointer SSA value with a compatible result slot, never an integer encoding
+of the aggregate. Calls carry both the declared function signature and an
+actual argument signature, including the types after variadic promotions.
 
 `source/mir.c` splits critical edges carrying phi transfers before allocation.
 The encoder emits edge transfers through the parallel-copy resolver using

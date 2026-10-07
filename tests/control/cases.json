@@ -2054,5 +2054,101 @@
   {
     "source": "../aggregates/conditional_in_list.c",
     "exit": 10
+  },
+  {
+    "source": "../aggregate_abi/argument_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/indirect_memory.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/indirect_small.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/integer_rollback.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/integer_sse.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/large_memory.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/large_recursive.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/mixed_rollback.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/multiple_results.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/nested_arrays.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/nine_bytes.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/one_byte.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/pointer_parameter.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/recursive_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/return_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/sret_registers.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/sse_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/sse_rollback.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/stack_order.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/three_bytes.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/two_double.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/two_float.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/two_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../aggregate_abi/union_merge.c",
+    "exit": 0
   }
 ]
