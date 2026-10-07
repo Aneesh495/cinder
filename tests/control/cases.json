@@ -2370,5 +2370,117 @@
   {
     "source": "../compound_literals/file_sizeof_literal_array.c",
     "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_inferred_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_designated_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_nested_braces.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_brace_elision.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_designated_continuation.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_struct_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_struct_function.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_struct_conditional.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_string_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_nested_literal.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/enum_inferred_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/enum_unevaluated_effects.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_bound_inferred.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_local_visibility.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_float_expression.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_variadic_context.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_named_inferred.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_named_string.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_bound_named.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_comma_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/designator_inferred_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/sizeof_large_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/sizeof_nested_large_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_comma_decay.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_conditional_decay.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_literal_dereference.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_reverse_subscript.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bound_arrow_array.c",
+    "exit": 0
   }
 ]

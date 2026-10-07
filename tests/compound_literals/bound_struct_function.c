@@ -1,0 +1,1 @@
+struct P { int x; int y; }; int calls; struct P make(void) { ++calls; return (struct P){4,5}; } int main(void) { int v[sizeof (struct P[]){make(),make()} / sizeof(struct P)] = {1,2}; return calls || sizeof v != 2 * sizeof(int); }

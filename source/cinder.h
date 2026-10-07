@@ -456,6 +456,7 @@ struct CinderDecl {
     CINDER_VEC_TYPE(CinderInitAction) init_actions;
     int lowering_slot;
     bool initializer_checked;
+    bool literal_evaluated;
 };
 
 typedef enum { PARSE_OBJECT, PARSE_TYPEDEF, PARSE_ENUMERATOR, PARSE_TAG } CinderParseBindingKind;
@@ -467,6 +468,9 @@ typedef struct {
     unsigned scope;
 } CinderParseBinding;
 
+typedef struct { CinderExpr *expression; CinderDecl *function; int64_t value; } CinderConstantExpr;
+typedef struct { CinderType *type; size_t index; size_t offset; } CinderInitFrame;
+
 typedef struct {
     CINDER_VEC_TYPE(CinderDecl *) declarations;
     CinderArena arena;
@@ -475,18 +479,24 @@ typedef struct {
     CinderDiagnostics *diags;
     size_t cursor;
     CINDER_VEC_TYPE(CinderParseBinding) bindings;
-    CINDER_VEC_TYPE(CinderExpr *) constant_exprs;
+    CINDER_VEC_TYPE(CinderConstantExpr) constant_exprs;
     CINDER_VEC_TYPE(CinderDecl *) static_literals;
     unsigned scope_depth;
     unsigned declarator_depth;
     CinderStmt *literal_scope;
     size_t literal_count;
+    CinderDecl *current_function;
 } CinderAst;
 
 void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream *tokens, CinderDiagnostics *diags);
 void cinder_ast_destroy(CinderAst *ast);
 int cinder_parse(CinderAst *ast);
 bool cinder_constant_integer(CinderAst *ast, const CinderExpr *expr, int64_t *value, CinderType **type);
+size_t cinder_init_child_count(const CinderType *type);
+CinderType *cinder_init_child(CinderInitFrame frame, size_t *offset);
+void cinder_init_advance(CinderInitFrame *frames, size_t *depth);
+bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned depth);
+CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsigned depth);
 void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *out);
 
 /* ---------- semantic analysis ---------- */
@@ -510,6 +520,7 @@ typedef struct {
     CinderScope globals;
     CinderStmt *function_body;
     CinderDecl *function;
+    unsigned unevaluated_depth;
 } CinderSema;
 
 void cinder_sema_init(CinderSema *sema, CinderAst *ast, CinderTypeContext *types, CinderDiagnostics *diags);

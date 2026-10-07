@@ -134,8 +134,8 @@ static CinderType *parse_enum_specifier(CinderAst *ast) {
         char *name = cinder_arena_strndup(&ast->arena, token->text, token->length);
         if (take(ast, '=')) {
             CinderExpr *expr = parse_conditional(ast); CinderType *value_type;
-            cinder_vec_push((CinderVec *)&ast->constant_exprs, &expr);
             if (!cinder_constant_integer(ast, expr, &next, &value_type) || next < INT32_MIN || next > INT32_MAX) { cinder_diag(ast->diags, CINDER_ERROR, token->loc, "enumerator requires an integer constant representable as int"); next = 0; }
+            CinderConstantExpr constant = {expr, ast->current_function, next}; cinder_vec_push((CinderVec *)&ast->constant_exprs, &constant);
         } else if (next > INT32_MAX) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "enumerator value is outside int range");
         bind_name(ast, name, ast->types->int_type, PARSE_ENUMERATOR, next, token->loc);
         ++next;
@@ -291,10 +291,10 @@ static DeclaratorNode *parse_declarator_node(CinderAst *ast, char **name, Cinder
             array->qualifiers = qualifiers;
             if (is(ast, ']')) array->incomplete = true;
             else {
-                CinderExpr *expr = parse_conditional(ast); CinderType *type; int64_t length;
-                cinder_vec_push((CinderVec *)&ast->constant_exprs, &expr);
+                CinderExpr *expr = parse_conditional(ast); CinderType *type; int64_t length = 0;
                 if (!cinder_constant_integer(ast, expr, &length, &type) || length <= 0 || (uint64_t)length > SIZE_MAX) cinder_diag(ast->diags, CINDER_ERROR, expr->loc, "array bound requires a positive integer constant");
                 else array->length = (size_t)length;
+                CinderConstantExpr constant = {expr, ast->current_function, length}; cinder_vec_push((CinderVec *)&ast->constant_exprs, &constant);
             }
             (void)expect(ast, ']', "']'"); direct = array;
         } else {
@@ -625,7 +625,11 @@ static CinderDecl *parse_local_decl(CinderAst *ast) {
         decl->name = name; decl->loc = name_loc; decl->type = type; decl->is_static = is_static; decl->is_extern = is_extern;
         decl->declaration_complete = type->complete;
         bind_name(ast, name, type, alias ? PARSE_TYPEDEF : PARSE_OBJECT, 0, name_loc);
-        if (take(ast, '=')) { decl->initializer = parse_initializer(ast, 0U); decl->initializer_index = ast->cursor; if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer"); }
+        if (take(ast, '=')) {
+            decl->initializer = parse_initializer(ast, 0U); decl->initializer_index = ast->cursor;
+            (void)cinder_infer_initializer_shape(ast, decl, 0U);
+            if (alias || type->kind == TYPE_FUNCTION) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef/function cannot have an initializer");
+        }
         if (tail == NULL) first = decl; else tail->next = decl;
         tail = decl;
     } while (take(ast, ','));
@@ -725,12 +729,13 @@ int cinder_parse(CinderAst *ast) {
                         bind_name(ast, param->name, param->type, PARSE_OBJECT, 0, name_loc);
                     }
                     --ast->scope_depth;
-                    decl->is_definition = true; decl->body = parse_compound(ast); definition = true;
+                    decl->is_definition = true; ast->current_function = decl; decl->body = parse_compound(ast); ast->current_function = NULL; definition = true;
                     ast->bindings.len = saved;
                 }
             } else if (take(ast, '=')) {
                 decl->initializer = parse_initializer(ast, 0U);
                 decl->initializer_index = ast->cursor;
+                (void)cinder_infer_initializer_shape(ast, decl, 0U);
                 if (alias) cinder_diag(ast->diags, CINDER_ERROR, loc, "typedef cannot have an initializer");
             }
             cinder_vec_push((CinderVec *)&ast->declarations, &decl);

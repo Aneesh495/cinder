@@ -20,6 +20,8 @@ when an enclosing expression is unevaluated. Original symbolic relocations
 connect nested literal objects. Emission caches each symbol in its module.
 
 The source, IR, object/assembly, reference, native, and classified lifetime
-checks cover these distinct contracts. Inferred literal arrays in parser-time
-constant bounds and goto scope entry need further implementation and retain
-explicit open feature-registry requirements.
+checks cover these distinct contracts. Parser-time type queries use the same
+subobject cursor as semantic initializer planning. They infer unknown array
+shapes without evaluating their values. Retained constant-expression roots
+are subsequently checked in their original binding and function context.
+Goto scope entry retains an explicit open feature-registry requirement.

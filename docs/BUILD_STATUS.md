@@ -500,6 +500,34 @@ Clang ASan/UBSan passed 593 source observations, 1,186 IR round trips, 127
 source rejections, 79 classified UB cases, and 57 malformed memory contracts.
 The 100,000-case IR campaign and 1,000 SSA/copy checks also passed.
 Escaped block, body, condition, loop, and return addresses are separate VM
-lifetime cases. Bound evaluation involving an inferred literal array before
-semantic completion and goto scope entry remain open. Final acceptance is
-incomplete.
+lifetime cases. The published checkpoint also passed full Linux validation in
+[run 37600909822](https://github.com/Aneesh495/cinder/actions/runs/37600909822).
+Goto scope entry and final family acceptance remain open.
+
+## Initializer shape and constant-expression checks
+
+Unknown array initializer shapes now complete at their definition point.
+The shared subobject cursor preserves brace elision, nested designators,
+aggregate copy values, and character string bounds. Compound literal shapes
+are available to parser-time array bounds and enumerators without executing
+initializer values. Retained constant expressions receive full semantic
+checking with source-point bindings and their enclosing function context.
+Their typed constant values must match the parser's recorded values.
+
+Automatic literals used only by unevaluated operands reserve no runtime
+storage. Large nested `sizeof` operands now compile and execute without
+allocating their literal payloads on the stack. Value queries account for
+array/function decay, comma and conditional expressions, subscripting,
+member access, pointer arithmetic, and unary address/dereference operations.
+
+GCC 15 Release and Clang ASan/UBSan builds passed all 64 authored compound
+literal cases against GCC/Clang at O0/O2, with exact object/assembly bytes
+and relocations. All 128 owned objects passed native x86 Linux execution
+in the development VM. Both builds rejected all 140 constraint fixtures.
+The sanitizer IR campaign passed 100,000 round trips and optimized execution
+comparisons, with 97,501 defined cases and 2,499 independently classified
+cases. Raw records are under `.agent-local/compound_literals`,
+`.agent-local/constraints`, `.agent-local/ir-campaign`, and
+`.agent-local/linux-vm/share/type-completion-final`. Full source IR round
+trips are still running at publication; hosted Linux CI validates the whole
+source and native suite after push. Full acceptance remains incomplete.
