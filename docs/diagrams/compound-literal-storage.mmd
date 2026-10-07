@@ -1,0 +1,12 @@
+flowchart LR
+  Syntax[Typed compound literal AST] --> Plan[Typed initializer actions]
+  Syntax --> Owner[Explicit C block scope owner]
+  File[File-scope literal] --> Global[One local ELF symbol]
+  Global --> Reloc[Nested constant-address relocations]
+  Owner --> Begin[Begin object at scope entry]
+  Begin --> Evaluate[Evaluate initializer into same object]
+  Plan --> Evaluate
+  Evaluate --> Use[Addressable typed lvalue]
+  Use --> Evaluate
+  Use --> End[Scope exit retires object]
+  End --> VM[Escaped pointer lifetime rejection]

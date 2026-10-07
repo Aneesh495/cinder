@@ -326,6 +326,16 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope) {
     if (expr == NULL) return sema->types->void_type;
     switch (expr->kind) {
+        case EX_COMPOUND_LITERAL: {
+            CinderDecl *decl = expr->as.compound_literal;
+            if (!decl->initializer_checked) {
+                decl->initializer_checked = true;
+                bool inferred = decl->type->kind == TYPE_ARRAY && !decl->type->complete && decl->type->base->complete;
+                if (decl->type->kind == TYPE_VOID || decl->type->kind == TYPE_FUNCTION || (!decl->type->complete && !inferred)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "compound literal requires a complete object or inferable array type");
+                else sema_init_object(sema, decl, &decl->initializer, decl->type, 0U, scope, 0U);
+            }
+            expr->type = decl->type; expr->is_lvalue = true; return expr->type;
+        }
         case EX_INIT_LIST:
             if (expr->type == NULL) { cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "initializer list requires an object context"); expr->type = sema->types->error_type; }
             return expr->type;
@@ -518,6 +528,11 @@ int cinder_sema_run(CinderSema *sema) {
         CinderDecl *decl = sema->ast->declarations.data[i];
         if (decl->kind == DECL_VAR) (void)string_array_initializer(sema, decl);
         if (decl->kind == DECL_VAR && decl->initializer != NULL && decl->initializer->kind == EX_INIT_LIST) sema_init_object(sema, decl, &decl->initializer, decl->type, 0U, &sema->globals, 0U);
+    }
+    for (size_t i = 0U; i < sema->ast->static_literals.len; ++i) {
+        CinderDecl *decl = sema->ast->static_literals.data[i];
+        CinderExpr literal; memset(&literal, 0, sizeof(literal)); literal.kind = EX_COMPOUND_LITERAL; literal.loc = decl->loc; literal.as.compound_literal = decl;
+        (void)sema_expr(sema, &literal, &sema->globals);
     }
     for (size_t i = 0U; i < sema->globals.symbols.len; ++i) free(sema->globals.symbols.data[i].name);
     free(sema->globals.symbols.data); sema->globals.symbols.data = NULL; sema->globals.symbols.len = 0U; sema->globals.symbols.cap = 0U;

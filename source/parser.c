@@ -424,8 +424,7 @@ static CinderExpr *parse_primary(CinderAst *ast) {
     return new_expr(ast, EX_INT, token->loc);
 }
 
-static CinderExpr *parse_postfix(CinderAst *ast) {
-    CinderExpr *expr = parse_primary(ast);
+static CinderExpr *parse_postfix_tail(CinderAst *ast, CinderExpr *expr) {
     while (true) {
         if (take(ast, '(')) {
             CinderExpr *call = new_expr(ast, EX_CALL, expr->loc);
@@ -455,7 +454,7 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             CinderToken *name = expect(ast, TOK_IDENTIFIER, "member name");
             CinderExpr *member = new_expr(ast, EX_MEMBER, expr->loc);
             member->as.member.base = expr; member->as.member.arrow = arrow;
-            member->as.member.name = cinder_arena_strndup(&ast->arena, name->text, name->length); expr = member;
+            member->as.member.name = name == NULL ? cinder_arena_strndup(&ast->arena, "", 0U) : cinder_arena_strndup(&ast->arena, name->text, name->length); expr = member;
         } else if (take(ast, TOK_PLUSPLUS)) {
             CinderExpr *unary = new_expr(ast, EX_UNARY, expr->loc); unary->as.unary.op = TOK_PLUSPLUS; unary->as.unary.value = expr; unary->as.unary.postfix = true; expr = unary;
         } else if (take(ast, TOK_MINUSMINUS)) {
@@ -463,6 +462,22 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
         } else break;
     }
     return expr;
+}
+
+static CinderExpr *parse_compound_literal(CinderAst *ast, CinderType *type, CinderLoc loc) {
+    if (type->kind == TYPE_ARRAY && !type->complete) { type = cinder_type_array(ast->types, type->base, 0U); type->complete = false; }
+    CinderDecl *decl = new_decl(ast, DECL_VAR, loc);
+    char name[64]; int length = snprintf(name, sizeof(name), ".LCO.%zu", ast->literal_count++);
+    if (length < 0 || (size_t)length >= sizeof(name)) abort();
+    decl->name = cinder_arena_strndup(&ast->arena, name, (size_t)length);
+    decl->type = type; decl->is_static = ast->literal_scope == NULL;
+    decl->is_definition = true; decl->has_definition = true;
+    decl->initializer = parse_initializer(ast, 0U); decl->initializer_index = ast->cursor;
+    CinderExpr *expr = new_expr(ast, EX_COMPOUND_LITERAL, loc);
+    expr->as.compound_literal = decl; expr->type = type; expr->is_lvalue = true;
+    if (ast->literal_scope != NULL) cinder_vec_push((CinderVec *)&ast->literal_scope->literal_objects, &decl);
+    else cinder_vec_push((CinderVec *)&ast->static_literals, &decl);
+    return parse_postfix_tail(ast, expr);
 }
 
 static CinderExpr *parse_unary(CinderAst *ast) {
@@ -475,7 +490,11 @@ static CinderExpr *parse_unary(CinderAst *ast) {
         ++ast->cursor;
         CinderExpr *expr = new_expr(ast, kind == TOK_KW_SIZEOF ? EX_SIZEOF : EX_ALIGNOF, previous(ast)->loc);
         if (is(ast, '(') && ast->cursor + 1U < ast->tokens->tokens.len && is_type_start(ast, &ast->tokens->tokens.data[ast->cursor + 1U])) {
-            ++ast->cursor; expr->queried_type = parse_type_name(ast); (void)expect(ast, ')', "')'");
+            ++ast->cursor; CinderLoc loc = previous(ast)->loc;
+            expr->queried_type = parse_type_name(ast); (void)expect(ast, ')', "')'");
+            if (kind == TOK_KW_SIZEOF && is(ast, '{')) {
+                expr->as.unary.value = parse_compound_literal(ast, expr->queried_type, loc); expr->queried_type = NULL;
+            }
         } else if (kind == TOK_KW_ALIGNOF) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "_Alignof requires a type name");
         else expr->as.unary.value = parse_unary(ast);
         expr->parse_index = ast->cursor;
@@ -485,10 +504,11 @@ static CinderExpr *parse_unary(CinderAst *ast) {
         ++ast->cursor;
         CinderLoc loc = previous(ast)->loc;
         CinderType *type = parse_type_name(ast); (void)expect(ast, ')', "')'");
+        if (is(ast, '{')) return parse_compound_literal(ast, type, loc);
         CinderExpr *expr = new_expr(ast, EX_CAST, loc); expr->as.cast.cast_type = type;
         expr->as.cast.value = parse_unary(ast); return expr;
     }
-    return parse_postfix(ast);
+    return parse_postfix_tail(ast, parse_primary(ast));
 }
 
 static int precedence(int kind) {
@@ -566,6 +586,7 @@ static CinderStmt *parse_compound(CinderAst *ast) {
     (void)expect(ast, '{', "'{'");
     size_t saved = ast->bindings.len; ++ast->scope_depth;
     CinderStmt *stmt = new_stmt(ast, ST_BLOCK, loc);
+    CinderStmt *outer = ast->literal_scope; ast->literal_scope = stmt;
     stmt->as.block.items.data = NULL; stmt->as.block.items.len = 0U; stmt->as.block.items.cap = 0U;
     while (!is(ast, TOK_EOF) && !is(ast, '}')) {
         CinderStmt *item = parse_statement(ast);
@@ -573,7 +594,19 @@ static CinderStmt *parse_compound(CinderAst *ast) {
     }
     (void)expect(ast, '}', "'}'");
     --ast->scope_depth; ast->bindings.len = saved;
+    ast->literal_scope = outer;
     return stmt;
+}
+
+static CinderStmt *parse_associated(CinderAst *ast) {
+    if (is(ast, '{')) return parse_compound(ast);
+    CinderStmt *scope = new_stmt(ast, ST_BLOCK, peek(ast)->loc);
+    CinderStmt *outer = ast->literal_scope; ast->literal_scope = scope;
+    size_t saved = ast->bindings.len; ++ast->scope_depth;
+    CinderStmt *body = parse_statement(ast);
+    --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer;
+    cinder_vec_push((CinderVec *)&scope->as.block.items, &body);
+    return scope;
 }
 
 static CinderDecl *parse_local_decl(CinderAst *ast) {
@@ -615,30 +648,40 @@ static CinderStmt *parse_statement(CinderAst *ast) {
         (void)expect(ast, ';', "';'"); return stmt;
     }
     if (take(ast, TOK_KW_IF)) {
-        CinderStmt *stmt = new_stmt(ast, ST_IF, token->loc); (void)expect(ast, '(', "'('"); stmt->as.if_stmt.condition = parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.if_stmt.then_branch = parse_statement(ast); stmt->as.if_stmt.else_branch = take(ast, TOK_KW_ELSE) ? parse_statement(ast) : NULL; return stmt;
+        CinderStmt *stmt = new_stmt(ast, ST_IF, token->loc), *outer = ast->literal_scope; ast->literal_scope = stmt;
+        size_t saved = ast->bindings.len; ++ast->scope_depth;
+        (void)expect(ast, '(', "'('"); stmt->as.if_stmt.condition = parse_expression(ast); (void)expect(ast, ')', "')'");
+        stmt->as.if_stmt.then_branch = parse_associated(ast); stmt->as.if_stmt.else_branch = take(ast, TOK_KW_ELSE) ? parse_associated(ast) : NULL;
+        --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer; return stmt;
     }
     if (take(ast, TOK_KW_WHILE)) {
-        CinderStmt *stmt = new_stmt(ast, ST_WHILE, token->loc); (void)expect(ast, '(', "'('"); stmt->as.loop.condition = parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.loop.body = parse_statement(ast); return stmt;
+        CinderStmt *stmt = new_stmt(ast, ST_WHILE, token->loc), *outer = ast->literal_scope; ast->literal_scope = stmt;
+        size_t saved = ast->bindings.len; ++ast->scope_depth;
+        (void)expect(ast, '(', "'('"); stmt->as.loop.condition = parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.loop.body = parse_associated(ast);
+        --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer; return stmt;
     }
     if (take(ast, TOK_KW_DO)) {
         CinderStmt *stmt = new_stmt(ast, ST_DO, token->loc);
-        stmt->as.loop.body = parse_statement(ast);
+        CinderStmt *outer = ast->literal_scope; ast->literal_scope = stmt;
+        size_t saved = ast->bindings.len; ++ast->scope_depth;
+        stmt->as.loop.body = parse_associated(ast);
         (void)expect(ast, TOK_KW_WHILE, "'while'");
         (void)expect(ast, '(', "'('");
         stmt->as.loop.condition = parse_expression(ast);
         (void)expect(ast, ')', "')'");
         (void)expect(ast, ';', "';'");
-        return stmt;
+        --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer; return stmt;
     }
     if (take(ast, TOK_KW_FOR)) {
         CinderStmt *stmt = new_stmt(ast, ST_FOR, token->loc); (void)expect(ast, '(', "'('");
+        CinderStmt *outer = ast->literal_scope; ast->literal_scope = stmt;
         size_t saved = ast->bindings.len; ++ast->scope_depth;
         if (is_type_start(ast, peek(ast))) stmt->as.for_stmt.init = new_stmt(ast, ST_DECL, peek(ast)->loc), stmt->as.for_stmt.init->as.decl = parse_local_decl(ast);
         else if (!is(ast, ';')) { stmt->as.for_stmt.init = new_stmt(ast, ST_EXPR, peek(ast)->loc); stmt->as.for_stmt.init->as.expr = parse_expression(ast); (void)expect(ast, ';', "';'"); }
         else { take(ast, ';'); stmt->as.for_stmt.init = NULL; }
         stmt->as.for_stmt.condition = is(ast, ';') ? NULL : parse_expression(ast); (void)expect(ast, ';', "';'");
-        stmt->as.for_stmt.step = is(ast, ')') ? NULL : parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.for_stmt.body = parse_statement(ast);
-        --ast->scope_depth; ast->bindings.len = saved; return stmt;
+        stmt->as.for_stmt.step = is(ast, ')') ? NULL : parse_expression(ast); (void)expect(ast, ')', "')'"); stmt->as.for_stmt.body = parse_associated(ast);
+        --ast->scope_depth; ast->bindings.len = saved; ast->literal_scope = outer; return stmt;
     }
     if (take(ast, TOK_KW_BREAK)) { CinderStmt *stmt = new_stmt(ast, ST_BREAK, token->loc); (void)expect(ast, ';', "';'"); return stmt; }
     if (take(ast, TOK_KW_CONTINUE)) { CinderStmt *stmt = new_stmt(ast, ST_CONTINUE, token->loc); (void)expect(ast, ';', "';'"); return stmt; }

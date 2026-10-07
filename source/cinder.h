@@ -369,6 +369,7 @@ typedef enum {
     EX_INDEX,
     EX_MEMBER,
     EX_INIT_LIST,
+    EX_COMPOUND_LITERAL,
 } CinderExprKind;
 
 typedef enum {
@@ -415,12 +416,14 @@ struct CinderExpr {
         struct { CinderExpr *base; CinderExpr *index; } index;
         struct { CinderExpr *base; char *name; size_t field; bool arrow; } member;
         struct { CINDER_VEC_TYPE(CinderInitEntry) entries; } initializer;
+        CinderDecl *compound_literal;
     } as;
 };
 
 struct CinderStmt {
     CinderStmtKind kind;
     CinderLoc loc;
+    CINDER_VEC_TYPE(CinderDecl *) literal_objects;
     union {
         CinderExpr *expr;
         struct { CINDER_VEC_TYPE(CinderStmt *) items; } block;
@@ -452,6 +455,7 @@ struct CinderDecl {
     size_t initializer_index;
     CINDER_VEC_TYPE(CinderInitAction) init_actions;
     int lowering_slot;
+    bool initializer_checked;
 };
 
 typedef enum { PARSE_OBJECT, PARSE_TYPEDEF, PARSE_ENUMERATOR, PARSE_TAG } CinderParseBindingKind;
@@ -472,8 +476,11 @@ typedef struct {
     size_t cursor;
     CINDER_VEC_TYPE(CinderParseBinding) bindings;
     CINDER_VEC_TYPE(CinderExpr *) constant_exprs;
+    CINDER_VEC_TYPE(CinderDecl *) static_literals;
     unsigned scope_depth;
     unsigned declarator_depth;
+    CinderStmt *literal_scope;
+    size_t literal_count;
 } CinderAst;
 
 void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream *tokens, CinderDiagnostics *diags);
@@ -688,6 +695,7 @@ void cinder_ir_init(CinderIRModule *module, CinderTypeContext *types);
 void cinder_ir_destroy(CinderIRModule *module);
 int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *diags);
 bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderExpr *expr, CinderIRAddress *address, CinderDiagnostics *diags);
+bool cinder_lower_static_object(CinderIRModule *module, CinderAst *ast, CinderDecl *decl, CinderDiagnostics *diags);
 bool cinder_constant_scalar(CinderAst *ast, const CinderExpr *expr, CinderType *target, int64_t *integer, double *floating);
 int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags);
 void cinder_dump_ir(const CinderIRModule *module, FILE *out);

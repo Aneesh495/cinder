@@ -54,6 +54,12 @@ static bool lvalue_address(AddressContext *context, const CinderExpr *expr, Cind
     if (depth >= 256U) return false;
     if (expr->kind == EX_NAME) return named_address(context, expr, address);
     if (expr->kind == EX_STRING) return string_address(context, expr, address);
+    if (expr->kind == EX_COMPOUND_LITERAL) {
+        CinderDecl *decl = expr->as.compound_literal;
+        if (!decl->is_static || !cinder_lower_static_object(context->module, context->ast, decl, context->diags)) return false;
+        address->symbol = cinder_strndup(decl->name, strlen(decl->name));
+        address->target_type = decl->type; address->domain_end = decl->type->size; return true;
+    }
     if (expr->kind == EX_UNARY && expr->as.unary.op == '*') return value_address(context, expr->as.unary.value, address, depth + 1U);
     if (expr->kind == EX_INDEX) {
         int64_t index; CinderType *type;

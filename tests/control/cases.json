@@ -2226,5 +2226,149 @@
   {
     "source": "../variadic/void_character_exception.c",
     "exit": 0
+  },
+  {
+    "source": "../compound_literals/scalar_read.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/scalar_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/scalar_increment.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/double_value.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/bool_value.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/array_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/inferred_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/array_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/struct_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/struct_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/struct_assignment.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/struct_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/aggregate_argument.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/aggregate_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/union_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/nested_objects.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/const_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/char_string.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/sizeof_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/sizeof_inferred.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/loop_condition_identity.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/loop_body_values.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/unbraced_body.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/conditional_choice.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_scalar.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_struct.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_nested.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_const.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/distinct_literals.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/function_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/pointer_literal.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/sizeof_array_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/condition_tag_scope.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_unevaluated_constant.c",
+    "exit": 0
+  },
+  {
+    "source": "../compound_literals/file_sizeof_literal_array.c",
+    "exit": 0
   }
 ]

@@ -1,6 +1,6 @@
 # Build status
 
-Updated: 2026-10-06
+Updated: 2026-10-07
 
 ## Repository and publication
 
@@ -483,3 +483,23 @@ and independent checker now diagnose that malformed contract before touching
 frame metadata. The 10,000-graph probe supplies real function signatures,
 includes both variadic and fixed frames, and checks the missing-signature
 rejection explicitly. The failed run's raw artifacts are retained locally.
+
+## Compound literal storage increment
+
+The repaired variadic checkpoint passed full Linux validation in
+[run 37561808498](https://github.com/Aneesh495/cinder/actions/runs/37561808498),
+including 512 variadic signatures, callbacks, and both-direction `va_list`
+interchange with GCC and Clang. The new compound literal path uses typed
+initializer plans, local ELF storage and relocations at file scope, and
+explicit C block owners for automatic literals. Selection/iteration statements
+and unbraced substatements preserve their declared scope and lifetime.
+
+Focused GCC/Clang checks passed all 36 authored compound literal sources.
+Both optimization levels passed native x86 Linux execution for all 72 objects.
+Clang ASan/UBSan passed 593 source observations, 1,186 IR round trips, 127
+source rejections, 79 classified UB cases, and 57 malformed memory contracts.
+The 100,000-case IR campaign and 1,000 SSA/copy checks also passed.
+Escaped block, body, condition, loop, and return addresses are separate VM
+lifetime cases. Bound evaluation involving an inferred literal array before
+semantic completion and goto scope entry remain open. Final acceptance is
+incomplete.
