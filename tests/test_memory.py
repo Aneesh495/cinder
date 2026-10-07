@@ -31,11 +31,11 @@ print(f'memory: {len(cases)} authored undefined cases classified at both optimiz
 # Change contracts on real memory instructions while preserving the rest of
 # each canonical module. Every rejection must leave a previous output intact.
 seeds = {}
-for name in ('member_array', 'global_array', 'pointer_difference'):
-    path = base / (name + '.cir')
+for name in ('member_array', 'global_array', 'pointer_difference', '../initializers/local_struct_omitted', '../initializers/local_const_array_list', '../initializers/local_scalar_braces'):
+    path = base / (pathlib.Path(name).name + '.cir')
     result = subprocess.run([str(compiler), '--serialize-ir', '-O0', 'tests/memory/' + name + '.c', '-o', str(path)], capture_output=True, timeout=10)
     assert result.returncode == 0, result
-    seeds[name] = path.read_text()
+    seeds[pathlib.Path(name).name] = path.read_text()
 mutations = [
     ('member_array', 'local.address', {10: '999999'}),
     ('member_array', 'local.begin', {6: '0'}),
@@ -54,6 +54,16 @@ mutations = [
     ('member_array', 'pointer.member', {10: '1'}),
     ('global_array', 'global.address', {12: 'x6d697373696e67'}),
     ('pointer_difference', 'pointer.diff', {8: '0000000000000000'}),
+    ('local_struct_omitted', 'zero.init', {5: '0'}),
+    ('local_struct_omitted', 'zero.init', {6: 'none'}),
+    ('local_struct_omitted', 'zero.init', {7: '0'}),
+    ('local_struct_omitted', 'zero.init', {8: 'ffffffffffffffff'}),
+    ('local_struct_omitted', 'zero.init', {8: '0000000004000001'}),
+    ('local_const_array_list', 'memory.init', {5: '0'}),
+    ('local_const_array_list', 'memory.init', {6: 'none'}),
+    ('local_const_array_list', 'memory.init', {7: 'none'}),
+    ('local_const_array_list', 'memory.init', {1: 'memory.store'}),
+    ('local_scalar_braces', 'memory.init', {2: 'none'}),
 ]
 for index, (seed, opcode, edits) in enumerate(mutations):
     lines = seeds[seed].splitlines()

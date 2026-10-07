@@ -1,6 +1,8 @@
 #include "cinder.h"
 
 #include <inttypes.h>
+#include <stdlib.h>
+#include <string.h>
 
 static void bytes(FILE *out, const unsigned char *data, size_t begin, size_t end) {
     while (begin < end) {
@@ -43,7 +45,7 @@ static int text_section(const CinderMachineObject *object, FILE *out, CinderDiag
             if (object->text.len - offset < 4U || (fix->type != 2 && fix->type != 4)) {
                 cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "assembly writer found an unsupported text relocation"); return 1;
             }
-            fprintf(out, "  .long %s%s - . %c %" PRIu64 "\n", fix->symbol, fix->type == 4 ? "@PLT" : "", fix->addend < 0 ? '-' : '+', fix->addend < 0 ? UINT64_C(0) - (uint64_t)fix->addend : (uint64_t)fix->addend);
+            fprintf(out, "  .reloc ., %s, %s %c %" PRIu64 "\n  .long 0\n", fix->type == 4 ? "R_X86_64_PLT32" : "R_X86_64_PC32", fix->symbol, fix->addend < 0 ? '-' : '+', fix->addend < 0 ? UINT64_C(0) - (uint64_t)fix->addend : (uint64_t)fix->addend);
             offset += 4U;
         } else {
             size_t end = next_text_label(object, offset);
@@ -95,7 +97,7 @@ static void data_section(const CinderMachineObject *object, FILE *out, unsigned 
     data_labels(object, out, section, size);
 }
 
-int cinder_write_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags) {
+static int write_ordered_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags) {
     size_t last[3] = {0U, 0U, 0U};
     for (size_t i = 0U; i < object->fixups.len; ++i) {
         const CinderFixup *fix = &object->fixups.data[i]; unsigned section = fix->section_kind;
@@ -113,4 +115,22 @@ int cinder_write_assembly(const CinderMachineObject *object, FILE *out, CinderDi
     fputs(".section .note.GNU-stack,\"\",@progbits\n", out);
     if (ferror(out)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "assembly output write failed"); return 1; }
     return 0;
+}
+
+static int compare_fixup(const void *left, const void *right) {
+    const CinderFixup *a = left, *b = right;
+    if (a->section_kind != b->section_kind) return a->section_kind < b->section_kind ? -1 : 1;
+    return a->offset < b->offset ? -1 : a->offset > b->offset ? 1 : 0;
+}
+
+int cinder_write_assembly(const CinderMachineObject *object, FILE *out, CinderDiagnostics *diags) {
+    if (object->fixups.len > SIZE_MAX / sizeof(*object->fixups.data)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "assembly relocation storage overflow"); return 1; }
+    CinderMachineObject ordered = *object;
+    ordered.fixups.data = cinder_alloc((object->fixups.len == 0U ? 1U : object->fixups.len) * sizeof(*object->fixups.data));
+    if (object->fixups.len != 0U) {
+        memcpy(ordered.fixups.data, object->fixups.data, object->fixups.len * sizeof(*object->fixups.data));
+        qsort(ordered.fixups.data, ordered.fixups.len, sizeof(*ordered.fixups.data), compare_fixup);
+    }
+    int result = write_ordered_assembly(&ordered, out, diags);
+    free(ordered.fixups.data); return result;
 }

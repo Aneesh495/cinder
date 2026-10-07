@@ -1,0 +1,16 @@
+{
+  "local_copy_then_leaf_override.c": {
+    "source_sha256": "a480ffda29304d0b77e6dadec77d766c3cb7141ce4e8baa25158f7d9e177eed0",
+    "standard_exit": 18,
+    "family": "gcc",
+    "reference_exit": 16,
+    "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0413.html"
+  },
+  "local_copy_then_nested_reset.c": {
+    "source_sha256": "983da73143bb29292648737deeab8baee9a7f62fee6ec291a21a0bc717fbe732",
+    "standard_exit": 15,
+    "family": "gcc",
+    "reference_exit": 12,
+    "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0413.html"
+  }
+}

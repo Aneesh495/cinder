@@ -33,7 +33,7 @@ reference execution, IR interpretation, emitted objects, and native Linux
 execution. `make test-memory` records separate UB classes through serialized
 IR and never executes emitted undefined programs.
 
-Aggregate values/copy, bitfields, general initializer lists, compound literals,
+Aggregate expression results/ABI, bitfields, compound literals,
 allocated storage/library models, restrict contracts, and goto scope entry
 remain open. The abstract VM does not expose host addresses or padding values
 as differential equality oracles.
@@ -46,3 +46,19 @@ Converting back to a pointer still observes the target object's lifetime.
 Partial byte writes invalidate stored word tags. General character copying of
 pointer representations and arithmetic reconstruction of addresses need
 additional modeling; exact address bits are outside the differential oracle.
+
+Brace initializers produce a source-ordered subobject plan. Array and member
+selectors retain continuation through nested aggregates and brace elision.
+Incomplete array bounds are inferred independently for each declared object.
+Each explicit aggregate brace level zeros its omitted subobjects and padding;
+a later complete subobject initializer replaces earlier contained actions.
+Local copy initialization transfers bytes, initialization state, and stored
+pointer identities. Const initialization uses explicit initialization effects;
+subsequent ordinary writes still obey deep const checks. Global plans encode
+scalar values and original pointer relocations at their actual byte offsets.
+Overlapping later stores remove superseded relocations.
+
+The interpreter keeps explicitly initialized scalar destinations uninitialized
+until their expression has been evaluated. Self-reads are classified separately
+from defined execution. Initializer ordering follows the chosen source order;
+unspecified side-effect order and padding are not differential equality tests.

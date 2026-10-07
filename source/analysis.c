@@ -152,8 +152,8 @@ unsigned cinder_forward_local_memory(CinderIRFunction *function) {
         for (size_t i = 0U; i < block->instructions.len; ++i) {
             CinderIRInst *inst = &block->instructions.data[i];
             if ((inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END) && inst->slot >= 0 && (size_t)inst->slot < function->local_count) { current[inst->slot] = CINDER_INVALID_VALUE; continue; }
-            if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE) && inst->slot >= 0 && (size_t)inst->slot < function->local_types.len && (function->local_types.data[inst->slot]->qualifiers & 2U) != 0U) { current[inst->slot] = CINDER_INVALID_VALUE; continue; }
-            if (inst->op == IR_LOCAL_STORE && inst->slot >= 0 && (size_t)inst->slot < function->local_count) { current[inst->slot] = inst->left; continue; }
+            if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) && inst->slot >= 0 && (size_t)inst->slot < function->local_types.len && (function->local_types.data[inst->slot]->qualifiers & 2U) != 0U) { current[inst->slot] = CINDER_INVALID_VALUE; continue; }
+            if ((inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) && inst->slot >= 0 && (size_t)inst->slot < function->local_count) { current[inst->slot] = inst->left; continue; }
             if (inst->op == IR_LOCAL_LOAD && inst->slot >= 0 && (size_t)inst->slot < function->local_count && current[inst->slot] != CINDER_INVALID_VALUE) { inst->op = IR_COPY; inst->left = current[inst->slot]; inst->right = CINDER_INVALID_VALUE; inst->slot = -1; forwarded++; }
         }
         free(current);

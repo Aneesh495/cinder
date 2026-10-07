@@ -112,4 +112,5 @@ for label, content in mutations.items():
     result = subprocess.run([str(irtool), '-c', str(fixture), '-o', str(prior)], capture_output=True, timeout=5)
     assert result.returncode != 0 and (b'error:' in result.stderr or b'fatal:' in result.stderr), (label, result)
     assert prior.read_bytes() == b'prior complete object', label
+assert hashlib.sha256(compiler.read_bytes() + irtool.read_bytes()).hexdigest() == identity, 'compiler tools changed during IR verification'
 print(f'IR text: {len(observations)} source round trips/backend comparisons and {len(mutations)} rejection mutations passed; native={native}')

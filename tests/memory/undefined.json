@@ -146,5 +146,29 @@
   {
     "source": "static_null_callback.undefined.c",
     "classification": 11
+  },
+  {
+    "source": "initializer_self_scalar.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "initializer_self_array.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "initializer_const_array_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "initializer_const_member_write.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "initializer_expired_pointer.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "initializer_literal_write.undefined.c",
+    "classification": 12
   }
 ]

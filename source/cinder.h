@@ -333,6 +333,23 @@ typedef struct CinderExpr CinderExpr;
 typedef struct CinderStmt CinderStmt;
 typedef struct CinderDecl CinderDecl;
 
+typedef struct {
+    char *member;
+    CinderExpr *index;
+} CinderInitDesignator;
+
+typedef struct {
+    CinderExpr *value;
+    CINDER_VEC_TYPE(CinderInitDesignator) designators;
+} CinderInitEntry;
+
+typedef struct {
+    size_t offset;
+    CinderType *type;
+    CinderExpr *value;
+    bool zero;
+} CinderInitAction;
+
 typedef enum {
     EX_INT,
     EX_FLOAT,
@@ -351,6 +368,7 @@ typedef enum {
     EX_DECAY,
     EX_INDEX,
     EX_MEMBER,
+    EX_INIT_LIST,
 } CinderExprKind;
 
 typedef enum {
@@ -396,6 +414,7 @@ struct CinderExpr {
         struct { CinderType *cast_type; CinderExpr *value; } cast;
         struct { CinderExpr *base; CinderExpr *index; } index;
         struct { CinderExpr *base; char *name; size_t field; bool arrow; } member;
+        struct { CINDER_VEC_TYPE(CinderInitEntry) entries; } initializer;
     } as;
 };
 
@@ -431,6 +450,7 @@ struct CinderDecl {
     bool has_definition;
     bool declaration_complete;
     size_t initializer_index;
+    CINDER_VEC_TYPE(CinderInitAction) init_actions;
     int lowering_slot;
 };
 
@@ -558,6 +578,9 @@ typedef enum {
     IR_FUNCTION_ADDRESS,
     IR_OBJECT_COPY,
     IR_OBJECT_INIT,
+    IR_LOCAL_INIT,
+    IR_MEMORY_INIT,
+    IR_ZERO_INIT,
     IR_UNDEF,
 } CinderIROp;
 

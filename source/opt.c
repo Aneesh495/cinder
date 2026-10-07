@@ -5,6 +5,7 @@
 
 static bool fold(const CinderIRInst *inst, int64_t left, int64_t right, int64_t *out) {
     CinderIROp op = inst->op;
+    if (op != IR_ADD && op != IR_SUB && op != IR_MUL && op != IR_BIT_AND && op != IR_BIT_OR && op != IR_BIT_XOR && op != IR_CMP_EQ && op != IR_CMP_NE && op != IR_CMP_LT_S && op != IR_CMP_LE_S && op != IR_CMP_GT_S && op != IR_CMP_GE_S && op != IR_DIV_S && op != IR_MOD_S) return false;
     bool unsig = inst->type != NULL && inst->type->is_unsigned;
     const CinderType *operand = inst->source_type != NULL ? inst->source_type : inst->type;
     unsigned width = (unsigned)(operand->size * 8U);

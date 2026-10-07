@@ -83,3 +83,13 @@ The authored memory suite separately covers pointer/object instructions and
 classifies invalid memory executions without running native undefined programs.
 The generated typed campaign has not yet been expanded to object-memory graphs.
 These incremental suites do not establish final frozen-source acceptance.
+
+`local.init`, `memory.init`, `object.init`, and `zero.init` represent construction
+of automatic objects separately from later ordinary stores. Scalar initializers
+retain RHS evaluation before their destination store. Aggregate brace plans
+emit omitted-byte zeroing at each explicit brace level, followed by surviving
+source-ordered subobject initializers. Whole object initialization copies byte
+initialization and pointer metadata in the interpreter. The x86 encoder emits
+original typed stores or bounded byte transfers. A zero effect carries an
+explicit byte pointer and extent; the verifier rejects scalar result IDs,
+extra operands, mismatched pointer types, and invalid extents.

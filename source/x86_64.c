@@ -541,6 +541,11 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_FUNCTION_ADDRESS: case IR_GLOBAL_ADDRESS:
                     emit8(object, 0x48U); emit8(object, 0x8DU); emit8(object, 0x05U); symbol_displacement(object, inst->callee);
                     store_value_alloc(object, function, allocation, inst->dst); break;
+                case IR_ZERO_INIT:
+                    load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 7U, 0U);
+                    emit8(object, 0x31U); emit8(object, 0xC0U);
+                    emit8(object, 0x48U); emit8(object, 0xB9U); emit64(object, (uint64_t)inst->integer);
+                    emit8(object, 0xF3U); emit8(object, 0xAAU); break;
                 case IR_OBJECT_COPY: case IR_OBJECT_INIT:
                     load_value_alloc(object, function, allocation, inst->left); emit_mov_reg_reg(object, 7U, 0U);
                     load_value_alloc(object, function, allocation, inst->right); emit_mov_reg_reg(object, 6U, 0U);
@@ -552,7 +557,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     if (cinder_ir_floating(inst->type)) store_float_value(object, function, allocation, inst->dst);
                     else store_value_alloc(object, function, allocation, inst->dst);
                     break;
-                case IR_MEMORY_STORE:
+                case IR_MEMORY_STORE: case IR_MEMORY_INIT:
                     load_value_to_r10(object, function, allocation, inst->left);
                     if (cinder_ir_floating(inst->type)) load_float_value(object, function, allocation, inst->right, 0U);
                     else load_value_alloc(object, function, allocation, inst->right);
@@ -577,7 +582,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     if (cinder_ir_floating(inst->type)) store_float_value(object, function, allocation, inst->dst);
                     else store_value_alloc(object, function, allocation, inst->dst);
                     break;
-                case IR_LOCAL_STORE:
+                case IR_LOCAL_STORE: case IR_LOCAL_INIT:
                     if (cinder_ir_floating(inst->type)) load_float_value(object, function, allocation, inst->left, 0U);
                     else load_value_alloc(object, function, allocation, inst->left);
                     object_store(object, inst->type, 0x85U, false, local_offset(allocation, inst->slot));
