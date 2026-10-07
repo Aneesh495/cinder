@@ -475,3 +475,11 @@ Local sanitizer checks passed 557 authored source observations and 1,114 IR
 round trips. The focused variadic corpus and generated GCC/Clang interchange
 checks retain their raw observations under `.agent-local`. Full native runs
 and audited acceptance remain required; no complete-project claim is made.
+
+Linux run [37555550311](https://github.com/Aneesh495/cinder/actions/runs/37555550311)
+passed the complete frontend, native source, IR, and variadic UB checks, then
+exposed an allocation probe with a missing function signature. The allocator
+and independent checker now diagnose that malformed contract before touching
+frame metadata. The 10,000-graph probe supplies real function signatures,
+includes both variadic and fixed frames, and checks the missing-signature
+rejection explicitly. The failed run's raw artifacts are retained locally.

@@ -35,6 +35,9 @@ static void check_point(const bool *live, const CinderLocation *const *locations
 
 int cinder_verify_allocation(const CinderAllocation *allocation, CinderDiagnostics *diags) {
     const CinderIRFunction *function = allocation->ir;
+    if (function == NULL || function->type == NULL || function->type->kind != TYPE_FUNCTION) {
+        cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation checker requires a function signature"); return 1;
+    }
     size_t count = function->value_count;
     size_t blocks = function->blocks.len;
     if (allocation->local_offsets.len != function->local_count || function->local_types.len != function->local_count) {
