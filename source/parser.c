@@ -376,6 +376,31 @@ static CinderExpr *parse_initializer(CinderAst *ast, unsigned depth) {
 
 static CinderExpr *parse_primary(CinderAst *ast) {
     CinderToken *token = peek(ast);
+    if (take(ast, TOK_KW_GENERIC)) {
+        if (ast->generic_depth >= 128U) {
+            cinder_diag(ast->diags, CINDER_ERROR, token->loc, "generic expression nesting exceeds the profile limit");
+            size_t parentheses = 0U;
+            while (!is(ast, TOK_EOF)) {
+                if (take(ast, '(')) ++parentheses;
+                else if (take(ast, ')')) { if (parentheses == 0U || --parentheses == 0U) break; }
+                else ++ast->cursor;
+            }
+            return new_expr(ast, EX_INT, token->loc);
+        }
+        ++ast->generic_depth;
+        CinderExpr *expr = new_expr(ast, EX_GENERIC, token->loc);
+        expr->as.generic.selected = SIZE_MAX;
+        (void)expect(ast, '(', "'('"); expr->as.generic.control = parse_assignment(ast);
+        (void)expect(ast, ',', "','");
+        do {
+            CinderGenericAssociation association;
+            association.type = take(ast, TOK_KW_DEFAULT) ? NULL : parse_type_name(ast);
+            association.parse_index = ast->cursor;
+            (void)expect(ast, ':', "':'"); association.value = parse_assignment(ast);
+            cinder_vec_push((CinderVec *)&expr->as.generic.associations, &association);
+        } while (take(ast, ','));
+        (void)expect(ast, ')', "')'"); --ast->generic_depth; return expr;
+    }
     if (take(ast, TOK_NUMBER)) {
         CinderExpr *expr = new_expr(ast, token->is_floating ? EX_FLOAT : EX_INT, token->loc);
         if (token->is_floating) { expr->as.floating = token->floating; expr->type = token->number_float32 ? ast->types->float_type : ast->types->double_type; }

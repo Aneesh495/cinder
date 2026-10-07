@@ -303,6 +303,31 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope) {
     if (expr == NULL) return sema->types->void_type;
     switch (expr->kind) {
+        case EX_GENERIC: {
+            ++sema->unevaluated_depth;
+            CinderType *control = sema_value(sema, &expr->as.generic.control, scope);
+            --sema->unevaluated_depth;
+            size_t selected = cinder_generic_selection(control, expr);
+            for (size_t i = 0U; i < expr->as.generic.associations.len; ++i) {
+                CinderGenericAssociation *association = &expr->as.generic.associations.data[i];
+                CinderType *type = association->type;
+                if (type != NULL && (!type->complete || type->completion_index > association->parse_index || type->size == 0U || type->kind == TYPE_FUNCTION || type->kind == TYPE_VOID)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "generic association requires a complete object type");
+                for (size_t j = 0U; j < i; ++j) {
+                    CinderType *other = expr->as.generic.associations.data[j].type;
+                    if ((type == NULL && other == NULL) || (type != NULL && other != NULL && cinder_type_compatible(type, other))) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "generic associations duplicate a default or compatible type");
+                }
+                if (i != selected) ++sema->unevaluated_depth;
+                (void)sema_expr(sema, association->value, scope);
+                if (i != selected) --sema->unevaluated_depth;
+            }
+            expr->as.generic.selected = selected;
+            if (selected >= expr->as.generic.associations.len) {
+                cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "generic selection has no unique matching association or default");
+                expr->type = sema->types->error_type; return expr->type;
+            }
+            CinderExpr *value = expr->as.generic.associations.data[selected].value;
+            expr->type = value->type; expr->is_lvalue = value->is_lvalue; return expr->type;
+        }
         case EX_COMPOUND_LITERAL: {
             CinderDecl *decl = expr->as.compound_literal;
             if (sema->unevaluated_depth == 0U) decl->literal_evaluated = true;
@@ -506,6 +531,11 @@ static bool constant_scope(CinderExpr *expr, CinderScope *scope, unsigned depth)
     if (expr == NULL) return true;
     if (depth >= 256U) return false;
     switch (expr->kind) {
+        case EX_GENERIC:
+            if (!constant_scope(expr->as.generic.control, scope, depth + 1U)) return false;
+            for (size_t i = 0U; i < expr->as.generic.associations.len; ++i)
+                if (!constant_scope(expr->as.generic.associations.data[i].value, scope, depth + 1U)) return false;
+            return true;
         case EX_NAME:
             if (expr->name_visible && expr->type != NULL && scope_here(scope, expr->as.name) == NULL)
                 scope_add(scope, expr->as.name, expr->type, NULL, expr->type->kind == TYPE_FUNCTION);

@@ -2554,5 +2554,197 @@
   {
     "source": "../static_assertions/nested_blocks.c",
     "exit": 0
+  },
+  {
+    "source": "../generic/int_select.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/default_select.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/char_no_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/short_no_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/bool_no_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/float_no_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/double_select.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/unsigned_select.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/const_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/volatile_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/qualified_pointer_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/pointee_qualifier.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/array_control_decay.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/string_control_decay.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/array_address_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/function_control_decay.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/control_increment_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/control_call_unevaluated.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/uninitialized_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/null_dereference_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/unselected_effect.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/selected_effect.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/lvalue_assignment.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/lvalue_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/lvalue_increment.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/selected_array_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/selected_array_decay.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/selected_function_call.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/selected_void.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/void_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/struct_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/struct_lvalue_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/struct_value_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/compound_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/unselected_large_literal.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/controlling_large_literal.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/nested_selection.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/constant_array_bound.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/constant_enumerator.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/constant_assertion.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/constant_shape_copy.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/global_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/global_float.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/global_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/global_function.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/enum_tag_select.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/enum_signed_compatibility.c",
+    "exit": 0
+  },
+  {
+    "source": "../generic/inline_association_tag.c",
+    "exit": 0
   }
 ]
