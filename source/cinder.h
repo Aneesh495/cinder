@@ -581,6 +581,7 @@ typedef enum {
     IR_LOCAL_INIT,
     IR_MEMORY_INIT,
     IR_ZERO_INIT,
+    IR_LOCAL_FREEZE,
     IR_UNDEF,
 } CinderIROp;
 

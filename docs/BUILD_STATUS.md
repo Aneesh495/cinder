@@ -359,7 +359,10 @@ uninitialized self-reads, expired pointers, and writes to const subobjects.
 Canonical IR mutations check initializer operand, effect, and extent contracts.
 General aggregate expression results and argument/return ABI remain open.
 The prior scalar constant checkpoint passed native Linux validation in run
-`37407723011`; this increment needs its own native validation after publication.
+`37407723011`. The subobject initializer checkpoint `96321b4` passed
+[native Linux validation](https://github.com/Aneesh495/cinder/actions/runs/37550970670),
+including owned object/assembly execution, scalar callback ABI checks, the
+1,000-case multi-unit object campaign, sanitizers, and evidence integrity checks.
 
 The GCC 15 macOS reference rejected a repeated implicit address-to-boolean
 initializer in one aggregate although its single-scalar form and explicit
@@ -392,3 +395,30 @@ Raw executions remain in the reports, and these cases cannot contribute to a
 GCC/Clang agreement count. Cinder's interpreter and native outputs must always
 match the standard result. This adjudication does not satisfy the full
 differential acceptance campaign.
+
+## Aggregate expression continuation
+
+Struct/union assignment, chained assignment, selected conditional results,
+comma results, aggregate copy initialization from these results, and member
+reads now use explicit typed object transfers. Completed expression snapshots
+are immutable in the interpreter and expire at the enclosing full expression.
+Source assignment checks reject aggregates containing const subobjects while
+allowing ordinary members that point to const storage.
+
+Strict GCC and Clang sanitizer builds passed. Local validation passed 514
+authored reference/interpreter/object cases, 1,028 canonical IR/backend
+comparisons, 108 source rejections, 56 undefined-memory classifications, 31
+malformed memory/lifetime instruction mutations, 100,000 typed IR cases, and
+1,000 simultaneous-phi/critical-edge cases. The focused aggregate runner checks
+28 authored inputs and independently assembled bytes/relocations. Three inputs
+have storage-identity-sensitive GCC/Clang differences permitted by the C17
+temporary-address correction; their raw results are retained, and they remain
+ineligible for reference equality counts. The remaining 25 agree with both
+references at both optimization levels. These local runs emit Linux target
+objects but cannot execute them on macOS arm64.
+
+The aggregate expression increment requires native validation after publication.
+Aggregate argument/return classification, hosted variadics, the remaining
+language families, debugging, self-hosting, full applications, and final
+acceptance remain open. The next implementation step is complete System V
+aggregate value transfer through calls and returns.

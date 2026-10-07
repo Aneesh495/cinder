@@ -297,7 +297,10 @@
         "tests/callbacks/callback_member.c",
         "tests/callbacks/callback_context.c",
         "tests/linkage/tag_member_after_definition.c",
-        "tests/static_addresses/global_member_pointer.c"
+        "tests/static_addresses/global_member_pointer.c",
+        "tests/aggregates/assignment.c",
+        "tests/aggregates/large_assignment.c",
+        "tests/aggregates/const_source_assignment.c"
       ],
       "boundary_cases": [
         "tests/memory/member_array.c",
@@ -330,7 +333,9 @@
       "required_boundary": "Layout and supported legal access semantics",
       "status": "partial",
       "valid_cases": [
-        "tests/memory/union_bytes.c"
+        "tests/memory/union_bytes.c",
+        "tests/aggregates/union_assignment.c",
+        "tests/aggregates/union_conditional.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -457,7 +462,9 @@
       "valid_cases": [
         "tests/memory/local_alias.c",
         "tests/memory/parameter_mutation.c",
-        "tests/memory/member_address.c"
+        "tests/memory/member_address.c",
+        "tests/aggregates/assignment_member_result.c",
+        "tests/aggregates/nested_member_result.c"
       ],
       "boundary_cases": [
         "tests/memory/lvalue_once.c",
@@ -465,7 +472,9 @@
       ],
       "negative_cases": [
         "tests/constraints/array_assignment.c",
-        "tests/constraints/member_const_write.c"
+        "tests/constraints/member_const_write.c",
+        "tests/constraints/aggregate_conditional_lvalue.c",
+        "tests/constraints/aggregate_comma_address.c"
       ],
       "native_evidence": [],
       "open_requirements": [
@@ -519,13 +528,17 @@
       "valid_cases": [
         "tests/control/compound_remainder.c",
         "tests/memory/pointer_compound.c",
-        "tests/memory/float_alias.c"
+        "tests/memory/float_alias.c",
+        "tests/aggregates/assignment_target_once.c",
+        "tests/aggregates/assignment_chain.c"
       ],
       "boundary_cases": [
         "tests/memory/lvalue_once.c"
       ],
       "negative_cases": [
-        "tests/constraints/pointer_compound_multiply.c"
+        "tests/constraints/pointer_compound_multiply.c",
+        "tests/constraints/aggregate_nested_const_assignment.c",
+        "tests/constraints/aggregate_array_const_assignment.c"
       ],
       "native_evidence": [],
       "open_requirements": [
@@ -616,7 +629,9 @@
       "valid_cases": [
         "tests/control/conditional_nested.c",
         "tests/memory/pointer_return.c",
-        "tests/callbacks/callback_phi.c"
+        "tests/callbacks/callback_phi.c",
+        "tests/aggregates/conditional_effect.c",
+        "tests/aggregates/conditional_in_list.c"
       ],
       "boundary_cases": [],
       "negative_cases": [],
@@ -641,7 +656,9 @@
       "valid_cases": [
         "tests/control/comma_sequence.c",
         "tests/memory/void_pointer_roundtrip.c",
-        "tests/memory/character_representation.c"
+        "tests/memory/character_representation.c",
+        "tests/aggregates/comma_member.c",
+        "tests/aggregates/comma_initializer.c"
       ],
       "boundary_cases": [
         "tests/memory/pointer_equal_casts.c"

@@ -127,7 +127,8 @@ static bool same_value_type(const CinderType *left, const CinderType *right) {
 }
 
 static void check_storage(const CinderIRModule *module, const CinderIRFunction *function, const CinderIRInst *inst, CinderType *const *types, CinderDiagnostics *diags) {
-    if ((inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END) && !cinder_type_equal(inst->type, function->local_types.data[inst->slot])) cinder_diag(diags, CINDER_FATAL, inst->loc, "local lifetime type disagrees with storage");
+    if ((inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END || inst->op == IR_LOCAL_FREEZE) && !cinder_type_equal(inst->type, function->local_types.data[inst->slot])) cinder_diag(diags, CINDER_FATAL, inst->loc, "local lifetime type disagrees with storage");
+    if (inst->op == IR_LOCAL_FREEZE && inst->type->kind != TYPE_STRUCT && inst->type->kind != TYPE_UNION) cinder_diag(diags, CINDER_FATAL, inst->loc, "temporary freeze requires aggregate storage");
     if (inst->op == IR_LOCAL_ADDRESS && (inst->type->kind != TYPE_POINTER || !cinder_type_equal(inst->type->base, function->local_types.data[inst->slot]))) cinder_diag(diags, CINDER_FATAL, inst->loc, "local address type disagrees with object storage");
     if (inst->op == IR_GLOBAL_ADDRESS) {
         const CinderIRGlobal *global = NULL;
@@ -276,7 +277,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 if (inst->op != IR_NOP && inst->type == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed IR instruction has no type");
-                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
+                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_FREEZE && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
                 if (has_result) {
                     if ((size_t)inst->dst >= function->value_count) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has no valid result ID");
                     else if (definitions[inst->dst] != CINDER_INVALID_BLOCK) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result ID has multiple definitions");
@@ -284,7 +285,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                     if (inst->type == NULL || inst->type->kind == TYPE_VOID || inst->type->kind == TYPE_ERROR || !inst->type->complete) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result has no type");
                     if (!(integer(inst->type) || cinder_ir_floating(inst->type))) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result requires a supported scalar value type");
                 } else if (inst->dst != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "effect-only IR instruction defines a value");
-                if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_LOCAL_ADDRESS || inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END || inst->op == IR_PHI) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot is outside storage table");
+                if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_LOCAL_ADDRESS || inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_END || inst->op == IR_LOCAL_FREEZE || inst->op == IR_PHI) && (inst->slot < 0 || (size_t)inst->slot >= function->local_count)) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR local slot is outside storage table");
                 if ((inst->op == IR_GLOBAL_LOAD || inst->op == IR_GLOBAL_STORE || inst->op == IR_GLOBAL_ADDRESS || inst->op == IR_FUNCTION_ADDRESS) && inst->callee == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR symbol operation has no symbol");
             }
         }

@@ -62,3 +62,22 @@ The interpreter keeps explicitly initialized scalar destinations uninitialized
 until their expression has been evaluated. Self-reads are classified separately
 from defined execution. Initializer ordering follows the chosen source order;
 unspecified side-effect order and padding are not differential equality tests.
+
+Aggregate assignment transfers the complete target object once. Chained
+assignment, selected conditional arms, comma sequencing, and member reads from
+expression results use bounded automatic snapshots. Object transfers preserve
+pointer identities and initialized-byte state, including undefined reads from
+uninitialized copied fields. The interpreter freezes snapshots after construction
+and retires them at each full-expression boundary: declaration initialization,
+expression statements, condition tests, loop steps, and returns. A write through
+an array member of a temporary is classified read-only; access after the boundary
+is classified as an expired object. Source const members also prevent aggregate
+assignment, while pointers to const objects do not make their containing struct
+unassignable.
+
+[C17 issue 0452](https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0452.html)
+permits nonunique addresses for temporary objects. Cinder materializes separate
+snapshots. Tests that mutate the source object while reading a temporary within
+one full expression expose GCC/Clang storage-identity differences. They check
+Cinder's declared snapshot behavior, retain both reference results, and remain
+ineligible for cross-reference equality accounting.
