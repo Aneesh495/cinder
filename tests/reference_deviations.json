@@ -1,42 +1,53 @@
 {
   "local_copy_then_leaf_override.c": {
     "source_sha256": "a480ffda29304d0b77e6dadec77d766c3cb7141ce4e8baa25158f7d9e177eed0",
-    "family": "gcc",
     "reference_exit": 16,
     "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0413.html",
     "resolution": "standard-ruling",
-    "expected_exit": 18
+    "expected_exit": 18,
+    "families": [
+      "gcc"
+    ]
   },
   "local_copy_then_nested_reset.c": {
     "source_sha256": "983da73143bb29292648737deeab8baee9a7f62fee6ec291a21a0bc717fbe732",
-    "family": "gcc",
     "reference_exit": 12,
     "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0413.html",
     "resolution": "standard-ruling",
-    "expected_exit": 15
+    "expected_exit": 15,
+    "families": [
+      "gcc"
+    ]
   },
   "assignment_snapshot.c": {
     "source_sha256": "1ce89c47e7a8c5a9559fb2d8915bd5a15d4155dfd5c06c1da381d99e5eb29bf3",
-    "family": "gcc",
     "reference_exit": 18,
     "resolution": "inconclusive-temporary-storage-identity",
     "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0452.html",
-    "expected_exit": 11
+    "expected_exit": 11,
+    "families": [
+      "gcc"
+    ]
   },
   "conditional_snapshot.c": {
     "source_sha256": "b78a40105d9cfa7af763bcfeb20b3b2d8186e4391805348ad9a7b4817dfd6be8",
-    "family": "gcc",
     "reference_exit": 18,
     "resolution": "inconclusive-temporary-storage-identity",
     "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0452.html",
-    "expected_exit": 16
+    "expected_exit": 16,
+    "families": [
+      "gcc"
+    ]
   },
   "comma_snapshot.c": {
     "source_sha256": "660413906d2a867156dd8cff6e948898799ba3e5db40a1c1f92aab2e232761bc",
-    "family": "gcc",
     "reference_exit": 18,
     "resolution": "inconclusive-temporary-storage-identity",
     "ruling": "https://open-std.org/JTC1/SC22/WG14/issues/c11c17/issue0452.html",
-    "expected_exit": 14
+    "expected_exit": 14,
+    "families": [
+      "gcc",
+      "clang"
+    ]
   }
 }
