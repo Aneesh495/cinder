@@ -132,6 +132,19 @@ static bool same_value_type(const CinderType *left, const CinderType *right) {
 }
 
 static void check_storage(const CinderIRModule *module, const CinderIRFunction *function, const CinderIRInst *inst, CinderType *const *types, CinderDiagnostics *diags) {
+    if (inst->op == IR_VA_START || inst->op == IR_VA_COPY || inst->op == IR_VA_END || inst->op == IR_VA_ARG) {
+        if (!cinder_va_pointer_type(types[inst->left])) cinder_diag(diags, CINDER_FATAL, inst->loc, "variadic instruction requires a va_list pointer");
+        if (inst->op == IR_VA_COPY && !cinder_va_pointer_type(types[inst->right])) cinder_diag(diags, CINDER_FATAL, inst->loc, "va_copy requires a va_list source pointer");
+        if (inst->op == IR_VA_START && !function->type->variadic) cinder_diag(diags, CINDER_FATAL, inst->loc, "va_start is outside a variadic function");
+        if (inst->op == IR_VA_ARG) {
+            const CinderType *requested = inst->source_type;
+            if (requested == NULL || !requested->complete || requested->size == 0U || requested->size > 64U * 1024U * 1024U || requested->kind == TYPE_ARRAY || requested->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_FATAL, inst->loc, "va_arg has no complete requested type"); return; }
+            if (aggregate_value(requested)) {
+                if (inst->slot < 0 || (size_t)inst->slot >= function->local_count || inst->type->kind != TYPE_POINTER || !same_value_type(inst->type->base, requested)) cinder_diag(diags, CINDER_FATAL, inst->loc, "aggregate va_arg has no compatible result storage");
+                else if (!same_value_type(function->local_types.data[inst->slot], requested)) cinder_diag(diags, CINDER_FATAL, inst->loc, "va_arg storage disagrees with requested type");
+            } else if (inst->slot != -1 || !same_value_type(inst->type, requested)) cinder_diag(diags, CINDER_FATAL, inst->loc, "scalar va_arg has an incorrect result contract");
+        } else if (inst->type->kind != TYPE_VOID || inst->slot != -1 || inst->source_type != NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "variadic state effect has unexpected result metadata");
+    }
     if (inst->op == IR_AGG_ARG) {
         if (inst->operator_code < 0 || (size_t)inst->operator_code >= function->params.len || !aggregate_value(inst->type) || !cinder_type_equal(inst->type, function->local_types.data[inst->slot])) cinder_diag(diags, CINDER_FATAL, inst->loc, "aggregate argument has no parameter or matching local storage");
         else if (!cinder_type_equal(inst->type, function->params.data[inst->operator_code]->type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "aggregate argument type disagrees with prototype");
@@ -180,6 +193,7 @@ static void check_storage(const CinderIRModule *module, const CinderIRFunction *
         if (aggregate_return && !same_value_type(function->local_types.data[inst->slot], signature->return_type)) cinder_diag(diags, CINDER_FATAL, inst->loc, "aggregate call storage type disagrees with return");
         if (!aggregate_return && inst->slot != -1) cinder_diag(diags, CINDER_FATAL, inst->loc, "scalar call has unexpected result storage");
         const CinderType *actual = inst->source_type;
+        if (signature->variadic && actual == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "variadic call requires actual argument types");
         if (actual != NULL && (actual->kind != TYPE_FUNCTION || actual->params.len != inst->args.len || !same_value_type(actual->return_type, signature->return_type))) { cinder_diag(diags, CINDER_FATAL, inst->loc, "call argument metadata has no complete actual signature"); return; }
         for (size_t a = 0U; a < inst->args.len; ++a) {
             const CinderType *type = types[inst->args.data[a]];
@@ -298,7 +312,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 if (inst->op != IR_NOP && inst->type == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed IR instruction has no type");
-                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_FREEZE && inst->op != IR_AGG_ARG && inst->op != IR_AGG_RETURN && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
+                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_FREEZE && inst->op != IR_AGG_ARG && inst->op != IR_AGG_RETURN && inst->op != IR_VA_START && inst->op != IR_VA_COPY && inst->op != IR_VA_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
                 if (has_result) {
                     if ((size_t)inst->dst >= function->value_count) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has no valid result ID");
                     else if (definitions[inst->dst] != CINDER_INVALID_BLOCK) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result ID has multiple definitions");
@@ -316,8 +330,8 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRBlock *block = &function->blocks.data[b];
                 for (size_t i = 0U; i < block->instructions.len && diags->errors == 0U; ++i) {
                     const CinderIRInst *inst = &block->instructions.data[i];
-                    bool needs_left = (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_ZERO_INIT || inst->op == IR_AGG_RETURN || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
-                    bool needs_right = binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
+                    bool needs_left = inst->op == IR_VA_START || inst->op == IR_VA_END || inst->op == IR_VA_COPY || inst->op == IR_VA_ARG || (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_ZERO_INIT || inst->op == IR_AGG_RETURN || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
+                    bool needs_right = inst->op == IR_VA_COPY || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
                     if (needs_left) check_use(inst->left, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);
                     else if (inst->left != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has an unexpected left operand");
                     if (needs_right) check_use(inst->right, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);

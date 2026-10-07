@@ -27,6 +27,10 @@ jobs:
         run: make test-abi-callbacks
       - name: Aggregate callback ABI campaign
         run: make test-abi-aggregates
+      - name: Authored dynamic variadic checks
+        run: make test-variadic
+      - name: Variadic callbacks and va_list interchange
+        run: make test-abi-variadic
       - name: Multi-unit object and assembly campaign
         run: make test-object-campaign
       - name: Sanitizer build
@@ -58,6 +62,8 @@ jobs:
             .agent-local/abi-boundary
             .agent-local/abi-callbacks
             .agent-local/abi-aggregates
+            .agent-local/abi-variadic
+            .agent-local/variadic
             .agent-local/allocation
             .agent-local/objects
             build

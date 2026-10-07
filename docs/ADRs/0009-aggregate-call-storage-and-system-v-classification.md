@@ -24,7 +24,8 @@ The rules follow the primary
 [x86-64 psABI source](https://gitlab.com/x86-psABIs/x86-64-ABI/-/raw/master/x86-64-ABI/low-level-sys-info.tex).
 The declared Cinder profile excludes x87, vector types, and unaligned packed
 extensions. The classifier does not claim those classes. Hosted variadic
-callee state requires its own implementation and remains a separate gate.
+callee state uses the shared classifier and the register-save implementation
+described in `0010-dynamic-variadic-state.md`.
 
 Authored observations cover integer/SSE/mixed/union/nested-array layouts,
 whole-argument rollback, stack order, hidden-pointer register pressure,

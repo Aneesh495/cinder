@@ -78,3 +78,18 @@ bool cinder_abi_place(const CinderType *type, CinderABIState *state, CinderABIAr
     }
     return true;
 }
+
+bool cinder_va_pointer_type(const CinderType *type) {
+    if (type == NULL || type->kind != TYPE_POINTER || type->base == NULL) return false;
+    const CinderType *state = type->base;
+    if (state->kind != TYPE_STRUCT || !state->complete || state->size != 24U || state->align != 8U || state->qualifiers != 0U || state->fields.len != 4U || state->tag == NULL || strcmp(state->tag, "__cinder_va_state") != 0) return false;
+    static const char *names[] = {"gp_offset", "fp_offset", "overflow_arg_area", "reg_save_area"};
+    static const size_t offsets[] = {0U, 4U, 8U, 16U};
+    for (size_t i = 0U; i < 4U; ++i) {
+        const CinderField *field = &state->fields.data[i];
+        if (field->name == NULL || field->type == NULL || strcmp(field->name, names[i]) != 0 || field->offset != offsets[i] || field->type->qualifiers != 0U) return false;
+        if (i < 2U) { if (field->type->kind != TYPE_INT || !field->type->is_unsigned || field->type->size != 4U) return false; }
+        else if (field->type->kind != TYPE_POINTER || field->type->base == NULL || field->type->base->kind != TYPE_VOID) return false;
+    }
+    return true;
+}

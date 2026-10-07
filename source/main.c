@@ -50,6 +50,8 @@ int main(int argc, char **argv) {
     }
     if (inputs.len == 0U) { fprintf(stderr, "cindercc: no input file\n"); free(inputs.data); free(includes.data); free(defines.data); return 2; }
     options.input = inputs.data[0]; options.inputs = inputs.data; options.input_count = inputs.len;
+    const char *runtime_include = CINDER_RUNTIME_INCLUDE;
+    cinder_vec_push((CinderVec *)&includes, &runtime_include);
     options.include_dirs = includes.data; options.include_count = includes.len; options.defines = defines.data; options.define_count = defines.len;
     int result = cinder_driver_run(&options);
     free(inputs.data); free(includes.data); free(defines.data); return result;

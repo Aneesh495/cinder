@@ -19,7 +19,7 @@ CinderSymbol *cinder_scope_lookup(CinderScope *scope, const char *name) {
 }
 
 void cinder_sema_init(CinderSema *sema, CinderAst *ast, CinderTypeContext *types, CinderDiagnostics *diags) {
-    sema->ast = ast; sema->types = types; sema->diags = diags; sema->function_body = NULL;
+    sema->ast = ast; sema->types = types; sema->diags = diags; sema->function_body = NULL; sema->function = NULL;
     sema->globals.symbols.data = NULL; sema->globals.symbols.len = 0U; sema->globals.symbols.cap = 0U; sema->globals.parent = NULL;
 }
 
@@ -421,9 +421,30 @@ static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *sc
             if (expr->as.assign.op != '=' && expr->as.assign.operation_type == NULL) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "invalid compound assignment operands");
             expr->type = target; return target;
         }
-        case EX_VA_ARG: (void)sema_expr(sema, expr->as.va_arg.list, scope); expr->type = expr->as.va_arg.type; return expr->type;
+        case EX_VA_ARG:
+            if (!cinder_va_pointer_type(sema_value(sema, &expr->as.va_arg.list, scope))) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_arg requires a mutable va_list");
+            expr->type = expr->as.va_arg.type;
+            if (!expr->type->complete || expr->type->size == 0U || expr->type->kind == TYPE_ARRAY || expr->type->kind == TYPE_FUNCTION) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_arg requires a complete object type");
+            return expr->type;
         case EX_CALL: {
-            if (expr->as.call.callee->kind == EX_NAME && (strcmp(expr->as.call.callee->as.name, "va_start") == 0 || strcmp(expr->as.call.callee->as.name, "va_end") == 0)) { for (size_t i = 0U; i < expr->as.call.args.len; ++i) (void)sema_expr(sema, expr->as.call.args.data[i], scope); expr->type = sema->types->void_type; return expr->type; }
+            if (expr->as.call.callee->kind == EX_NAME) {
+                const char *name = expr->as.call.callee->as.name;
+                bool start = strcmp(name, "__cinder_va_start") == 0, copy = strcmp(name, "__cinder_va_copy") == 0, end = strcmp(name, "__cinder_va_end") == 0;
+                if (start || copy || end) {
+                    size_t count = end ? 1U : 2U;
+                    if (expr->as.call.args.len != count) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "variadic builtin has incorrect arity");
+                    else {
+                        if (!cinder_va_pointer_type(sema_value(sema, &expr->as.call.args.data[0], scope))) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "variadic builtin requires a mutable va_list");
+                        if (copy && !cinder_va_pointer_type(sema_value(sema, &expr->as.call.args.data[1], scope))) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_copy requires a va_list source");
+                        if (start) {
+                            CinderExpr *last = expr->as.call.args.data[1];
+                            if (sema->function == NULL || !sema->function->type->variadic || sema->function->params.len == 0U || last->kind != EX_NAME || strcmp(last->as.name, sema->function->params.data[sema->function->params.len - 1U]->name) != 0) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "va_start requires the final named parameter of a variadic function");
+                            else (void)sema_expr(sema, last, scope);
+                        }
+                    }
+                    expr->type = sema->types->void_type; return expr->type;
+                }
+            }
             CinderType *callee = sema_expr(sema, expr->as.call.callee, scope);
             if (callee->kind == TYPE_FUNCTION && expr->as.call.callee->kind != EX_NAME) callee = sema_value(sema, &expr->as.call.callee, scope);
             if (callee->kind != TYPE_FUNCTION) { if (callee->kind == TYPE_POINTER && callee->base->kind == TYPE_FUNCTION) callee = callee->base; else cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "called object is not a function"); }
@@ -536,8 +557,10 @@ int cinder_sema_run(CinderSema *sema) {
             CinderScope scope = { {NULL, 0U, 0U}, &sema->globals };
             for (size_t p = 0U; p < decl->params.len; ++p) scope_add(&scope, decl->params.data[p]->name, decl->params.data[p]->type, decl->params.data[p], false);
             sema->function_body = decl->body;
+            sema->function = decl;
             sema_stmt(sema, decl->body, &scope, decl->type->return_type, 0U);
             sema->function_body = NULL;
+            sema->function = NULL;
             for (size_t p = 0U; p < scope.symbols.len; ++p) free(scope.symbols.data[p].name);
             free(scope.symbols.data);
         }

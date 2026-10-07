@@ -2150,5 +2150,81 @@
   {
     "source": "../aggregate_abi/union_merge.c",
     "exit": 0
+  },
+  {
+    "source": "../variadic/aggregate_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/aggregate_memory.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/aggregate_mixed.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/aggregate_rollback.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/aggregate_short.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/aggregate_sse.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/copied_helper.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/copy_cursor.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/copy_stack_cursor.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/default_promotions.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/double_loop.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/integer_loop.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/interleaved.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/pointer_helper.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/pointer_value.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/sret_named.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/restart_after_end.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/signed_unsigned_exception.c",
+    "exit": 0
+  },
+  {
+    "source": "../variadic/void_character_exception.c",
+    "exit": 0
   }
 ]

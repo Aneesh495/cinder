@@ -145,6 +145,7 @@ def main():
     parser.add_argument('compiler')
     parser.add_argument('--count', type=int, default=512)
     parser.add_argument('--jobs', type=int, default=4)
+    parser.add_argument('--variadic', action='store_true')
     options = parser.parse_args()
     assert 1 <= options.count <= 100000 and 1 <= options.jobs <= 32
     compiler = pathlib.Path(options.compiler).resolve()
@@ -152,7 +153,8 @@ def main():
     inputs = source_inputs(ROOT)
     source_hash = inventory_digest(inputs)
     identity = digest(compiler)
-    base = ROOT / '.agent-local/abi-aggregates' / source_hash / identity
+    campaign = 'abi-variadic' if options.variadic else 'abi-aggregates'
+    base = ROOT / '.agent-local' / campaign / source_hash / identity
     base.mkdir(parents=True, exist_ok=True)
     frozen = base / 'cindercc'
     shutil.copy2(compiler, frozen)
@@ -179,11 +181,14 @@ def main():
             assert result.returncode == 0, (seed, argv, result)
             if expected_output is not None:
                 assert result.stdout.decode() == expected_output and result.stderr == b'', (seed, argv, result)
-        for name, text in sources(spec).items():
+        generate = sources
+        if options.variadic:
+            from test_abi_variadic import sources as generate
+        for name, text in generate(spec).items():
             path = work / name
             path.write_text(text)
             record['artifacts'][name] = dict(sha256=digest(path), bytes=path.stat().st_size)
-        expected = (spec['expected'] + '\n') * 2
+        expected = (spec['expected'] + '\n') * (4 if options.variadic else 2)
         for mode, counterpart in (('provider', 'host_driver'), ('caller', 'host_library')):
             source, host_source = work / (mode + '.c'), work / (counterpart + '.c')
             for index, host in enumerate(hosts):
@@ -222,7 +227,8 @@ def main():
     assert source_inputs(ROOT) == inputs, 'source changed during the ABI campaign'
     assert digest(compiler) == identity and digest(frozen) == identity, 'compiler changed during the ABI campaign'
     assert all(digest(ROOT / name) == expected for name, expected in configuration.items()), 'configuration changed'
-    summary = dict(schema=1, scope='aggregate fixed signatures and callbacks; full hosted variadic state remains open',
+    scope = 'aggregate variadic signatures, callbacks, and va_list transfer in both directions' if options.variadic else 'aggregate fixed signatures and callbacks'
+    summary = dict(schema=1, scope=scope,
         source_revision=revision(ROOT), source_inputs=inputs, source_sha256=source_hash,
         compiler_sha256=identity, configuration_inputs=configuration, toolchains=toolchains,
         host=dict(system=platform.system(), machine=platform.machine(), uname=platform.uname()._asdict()), native=native,
@@ -230,7 +236,7 @@ def main():
         native_executions=sum(record['native_executions'] for record in observations),
         aggregate_return_families=sorted({record['result'] for record in observations}), observations=observations)
     (base / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
-    print(f'Aggregate ABI: {options.count} signatures, both directions, two toolchains; native={native}')
+    print(f'{campaign}: {options.count} signatures, both directions, two toolchains; native={native}')
 
 
 if __name__ == '__main__':

@@ -70,3 +70,10 @@ or aggregate through two compatible object pointers. They are effect-only
 instructions. Initialization is explicit because const objects can be
 initialized while ordinary writes remain constrained. The interpreter copies
 initialization flags and pointer metadata with the object representation.
+
+`va.start`, `va.copy`, and `va.end` are effect-only instructions with a typed
+list pointer on the left; copy has a second list pointer on the right.
+`va_arg` records its requested type in `source_type`. Scalar reads return
+that type and use no storage slot. Aggregate reads return a pointer to the
+requested type and name a compatible local result slot. Runtime state remains
+explicit across loops and calls; no syntactic argument ordinal is retained.

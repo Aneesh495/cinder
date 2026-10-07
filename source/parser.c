@@ -431,7 +431,7 @@ static CinderExpr *parse_postfix(CinderAst *ast) {
             CinderExpr *call = new_expr(ast, EX_CALL, expr->loc);
             call->as.call.callee = expr;
             call->as.call.args.data = NULL; call->as.call.args.len = 0U; call->as.call.args.cap = 0U;
-            if (expr->kind == EX_NAME && strcmp(expr->as.name, "va_arg") == 0) {
+            if (expr->kind == EX_NAME && strcmp(expr->as.name, "__cinder_va_arg") == 0) {
                 CinderExpr *list = parse_assignment(ast);
                 (void)expect(ast, ',', "','");
                 CinderType *argument_type = parse_type_name(ast);

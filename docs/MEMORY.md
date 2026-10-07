@@ -70,6 +70,12 @@ until their expression has been evaluated. Self-reads are classified separately
 from defined execution. Initializer ordering follows the chosen source order;
 unspecified side-effect order and padding are not differential equality tests.
 
+Variadic state uses checked list object identities and independent cursors over
+promoted argument values. Helper functions can advance the caller's list;
+`va_copy` owns a distinct cursor. Start/end frame pairing, exhaustion, wrong
+promoted types, and missing pointer provenance are classified separately from
+defined execution. Native register-save details are described in `VARARGS.md`.
+
 Aggregate assignment transfers the complete target object once. Chained
 assignment, selected conditional arms, comma sequencing, and member reads from
 expression results use bounded automatic snapshots. Object transfers preserve
