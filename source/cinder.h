@@ -819,6 +819,9 @@ void cinder_dump_cfg(const CinderIRFunction *function, const CinderCFGAnalysis *
 int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags);
 unsigned cinder_forward_local_memory(CinderIRFunction *function);
 unsigned cinder_remove_dead_ir(CinderIRFunction *function);
+unsigned cinder_simplify_cfg(CinderIRFunction *function, CinderDiagnostics *diags);
+unsigned cinder_sparse_constants(CinderIRFunction *function, CinderDiagnostics *diags);
+unsigned cinder_number_values(CinderIRFunction *function, CinderDiagnostics *diags);
 /* ---------- interpreter and optimization ---------- */
 typedef enum {
     INTERP_DEFINED,

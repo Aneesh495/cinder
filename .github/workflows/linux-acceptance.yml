@@ -60,6 +60,8 @@ jobs:
         run: make test-bitfields
       - name: Union alternatives and declared const origins
         run: make test-qualifiers
+      - name: Optimizer semantic and transformation boundaries
+        run: make test-optimizer
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -125,6 +127,10 @@ jobs:
             .agent-local/bitfield-contracts
             .agent-local/qualifiers
             .agent-local/qualifier-contracts
+            .agent-local/cfg-optimization
+            .agent-local/sparse-optimization
+            .agent-local/value-numbering
+            .agent-local/dead-code
             .agent-local/bitfields-abi-contracts
             .agent-local/flexible-abi-contracts
             .agent-local/aggregate_abi

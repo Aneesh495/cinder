@@ -4346,5 +4346,149 @@
   {
     "source": "../qualifiers/union_static_bit_pointer.c",
     "exit": 0
+  },
+  {
+    "source": "../optimization/cfg_constant_if.c",
+    "exit": 17
+  },
+  {
+    "source": "../optimization/cfg_dead_call.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/cfg_zero_while.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/cfg_zero_do_condition.c",
+    "exit": 9
+  },
+  {
+    "source": "../optimization/cfg_selected_phi.c",
+    "exit": 23
+  },
+  {
+    "source": "../optimization/cfg_nested_constants.c",
+    "exit": 13
+  },
+  {
+    "source": "../optimization/cfg_conditional_effect.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/cfg_goto_lifetime.c",
+    "exit": 9
+  },
+  {
+    "source": "../optimization/cfg_unknown_branch.c",
+    "exit": 18
+  },
+  {
+    "source": "../optimization/cfg_volatile_condition.c",
+    "exit": 11
+  },
+  {
+    "source": "../optimization/cfg_effectful_condition.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/cfg_loop_phi.c",
+    "exit": 17
+  },
+  {
+    "source": "../optimization/sparse_equal_phi.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/sparse_conversion.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/sparse_signed_conversion.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/sparse_phi_arithmetic.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/sparse_different_phi.c",
+    "exit": 30
+  },
+  {
+    "source": "../optimization/sparse_volatile_load.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/sparse_call_effect.c",
+    "exit": 1
+  },
+  {
+    "source": "../optimization/sparse_phi_narrow_range.c",
+    "exit": 14
+  },
+  {
+    "source": "../optimization/value_same_block.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/value_dominating_block.c",
+    "exit": 30
+  },
+  {
+    "source": "../optimization/value_integer_product.c",
+    "exit": 42
+  },
+  {
+    "source": "../optimization/value_integer_conversion.c",
+    "exit": 6
+  },
+  {
+    "source": "../optimization/value_sibling_blocks.c",
+    "exit": 22
+  },
+  {
+    "source": "../optimization/value_float_rounding.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/value_volatile_reads.c",
+    "exit": 14
+  },
+  {
+    "source": "../optimization/value_memory_alias.c",
+    "exit": 16
+  },
+  {
+    "source": "../optimization/value_call_results.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/dead_unsigned_sum.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/dead_unsigned_product.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/dead_bit_expression.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/dead_signed_sum_kept.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/dead_memory_read_kept.c",
+    "exit": 3
+  },
+  {
+    "source": "../optimization/dead_call_kept.c",
+    "exit": 1
+  },
+  {
+    "source": "../optimization/dead_float_kept.c",
+    "exit": 0
   }
 ]
