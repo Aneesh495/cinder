@@ -377,6 +377,7 @@ typedef enum {
     EX_INIT_LIST,
     EX_COMPOUND_LITERAL,
     EX_GENERIC,
+    EX_OFFSETOF,
 } CinderExprKind;
 
 typedef enum {
@@ -431,6 +432,7 @@ struct CinderExpr {
         struct { CINDER_VEC_TYPE(CinderInitEntry) entries; } initializer;
         CinderDecl *compound_literal;
         struct { CinderExpr *control; CINDER_VEC_TYPE(CinderGenericAssociation) associations; size_t selected; } generic;
+        struct { CinderType *object_type; CINDER_VEC_TYPE(CinderInitDesignator) path; size_t value; } offset;
     } as;
 };
 
@@ -512,6 +514,7 @@ typedef struct {
     unsigned scope_depth;
     unsigned declarator_depth;
     unsigned generic_depth;
+    unsigned offsetof_depth;
     unsigned alignment_depth;
     unsigned label_depth;
     unsigned statement_depth;
@@ -524,6 +527,7 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
 void cinder_ast_destroy(CinderAst *ast);
 int cinder_parse(CinderAst *ast);
 bool cinder_constant_integer(CinderAst *ast, const CinderExpr *expr, int64_t *value, CinderType **type);
+bool cinder_offsetof_value(CinderAst *ast, const CinderExpr *expr, size_t *value);
 size_t cinder_init_child_count(const CinderType *type);
 CinderType *cinder_init_child(CinderInitFrame frame, size_t *offset);
 void cinder_init_advance(CinderInitFrame *frames, size_t *depth);

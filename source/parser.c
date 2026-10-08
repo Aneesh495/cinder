@@ -466,6 +466,41 @@ static CinderExpr *parse_initializer(CinderAst *ast, unsigned depth) {
 
 static CinderExpr *parse_primary(CinderAst *ast) {
     CinderToken *token = peek(ast);
+    if (token->kind == TOK_IDENTIFIER && token->length == sizeof("__cinder_offsetof") - 1U && memcmp(token->text, "__cinder_offsetof", token->length) == 0) {
+        ++ast->cursor;
+        CinderExpr *expr = new_expr(ast, EX_OFFSETOF, token->loc);
+        if (ast->offsetof_depth >= 128U) {
+            cinder_diag(ast->diags, CINDER_ERROR, token->loc, "offsetof nesting exceeds the profile limit");
+            size_t parentheses = 0U;
+            while (!is(ast, TOK_EOF)) {
+                if (take(ast, '(')) ++parentheses;
+                else if (take(ast, ')')) { if (parentheses == 0U || --parentheses == 0U) break; }
+                else ++ast->cursor;
+            }
+            return expr;
+        }
+        ++ast->offsetof_depth;
+        (void)expect(ast, '(', "'('"); expr->as.offset.object_type = parse_type_name(ast);
+        (void)expect(ast, ',', "','");
+        bool first = true;
+        do {
+            CinderInitDesignator part = {NULL, NULL};
+            if (first || take(ast, '.')) {
+                CinderToken *name = expect(ast, TOK_IDENTIFIER, "offsetof member name");
+                if (name != NULL) part.member = cinder_arena_strndup(&ast->arena, name->text, name->length);
+            } else {
+                (void)expect(ast, '[', "'['"); part.index = parse_conditional(ast); (void)expect(ast, ']', "']'");
+            }
+            cinder_vec_push((CinderVec *)&expr->as.offset.path, &part); first = false;
+            if (expr->as.offset.path.len >= 256U && (is(ast, '.') || is(ast, '['))) {
+                cinder_diag(ast->diags, CINDER_ERROR, token->loc, "offsetof designator exceeds the profile limit");
+                while (!is(ast, ')') && !is(ast, TOK_EOF)) ++ast->cursor;
+                break;
+            }
+        } while (is(ast, '.') || is(ast, '['));
+        (void)expect(ast, ')', "')'"); expr->parse_index = ast->cursor;
+        --ast->offsetof_depth; return expr;
+    }
     if (take(ast, TOK_KW_GENERIC)) {
         if (ast->generic_depth >= 128U) {
             cinder_diag(ast->diags, CINDER_ERROR, token->loc, "generic expression nesting exceeds the profile limit");

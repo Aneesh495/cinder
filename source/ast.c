@@ -19,12 +19,16 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
     ast->stored_objects.data = NULL; ast->stored_objects.len = 0U; ast->stored_objects.cap = 0U;
     ast->scope_depth = 0U; ast->declarator_depth = 0U; ast->generic_depth = 0U; ast->alignment_depth = 0U; ast->label_depth = 0U; ast->statement_depth = 0U;
     ast->literal_scope = NULL; ast->literal_count = 0U;
+    ast->offsetof_depth = 0U;
     ast->current_function = NULL;
 }
 
 static void free_expr(CinderExpr *expr) {
     if (expr == NULL) return;
-    if (expr->kind == EX_GENERIC) {
+    if (expr->kind == EX_OFFSETOF) {
+        for (size_t i = 0U; i < expr->as.offset.path.len; ++i) free_expr(expr->as.offset.path.data[i].index);
+        free(expr->as.offset.path.data);
+    } else if (expr->kind == EX_GENERIC) {
         free_expr(expr->as.generic.control);
         for (size_t i = 0U; i < expr->as.generic.associations.len; ++i) free_expr(expr->as.generic.associations.data[i].value);
         free(expr->as.generic.associations.data);
@@ -130,6 +134,14 @@ static void dump_expr(const CinderExpr *expr, FILE *out, unsigned depth) {
     if (expr == NULL) { indent(out, depth); fputs("<null>\n", out); return; }
     indent(out, depth);
     switch (expr->kind) {
+        case EX_OFFSETOF:
+            fprintf(out, "offsetof %s = %zu : %s\n", cinder_type_name(expr->as.offset.object_type), expr->as.offset.value, cinder_type_name(expr->type));
+            for (size_t i = 0U; i < expr->as.offset.path.len; ++i) {
+                const CinderInitDesignator *part = &expr->as.offset.path.data[i];
+                if (part->member != NULL) { indent(out, depth + 1U); fprintf(out, "member %s\n", part->member); }
+                else dump_expr(part->index, out, depth + 1U);
+            }
+            break;
         case EX_GENERIC:
             fprintf(out, "generic selected=%zu : %s%s\n", expr->as.generic.selected, cinder_type_name(expr->type), expr->is_lvalue ? " lvalue" : "");
             dump_expr(expr->as.generic.control, out, depth + 1U);

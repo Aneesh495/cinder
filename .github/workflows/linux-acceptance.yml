@@ -48,6 +48,8 @@ jobs:
         run: make test-switch
       - name: Register storage and variadic parameter eligibility
         run: make test-register
+      - name: Target offsetof and fundamental headers
+        run: make test-offset
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -100,6 +102,8 @@ jobs:
             .agent-local/switch-contracts
             .agent-local/register
             .agent-local/register-contracts
+            .agent-local/offset
+            .agent-local/offset-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks

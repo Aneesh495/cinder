@@ -3638,5 +3638,141 @@
   {
     "source": "../register/register_pointer_member.c",
     "exit": 0
+  },
+  {
+    "source": "../offset/plain_layout.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/union_layout.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/nested_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/array_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/matrix_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/array_records.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/union_nested.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/pointer_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/const_type.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/aligned_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/array_bound.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/enumerator.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/case_label.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/global_initializer.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/designated_index.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/generic_result.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/unevaluated_size.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/one_past_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/constant_index.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/generic_index.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/sizeof_index.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/nested_offset_index.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/shadowed_tag.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/incomplete_then_complete.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/boolean_header.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/boolean_undef.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/integer_widths.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/integer_least_fast.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/integer_constant_types.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/limits_header.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/common_header.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/maximum_alignment.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/repeated_headers.c",
+    "exit": 0
+  },
+  {
+    "source": "../offset/header_preprocessing.c",
+    "exit": 0
   }
 ]

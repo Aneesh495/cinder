@@ -409,6 +409,15 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
 static CinderType *sema_expr(CinderSema *sema, CinderExpr *expr, CinderScope *scope) {
     if (expr == NULL) return sema->types->void_type;
     switch (expr->kind) {
+        case EX_OFFSETOF:
+            ++sema->unevaluated_depth;
+            for (size_t i = 0U; i < expr->as.offset.path.len; ++i) {
+                CinderExpr *index = expr->as.offset.path.data[i].index;
+                if (index != NULL) (void)sema_expr(sema, index, scope);
+            }
+            --sema->unevaluated_depth;
+            if (!cinder_offsetof_value(sema->ast, expr, &expr->as.offset.value)) cinder_diag(sema->diags, CINDER_ERROR, expr->loc, "offsetof requires a complete aggregate and an addressable constant member designator");
+            expr->type = sema->types->ulong_type; return expr->type;
         case EX_GENERIC: {
             ++sema->unevaluated_depth;
             CinderType *control = sema_value(sema, &expr->as.generic.control, scope);
@@ -646,6 +655,10 @@ static bool constant_scope(CinderExpr *expr, CinderScope *scope, unsigned depth)
     if (expr == NULL) return true;
     if (depth >= 256U) return false;
     switch (expr->kind) {
+        case EX_OFFSETOF:
+            for (size_t i = 0U; i < expr->as.offset.path.len; ++i)
+                if (!constant_scope(expr->as.offset.path.data[i].index, scope, depth + 1U)) return false;
+            return true;
         case EX_GENERIC:
             if (!constant_scope(expr->as.generic.control, scope, depth + 1U)) return false;
             for (size_t i = 0U; i < expr->as.generic.associations.len; ++i)

@@ -474,6 +474,10 @@ static CinderIROp compound_operation(int op, bool floating, bool unsig) {
 
 static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
     if (expr == NULL) return CINDER_INVALID_VALUE;
+    if (expr->kind == EX_OFFSETOF) {
+        CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_CONST, expr->loc);
+        inst->dst = new_value(context->function); inst->integer = (int64_t)expr->as.offset.value; return inst->dst;
+    }
     if (expr->kind == EX_GENERIC) {
         if (expr->as.generic.selected >= expr->as.generic.associations.len) { cinder_diag(context->diags, CINDER_FATAL, expr->loc, "unresolved generic value expression"); return CINDER_INVALID_VALUE; }
         return lower_expr(context, expr->as.generic.associations.data[expr->as.generic.selected].value);
