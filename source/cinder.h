@@ -403,7 +403,7 @@ struct CinderExpr {
     CinderType *type;
     bool is_lvalue;
     bool name_visible;
-    CinderDecl *function_decl;
+    CinderDecl *resolved_decl;
     CinderType *queried_type;
     size_t literal_length;
     size_t parse_index;
@@ -453,6 +453,8 @@ struct CinderDecl {
     size_t alignment;
     bool has_alignment;
     bool is_noreturn;
+    char *storage_symbol;
+    size_t parse_index;
     CinderExpr *initializer;
     CINDER_VEC_TYPE(CinderDecl *) params;
     CinderStmt *body;
@@ -476,6 +478,7 @@ typedef struct {
     CinderParseBindingKind kind;
     int64_t value;
     unsigned scope;
+    CinderDecl *decl;
 } CinderParseBinding;
 
 typedef struct { CinderExpr *expression; CinderDecl *function; int64_t value; } CinderConstantExpr;
@@ -491,6 +494,7 @@ typedef struct {
     CINDER_VEC_TYPE(CinderParseBinding) bindings;
     CINDER_VEC_TYPE(CinderConstantExpr) constant_exprs;
     CINDER_VEC_TYPE(CinderDecl *) static_literals;
+    CINDER_VEC_TYPE(CinderDecl *) stored_objects;
     unsigned scope_depth;
     unsigned declarator_depth;
     unsigned generic_depth;

@@ -1,0 +1,60 @@
+[
+  {
+    "name": "separate-statics",
+    "owned": [
+      "separate_a.c",
+      "separate_b.c",
+      "separate_main.c"
+    ],
+    "provider": null,
+    "interpreter": null
+  },
+  {
+    "name": "external-array-address",
+    "owned": [
+      "array_consumer.c"
+    ],
+    "provider": "array_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "external-record",
+    "owned": [
+      "record_consumer.c"
+    ],
+    "provider": "record_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "external-shadow",
+    "owned": [
+      "hidden_consumer.c"
+    ],
+    "provider": "hidden_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "unknown-array",
+    "owned": [
+      "extern_unknown.c"
+    ],
+    "provider": "array_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "incomplete-record",
+    "owned": [
+      "extern_incomplete_record.c"
+    ],
+    "provider": "incomplete_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "unused-external",
+    "owned": [
+      "unused_extern.c"
+    ],
+    "provider": null,
+    "interpreter": "defined"
+  }
+]

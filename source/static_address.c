@@ -25,16 +25,16 @@ static bool shift_address(CinderIRAddress *address, int64_t index, const CinderT
 }
 
 static bool named_address(AddressContext *context, const CinderExpr *expr, CinderIRAddress *address) {
-    for (size_t d = 0U; d < context->ast->declarations.len; ++d) {
-        const CinderDecl *decl = context->ast->declarations.data[d];
-        if (decl->kind == DECL_TYPEDEF || decl->name == NULL || strcmp(decl->name, expr->as.name) != 0) continue;
-        if (decl->canonical != NULL) decl = decl->canonical;
-        address->symbol = cinder_strndup(expr->as.name, strlen(expr->as.name));
-        address->target_type = decl->type; address->function = decl->kind == DECL_FUNCTION;
-        address->domain_end = address->function ? 1U : decl->type->size;
-        return true;
-    }
-    return false;
+    const CinderDecl *decl = expr->resolved_decl;
+    if (decl == NULL || (decl->kind == DECL_VAR && !decl->is_static && !decl->is_extern && decl->canonical == NULL)) return false;
+    if (decl->canonical != NULL) decl = decl->canonical;
+    const char *symbol = decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
+    if (symbol == NULL) return false;
+    address->symbol = cinder_strndup(symbol, strlen(symbol));
+    address->target_type = decl->type; address->function = decl->kind == DECL_FUNCTION;
+    address->domain_end = address->function ? 1U : decl->type->size;
+    (void)context;
+    return true;
 }
 
 static bool string_address(AddressContext *context, const CinderExpr *expr, CinderIRAddress *address) {

@@ -43,5 +43,45 @@
     "require_reference_rejection": false,
     "rule": "C17 6.7.5 paragraph 7 is an alignment declaration semantic rule; host diagnostic is not mandatory.",
     "source_sha256": "0f9b72e9a33d2707bb3c16421962cb75ac05b0a2dd9f72eb41022549242bf06d"
+  },
+  "block_storage_alignment_conflict.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.7.5 paragraph 7 alignment declaration semantic rule; host diagnostic is not mandatory.",
+    "source_sha256": "8e04e91d69c8306a0d6457b33373f0d00eb56b8393aaa91fcb1ee6bbcd042ba6"
+  },
+  "block_storage_alignment_definition_missing.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.7.5 paragraph 7 alignment declaration semantic rule; host diagnostic is not mandatory.",
+    "source_sha256": "4b1457eb1c931e5022a2381f21a84a3fd4b68bc21bb3b1f7105cba71585e1eb1"
+  },
+  "block_storage_external_before_internal.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.2.2 paragraphs 4, 5 and 7: external declarations inherit only visible linkage; mixing internal and external linkage is undefined and Cinder diagnoses it. A host diagnostic is not mandatory.",
+    "source_sha256": "8f3644e007cb2160d0f44a65c2c31c0bebfd963ad3bdc091e5f4de7dbd34008c"
+  },
+  "block_storage_internal_auto_hidden.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.2.2 paragraphs 4, 5 and 7: external declarations inherit only visible linkage; mixing internal and external linkage is undefined and Cinder diagnoses it. A host diagnostic is not mandatory.",
+    "source_sha256": "b70380ec1e4f01fc3122ec535c2e635cab8d8c47bf30fc7087bdaeeb9c771e8e"
+  },
+  "block_storage_internal_static_hidden.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.2.2 paragraphs 4, 5 and 7: external declarations inherit only visible linkage; mixing internal and external linkage is undefined and Cinder diagnoses it. A host diagnostic is not mandatory.",
+    "source_sha256": "c9fb5841cfe16f8f4e09a27cfa84445aa4517c0366e965e523366ed930dd30dd"
+  },
+  "block_storage_function_before_internal.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.2.2 paragraphs 4, 5 and 7: external declarations inherit only visible linkage; mixing internal and external linkage is undefined and Cinder diagnoses it. A host diagnostic is not mandatory.",
+    "source_sha256": "9f751e87b2387009913245723488cd2751e784a08bebe8669e6d4ae3a594e4b2"
+  },
+  "block_storage_alignment_extern_definition.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.7.5 paragraph 7 alignment declaration semantic rule applies to an extern declaration with an initializer because it defines the object; host diagnostic is not mandatory.",
+    "source_sha256": "20c6e151b4617d273e18857857f29cfc272420d26e4072014e1b80023874d7ad"
+  },
+  "alignment_extern_initializer_missing.c": {
+    "require_reference_rejection": false,
+    "rule": "C17 6.7.5 paragraph 7 alignment declaration semantic rule applies to an extern declaration with an initializer because it defines the object; host diagnostic is not mandatory.",
+    "source_sha256": "a220d08f14e5efc2a77a67b08f0778dce53b4d46d81fbaf156d0ab3819771a0d"
   }
 }
