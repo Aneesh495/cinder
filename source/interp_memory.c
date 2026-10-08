@@ -19,7 +19,7 @@ uint32_t cinder_interp_object(InterpContext *context, const CinderType *type, bo
     }
     InterpObject object; memset(&object, 0, sizeof(object)); object.type = type; object.size = type->kind == TYPE_FUNCTION ? 1U : type->size; object.alive = true; object.readonly = readonly;
     object.bytes = cinder_alloc(object.size); object.initialized = cinder_alloc(object.size);
-    memset(object.bytes, 0, object.size); memset(object.initialized, zero ? 1 : 0, object.size);
+    memset(object.bytes, 0, object.size); memset(object.initialized, zero ? 255 : 0, object.size);
     cinder_vec_push((CinderVec *)&context->objects, &object); context->live_bytes += object.size;
     return (uint32_t)context->objects.len;
 }
@@ -83,6 +83,12 @@ static bool const_storage(const CinderType *type, size_t extent, size_t offset, 
     } else if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
         for (size_t f = 0U; f < type->fields.len; ++f) {
             const CinderField *field = &type->fields.data[f];
+            if (field->is_bitfield) {
+                size_t begin = field->offset + field->bit_offset / 8U;
+                size_t end = field->offset + (field->bit_offset + field->bit_width + 7U) / 8U;
+                if (field->name != NULL && field->bit_width != 0U && (field->type->qualifiers & 1U) != 0U && begin < offset + length && offset < end) return true;
+                continue;
+            }
             bool flexible = (field->type->kind == TYPE_ARRAY && !field->type->complete) || cinder_type_contains_flexible(field->type);
             size_t field_extent = flexible && field->offset <= extent ? extent - field->offset : field->type->size;
             if (field->offset < offset + length && offset < field->offset + field_extent) {
@@ -105,10 +111,77 @@ static InterpObject *checked_access(InterpContext *context, InterpPointer pointe
     return object;
 }
 
+int64_t cinder_interp_bit_value(uint64_t bits, const CinderType *type, unsigned width) {
+    uint64_t mask = (UINT64_C(1) << width) - 1U; bits &= mask;
+    if (type->kind != TYPE_BOOL && !type->is_unsigned && (bits & (UINT64_C(1) << (width - 1U))) != 0U) bits |= ~mask;
+    return cinder_interp_integer(bits, type);
+}
+
+static bool const_bit_storage(const CinderType *type, size_t extent, size_t begin, size_t width, unsigned depth) {
+    if (depth > 64U || (type->qualifiers & 1U) != 0U) return true;
+    if (type->kind == TYPE_ARRAY && type->base->size != 0U) {
+        size_t unit = type->base->size * 8U;
+        while (width != 0U) {
+            size_t within = begin % unit, count = unit - within; if (count > width) count = width;
+            if (const_bit_storage(type->base, type->base->size, within, count, depth + 1U)) return true;
+            begin += count; width -= count;
+        }
+    } else if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
+        for (size_t f = 0U; f < type->fields.len; ++f) {
+            const CinderField *field = &type->fields.data[f];
+            size_t start = field->offset * 8U + field->bit_offset;
+            bool flexible = (field->type->kind == TYPE_ARRAY && !field->type->complete) || cinder_type_contains_flexible(field->type);
+            size_t count = field->is_bitfield ? field->bit_width : (flexible && field->offset <= extent ? extent - field->offset : field->type->size) * 8U;
+            if (begin < start + count && start < begin + width) {
+                if (field->is_bitfield) { if ((field->type->qualifiers & 1U) != 0U) return true; }
+                else {
+                    size_t intersection = begin > start ? begin : start, end = begin + width < start + count ? begin + width : start + count;
+                    if (const_bit_storage(field->type, count / 8U, intersection - start, end - intersection, depth + 1U)) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool cinder_interp_bit_load(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, InterpValue *value, CinderLoc loc) {
+    size_t bytes = (offset + width + 7U) / 8U;
+    InterpObject *object = checked_object(context, pointer, bytes, loc); if (object == NULL) return false;
+    if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || !permits_access(object->type, object->size, (size_t)pointer.offset, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "misaligned or incompatible bitfield storage access"); return false; }
+    uint64_t bits = 0U;
+    for (unsigned bit = 0U; bit < width; ++bit) {
+        size_t position = offset + bit, byte = (size_t)pointer.offset + position / 8U;
+        unsigned char mask = (unsigned char)(1U << (position % 8U));
+        if ((object->initialized[byte] & mask) == 0U) { cinder_interp_fail(context, INTERP_UNINITIALIZED, loc, "read of uninitialized bitfield bits"); return false; }
+        if ((object->bytes[byte] & mask) != 0U) bits |= UINT64_C(1) << bit;
+    }
+    memset(value, 0, sizeof(*value)); value->defined = true; value->integer = cinder_interp_bit_value(bits, type, width); return true;
+}
+
+bool cinder_interp_bit_store(InterpContext *context, InterpPointer pointer, const CinderType *type, unsigned offset, unsigned width, const InterpValue *value, bool initializing, CinderLoc loc) {
+    size_t bytes = (offset + width + 7U) / 8U;
+    InterpObject *object = checked_object(context, pointer, bytes, loc); if (object == NULL) return false;
+    size_t begin = (size_t)pointer.offset * 8U + offset;
+    if (object->readonly || (!initializing && const_bit_storage(object->type, object->size, begin, width, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only bitfield"); return false; }
+    if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || !permits_access(object->type, object->size, (size_t)pointer.offset, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "misaligned or incompatible bitfield storage write"); return false; }
+    for (size_t p = 0U; p < object->pointers.len;) {
+        size_t old = object->pointers.data[p].offset;
+        if (old < (size_t)pointer.offset + bytes && (size_t)pointer.offset < old + 8U) object->pointers.data[p] = object->pointers.data[--object->pointers.len];
+        else ++p;
+    }
+    for (unsigned bit = 0U; bit < width; ++bit) {
+        size_t position = offset + bit, byte = (size_t)pointer.offset + position / 8U;
+        unsigned char mask = (unsigned char)(1U << (position % 8U));
+        object->bytes[byte] = (unsigned char)((object->bytes[byte] & (unsigned char)~mask) | ((((uint64_t)value->integer >> bit) & 1U) != 0U ? mask : 0U));
+        object->initialized[byte] |= mask;
+    }
+    return true;
+}
+
 bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const CinderType *type, InterpValue *value, CinderLoc loc) {
     InterpObject *object = checked_access(context, pointer, type, false, false, loc); if (object == NULL) return false;
     size_t offset = (size_t)pointer.offset;
-    for (size_t i = 0U; i < type->size; ++i) if (object->initialized[offset + i] == 0U) { cinder_interp_fail(context, INTERP_UNINITIALIZED, loc, "read of uninitialized object bytes"); return false; }
+    for (size_t i = 0U; i < type->size; ++i) if (object->initialized[offset + i] != 255U) { cinder_interp_fail(context, INTERP_UNINITIALIZED, loc, "read of uninitialized object bytes"); return false; }
     uint64_t bits = 0U; for (size_t i = 0U; i < type->size; ++i) bits |= (uint64_t)object->bytes[offset + i] << (i * 8U);
     memset(value, 0, sizeof(*value)); value->defined = true; value->fp = cinder_ir_floating(type);
     if (type->kind == TYPE_FLOAT) { uint32_t narrow = (uint32_t)bits; float single; memcpy(&single, &narrow, sizeof(single)); value->floating = (double)single; }
@@ -134,7 +207,7 @@ bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const Ci
         if (old < offset + type->size && offset < old + 8U) object->pointers.data[p] = object->pointers.data[--object->pointers.len];
         else ++p;
     }
-    for (size_t i = 0U; i < type->size; ++i) { object->bytes[offset + i] = (unsigned char)(bits >> (i * 8U)); object->initialized[offset + i] = 1U; }
+    for (size_t i = 0U; i < type->size; ++i) { object->bytes[offset + i] = (unsigned char)(bits >> (i * 8U)); object->initialized[offset + i] = 255U; }
     if (!cinder_ir_floating(type) && type->size == 8U && value->pointer && value->address.object != 0U && bits == (uint64_t)pointer_bits(value->address)) { InterpStoredPointer stored = {offset, value->address}; cinder_vec_push((CinderVec *)&object->pointers, &stored); }
     return true;
 }
@@ -143,7 +216,7 @@ bool cinder_interp_zero(InterpContext *context, InterpPointer pointer, size_t co
     InterpObject *object = checked_object(context, pointer, count, loc); if (object == NULL) return false;
     if (object->readonly) { cinder_interp_fail(context, INTERP_READONLY, loc, "zero initialization modifies immutable storage"); return false; }
     size_t offset = (size_t)pointer.offset;
-    memset(object->bytes + offset, 0, count); memset(object->initialized + offset, 1, count);
+    memset(object->bytes + offset, 0, count); memset(object->initialized + offset, 255, count);
     for (size_t p = 0U; p < object->pointers.len;) {
         size_t old = object->pointers.data[p].offset;
         if (old < offset + count && offset < old + 8U) object->pointers.data[p] = object->pointers.data[--object->pointers.len];

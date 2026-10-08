@@ -49,5 +49,35 @@
       "gcc",
       "clang"
     ]
+  },
+  "profile_generic_declared.c": {
+    "source_sha256": "7d8dd57fe6143a48d2a421f79c1f1502c05dc44f0c02a9fdaa95c564856116ee",
+    "reference_exit": 1,
+    "ruling": "https://open-std.org/JTC1/SC22/WG14/www/docs/n2958.htm",
+    "resolution": "declared-bitfield-expression-profile; excluded from differential eligibility",
+    "expected_exit": 0,
+    "families": [
+      "gcc"
+    ]
+  },
+  "profile_sizeof_values.c": {
+    "source_sha256": "0d8065123300e7574738d130715b781854d433a8377d132f5c1f3fcb12aae3b5",
+    "reference_exit": 1,
+    "ruling": "https://open-std.org/JTC1/SC22/WG14/www/docs/n2958.htm",
+    "resolution": "declared-bitfield-expression-profile; excluded from differential eligibility",
+    "expected_exit": 0,
+    "families": [
+      "gcc"
+    ]
+  },
+  "profile_postfix_promotion.c": {
+    "source_sha256": "1d98c692afa2d21954bd3c0ac00b06f8ef449e9bfebb0e771c4bc82ffe0a5999",
+    "reference_exit": 1,
+    "ruling": "https://open-std.org/JTC1/SC22/WG14/www/docs/n2958.htm",
+    "resolution": "declared-bitfield-expression-profile; excluded from differential eligibility",
+    "expected_exit": 0,
+    "families": [
+      "clang"
+    ]
   }
 }

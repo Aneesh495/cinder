@@ -61,7 +61,7 @@ constant = next(line for line in lines if line.startswith('inst const '))
 parts = constant.split()
 # Mutation cases are counted separately from authored source cases.
 mutations = {
-    'schema': text.replace('cinder-ir 4', 'cinder-ir 99', 1),
+    'schema': text.replace('cinder-ir 5', 'cinder-ir 99', 1),
     'profile': text.replace('sysv-x86-64', 'other-target', 1),
     'missing-end': text.replace('end-module\n', ''),
     'trailing-data': text + 'unexpected\n',
@@ -90,14 +90,14 @@ def extra_types(value):
 mutations.update({
     'pointer-cycle': extra_types('type 2 pointer 0 1 0 0 8 8 2 0 none 0 - params 0 fields 0 identity 100\n'),
     'array-cycle': extra_types('type 2 array 0 1 0 0 8 8 2 1 none 0 - params 0 fields 0 identity 100\n'),
-    'aggregate-value-cycle': extra_types('type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1 identity 101\nfield x6e657874 2 0 0 0 align 0\n'),
+    'aggregate-value-cycle': extra_types('type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1 identity 101\nfield x6e657874 2 0 0 0 align 0 bits 0\n'),
     'aggregate-alignment': extra_types('type 2 struct 0 1 0 0 7 8 none 0 none 0 x6e6f6465 params 0 fields 0 identity 100\n'),
     'enum-layout': extra_types('type 2 enum 0 1 0 0 8 8 none 0 none 0 x636f6c6f72 params 0 fields 0 identity 100\n'),
     'float-unsigned': extra_types('type 2 float 0 1 1 0 4 4 none 0 none 0 - params 0 fields 0 identity 100\n'),
     'function-layout': text.replace('function 0 1 0 0 0 1', 'function 0 1 0 0 8 8', 1),
 })
 recursive = text.replace('types 2\n', 'types 4\n', 1).replace('globals 0\n',
-    'type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1 identity 101\nfield x6e657874 3 0 0 0 align 0\n'
+    'type 2 struct 0 1 0 0 8 8 none 0 none 0 x6e6f6465 params 0 fields 1 identity 101\nfield x6e657874 3 0 0 0 align 0 bits 0\n'
     'type 3 pointer 0 1 0 0 8 8 2 0 none 0 - params 0 fields 0 identity 100\nglobals 0\n', 1)
 recursive_path = base / 'recursive-pointer-type.cir'
 recursive_path.write_text(recursive)

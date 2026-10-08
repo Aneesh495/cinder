@@ -1,0 +1,98 @@
+[
+  {
+    "name": "integer",
+    "owned": [
+      "integer.c"
+    ],
+    "provider": "integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "bool",
+    "owned": [
+      "bool.c"
+    ],
+    "provider": "bool_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "mixed",
+    "owned": [
+      "mixed.c"
+    ],
+    "provider": "mixed_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "sse_integer",
+    "owned": [
+      "sse_integer.c"
+    ],
+    "provider": "sse_integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "memory",
+    "owned": [
+      "memory.c"
+    ],
+    "provider": "memory_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "zero_boundary",
+    "owned": [
+      "zero_boundary.c"
+    ],
+    "provider": "zero_boundary_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "char_packing",
+    "owned": [
+      "char_packing.c"
+    ],
+    "provider": "char_packing_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "cross_unit",
+    "owned": [
+      "cross_unit.c"
+    ],
+    "provider": "cross_unit_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "anonymous",
+    "owned": [
+      "anonymous.c"
+    ],
+    "provider": "anonymous_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "union_integer",
+    "owned": [
+      "union_integer.c"
+    ],
+    "provider": "union_integer_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "union_sse_overlap",
+    "owned": [
+      "union_sse_overlap.c"
+    ],
+    "provider": "union_sse_overlap_provider.c",
+    "interpreter": "unsupported"
+  },
+  {
+    "name": "integer_pair",
+    "owned": [
+      "integer_pair.c"
+    ],
+    "provider": "integer_pair_provider.c",
+    "interpreter": "unsupported"
+  }
+]

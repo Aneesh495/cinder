@@ -1,0 +1,1 @@
+struct S { unsigned a:3; unsigned b:5; }; static int calls; static struct S s={4,17}; struct S *get(void){++calls;return &s;} int main(void){int r=(get()->a+=2);return calls!=1 || r!=6 || s.a!=6 || s.b!=17;}

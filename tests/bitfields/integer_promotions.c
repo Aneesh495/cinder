@@ -1,0 +1,1 @@
+struct S { unsigned a:3; signed b:5; _Bool c:1; }; int main(void){struct S s={7,-3,1};_Static_assert(_Generic(+((struct S*)0)->a,int:1,default:0),"narrow field promotes");return _Generic(+s.a,int:0,default:1) || _Generic(~s.a,int:0,default:1) || _Generic(s.a<<1,int:0,default:1) || s.a-9!=-2 || s.b+1!=-2 || s.c+2!=3;}

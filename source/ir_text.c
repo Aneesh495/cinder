@@ -80,7 +80,7 @@ static void write_type(FILE *out, const TypeTable *table, size_t id) {
     for (size_t f = 0U; f < type->fields.len; ++f) {
         const CinderField *field = &type->fields.data[f];
         fputs("field ", out); write_string(out, field->name); fputc(' ', out); write_type_ref(out, table, field->type);
-        fprintf(out, " %zu %u %u align %zu\n", field->offset, field->bit_offset, field->bit_width, field->alignment);
+        fprintf(out, " %zu %u %u align %zu bits %u\n", field->offset, field->bit_offset, field->bit_width, field->alignment, field->is_bitfield ? 1U : 0U);
     }
 }
 
@@ -101,7 +101,7 @@ int cinder_write_ir(const CinderIRModule *module, FILE *out, CinderDiagnostics *
     if (cinder_verify_ir(module, diags) != 0) return 1;
     TypeTable table = {NULL, 0U, 0U};
     if (!collect_module(&table, module)) { cinder_diag(diags, CINDER_ERROR, (CinderLoc){0}, "IR serialization type graph exceeds limits"); free(table.data); return 1; }
-    fprintf(out, "cinder-ir 4 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
+    fprintf(out, "cinder-ir 5 lp64-le sysv-x86-64\ntypes %zu\n", table.len);
     for (size_t t = 0U; t < table.len; ++t) write_type(out, &table, t);
     fprintf(out, "globals %zu\n", module->globals.len);
     for (size_t g = 0U; g < module->globals.len; ++g) {
@@ -295,7 +295,7 @@ static void read_types(Reader *reader) {
         for (size_t f = 0U; f < fields && !reader->failed; ++f) {
             expect(reader, "field"); CinderField field; field.name = string(reader, false, false); field.type = type_ref(reader);
             field.offset = (size_t)number(reader, IR_TEXT_LIMIT); field.bit_offset = (unsigned)number(reader, 63U); field.bit_width = (unsigned)number(reader, 64U);
-            expect(reader, "align"); field.alignment = (size_t)number(reader, 16U);
+            expect(reader, "align"); field.alignment = (size_t)number(reader, 16U); expect(reader, "bits"); field.is_bitfield = boolean(reader);
             if (field.type == NULL) parse_error(reader, "field has no type");
             cinder_vec_push((CinderVec *)&type->fields, &field);
         }
@@ -333,36 +333,43 @@ static bool validate_type(Reader *reader, const CinderType *type, bool *active, 
      * is separately checked against the declared object extent below. */
     if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
         if (type->base != NULL || type->return_type != NULL || type->variadic || (type->complete && (type->size == 0U || type->size % type->align != 0U)) || (!type->complete && (type->size != 0U || type->fields.len != 0U))) { parse_error(reader, "invalid aggregate layout or attributes"); return false; }
-        bool plain = true;
-        for (size_t f = 0U; f < type->fields.len; ++f) if (type->fields.data[f].bit_width != 0U) plain = false;
-        size_t extent = 0U, aggregate_align = 1U;
+        size_t extent = 0U, aggregate_align = 1U, bit_cursor = 0U, named = 0U;
         for (size_t f = 0U; f < type->fields.len; ++f) {
             const CinderField *field = &type->fields.data[f];
-            if (!cinder_object_alignment_valid(field->type, field->alignment)) { parse_error(reader, "invalid declared member alignment"); return false; }
+            if (field->is_bitfield) {
+                if ((field->type->kind != TYPE_BOOL && field->type->kind != TYPE_INT) || field->alignment != 0U || field->bit_width > (field->type->kind == TYPE_BOOL ? 1U : 32U) || (field->name != NULL && field->bit_width == 0U)) { parse_error(reader, "invalid target bitfield type, width, or alignment"); return false; }
+                if (!validate_type(reader, field->type, active, depth + 1U)) return false;
+                size_t unit = field->type->size * 8U;
+                if (field->name != NULL) { ++named; if (field->type->align > aggregate_align) aggregate_align = field->type->align; }
+                size_t expected_offset = 0U, expected_bit = 0U;
+                if (type->kind == TYPE_UNION) {
+                    size_t bytes = field->name == NULL ? (field->bit_width + 7U) / 8U : field->type->size;
+                    if (bytes > extent) extent = bytes;
+                } else {
+                    if (field->bit_width == 0U || bit_cursor % unit + field->bit_width > unit) bit_cursor = (bit_cursor + unit - 1U) / unit * unit;
+                    expected_offset = bit_cursor / unit * field->type->size; expected_bit = bit_cursor % unit;
+                    bit_cursor += field->bit_width; extent = (bit_cursor + 7U) / 8U;
+                }
+                if (field->offset != expected_offset || field->bit_offset != expected_bit || field->bit_offset + field->bit_width > unit || field->offset > type->size || (field->bit_width != 0U && (field->bit_offset + field->bit_width + 7U) / 8U > type->size - field->offset)) { parse_error(reader, "bitfield storage disagrees with target layout"); return false; }
+                continue;
+            }
+            if (field->bit_offset != 0U || field->bit_width != 0U || !cinder_object_alignment_valid(field->type, field->alignment)) { parse_error(reader, "invalid declared ordinary member alignment or bit metadata"); return false; }
             size_t alignment = field->alignment == 0U ? field->type->align : field->alignment;
             if (alignment > aggregate_align) aggregate_align = alignment;
-            if (plain) {
-                size_t expected = type->kind == TYPE_UNION ? 0U : (extent + alignment - 1U) & ~(alignment - 1U);
-                if (field->offset != expected) { parse_error(reader, "member offset disagrees with target alignment layout"); return false; }
-                size_t end = expected + field->type->size;
-                if (end > extent) extent = end;
-            }
+            size_t expected = type->kind == TYPE_UNION ? 0U : (extent + alignment - 1U) & ~(alignment - 1U);
+            if (field->offset != expected) { parse_error(reader, "member offset disagrees with target alignment layout"); return false; }
             bool flexible = field->type->kind == TYPE_ARRAY && !field->type->complete && field->type->base != NULL && field->type->base->complete;
-            if (flexible) {
-                size_t named = 0U;
-                for (size_t p = 0U; p < f; ++p) {
-                    const CinderField *previous = &type->fields.data[p];
-                    if (previous->name != NULL) ++named;
-                    else if (cinder_type_anonymous_member(previous)) named += cinder_type_named_members(previous->type);
-                }
-                if (type->kind != TYPE_STRUCT || f + 1U != type->fields.len || field->name == NULL || named == 0U || field->type->size != 0U || field->type->array_len != 0U) { parse_error(reader, "invalid flexible array member placement or extent"); return false; }
-            }
-            if ((!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION || field->offset > type->size || field->type->size > type->size - field->offset || field->bit_offset + field->bit_width > field->type->size * 8U || (type->kind == TYPE_UNION && field->offset != 0U) || (type->kind == TYPE_STRUCT && cinder_type_contains_flexible(field->type))) { parse_error(reader, "field is outside aggregate extent or has an invalid object type"); return false; }
-            if (type->align < alignment || (field->bit_width != 0U && (!integer_type(field->type) || field->alignment != 0U)) || (field->bit_width == 0U && (field->bit_offset != 0U || field->offset % alignment != 0U))) { parse_error(reader, "invalid member alignment or bitfield type"); return false; }
+            if (flexible && (type->kind != TYPE_STRUCT || f + 1U != type->fields.len || field->name == NULL || named == 0U || field->type->size != 0U || field->type->array_len != 0U)) { parse_error(reader, "invalid flexible array member placement or extent"); return false; }
+            if ((!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION || field->offset > type->size || field->type->size > type->size - field->offset || (type->kind == TYPE_STRUCT && cinder_type_contains_flexible(field->type))) { parse_error(reader, "field is outside aggregate extent or has an invalid object type"); return false; }
+            if (field->name != NULL) ++named;
+            else if (cinder_type_anonymous_member(field)) named += cinder_type_named_members(field->type);
+            size_t end = expected + field->type->size;
+            if (end > extent) extent = end;
+            bit_cursor = extent * 8U;
             for (size_t previous = 0U; previous < f; ++previous)
                 if (field->name != NULL && type->fields.data[previous].name != NULL && strcmp(field->name, type->fields.data[previous].name) == 0) { parse_error(reader, "duplicate aggregate member"); return false; }
         }
-        if (type->complete && plain && (type->fields.len == 0U || type->align != aggregate_align || type->size != ((extent + aggregate_align - 1U) & ~(aggregate_align - 1U)))) { parse_error(reader, "aggregate extent or alignment disagrees with target layout"); return false; }
+        if (type->complete && (type->fields.len == 0U || type->align != aggregate_align || type->size != ((extent + aggregate_align - 1U) & ~(aggregate_align - 1U)))) { parse_error(reader, "aggregate extent or alignment disagrees with target layout"); return false; }
         if (type->complete && !cinder_type_members_unique(type)) { parse_error(reader, "duplicate promoted member or invalid anonymous aggregate member"); return false; }
         return finite_object(reader, type, active, depth);
     }
@@ -473,7 +480,7 @@ static void read_functions(Reader *reader) {
 int cinder_parse_ir(CinderIRModule *module, const char *text, size_t length, CinderDiagnostics *diags) {
     Reader reader; memset(&reader, 0, sizeof(reader)); reader.text = text; reader.length = length; reader.line = 1U; reader.module = module; reader.diags = diags;
     if (length > IR_TEXT_LIMIT || memchr(text, '\0', length) != NULL || module->functions.len != 0U || module->globals.len != 0U) { parse_error(&reader, "invalid input extent or nonempty destination module"); return 1; }
-    expect(&reader, "cinder-ir"); if (number(&reader, 4U) != 4U) parse_error(&reader, "unsupported IR schema version");
+    expect(&reader, "cinder-ir"); if (number(&reader, 5U) != 5U) parse_error(&reader, "unsupported IR schema version");
     expect(&reader, "lp64-le"); expect(&reader, "sysv-x86-64"); read_types(&reader);
     bool *active = cinder_alloc((reader.types.len == 0U ? 1U : reader.types.len) * sizeof(*active)); memset(active, 0, reader.types.len * sizeof(*active));
     for (size_t t = 0U; t < reader.types.len && !reader.failed; ++t) (void)validate_type(&reader, reader.types.data[t], active, 0U);

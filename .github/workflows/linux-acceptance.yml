@@ -56,6 +56,8 @@ jobs:
         run: make test-flexible
       - name: Anonymous members, nested initialization, and ABI
         run: make test-anonymous
+      - name: Bitfield packing, masked updates, and ABI
+        run: make test-bitfields
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -117,6 +119,9 @@ jobs:
             .agent-local/anonymous
             .agent-local/anonymous-contracts
             .agent-local/anonymous-abi-contracts
+            .agent-local/bitfields
+            .agent-local/bitfield-contracts
+            .agent-local/bitfields-abi-contracts
             .agent-local/flexible-abi-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary

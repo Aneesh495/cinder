@@ -478,5 +478,25 @@
   {
     "source": "anonymous_const_character.undefined.c",
     "classification": 12
+  },
+  {
+    "source": "bitfield_uninitialized.c",
+    "classification": 4
+  },
+  {
+    "source": "bitfield_uninitialized_neighbor.c",
+    "classification": 4
+  },
+  {
+    "source": "bitfield_expired.c",
+    "classification": 10
+  },
+  {
+    "source": "bitfield_null.c",
+    "classification": 11
+  },
+  {
+    "source": "bitfield_readonly_cast.c",
+    "classification": 12
   }
 ]

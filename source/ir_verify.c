@@ -105,6 +105,20 @@ static void check_types(const CinderIRInst *inst, CinderType *const *types, Cind
         if (pointer->kind != TYPE_POINTER || !same_value_type(pointer->base, inst->type) || !same_value_type(value, inst->type) || !(integer(inst->type) || result_fp)) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed memory access disagrees with pointer or scalar storage");
         if (inst->op == IR_MEMORY_STORE && pointer->kind == TYPE_POINTER && (pointer->base->qualifiers & 1U) != 0U) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed memory store modifies a const-qualified object");
     }
+    if (inst->op >= IR_BIT_LOAD && inst->op <= IR_BIT_CONVERT) {
+        bool convert = inst->op == IR_BIT_CONVERT;
+        bool store = inst->op == IR_BIT_STORE || inst->op == IR_BIT_INIT;
+        const CinderType *left = types[inst->left];
+        bool valid = inst->type->kind == TYPE_INT || inst->type->kind == TYPE_BOOL || inst->type->kind == TYPE_CHAR;
+        size_t width = inst->type->kind == TYPE_BOOL ? 1U : inst->type->size * 8U;
+        valid = valid && inst->integer > 0 && (uint64_t)inst->integer <= width && inst->operator_code >= 0 && (uint64_t)inst->operator_code + (uint64_t)inst->integer <= inst->type->size * 8U;
+        valid = valid && (convert ? same_value_type(left, inst->type) && inst->operator_code == 0 : left->kind == TYPE_POINTER && same_value_type(left->base, inst->type));
+        valid = valid && inst->slot == -1 && inst->source_type == NULL && inst->args.len == 0U && inst->callee == NULL;
+        if (store) valid = valid && same_value_type(types[inst->right], inst->type);
+        else valid = valid && inst->right == CINDER_INVALID_VALUE;
+        if (!valid) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid typed bitfield width, offset, or value contract");
+        if (inst->op == IR_BIT_STORE && left->kind == TYPE_POINTER && (left->base->qualifiers & 1U) != 0U) cinder_diag(diags, CINDER_FATAL, inst->loc, "bitfield store modifies const-qualified storage");
+    }
     if (inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF) {
         const CinderType *base = types[inst->left], *right = types[inst->right];
         bool valid = base->kind == TYPE_POINTER && base->base->complete && base->base->size != 0U && base->base->kind != TYPE_VOID && base->base->kind != TYPE_FUNCTION && inst->integer > 0 && (uint64_t)inst->integer == base->base->size;
@@ -316,7 +330,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 if (inst->op != IR_NOP && inst->type == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed IR instruction has no type");
-                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_RESET && inst->op != IR_LOCAL_FREEZE && inst->op != IR_AGG_ARG && inst->op != IR_AGG_RETURN && inst->op != IR_VA_START && inst->op != IR_VA_COPY && inst->op != IR_VA_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
+                bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_BIT_STORE && inst->op != IR_BIT_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_RESET && inst->op != IR_LOCAL_FREEZE && inst->op != IR_AGG_ARG && inst->op != IR_AGG_RETURN && inst->op != IR_VA_START && inst->op != IR_VA_COPY && inst->op != IR_VA_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);
                 if (has_result) {
                     if ((size_t)inst->dst >= function->value_count) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has no valid result ID");
                     else if (definitions[inst->dst] != CINDER_INVALID_BLOCK) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR result ID has multiple definitions");
@@ -334,8 +348,8 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 const CinderIRBlock *block = &function->blocks.data[b];
                 for (size_t i = 0U; i < block->instructions.len && diags->errors == 0U; ++i) {
                     const CinderIRInst *inst = &block->instructions.data[i];
-                    bool needs_left = inst->op == IR_VA_START || inst->op == IR_VA_END || inst->op == IR_VA_COPY || inst->op == IR_VA_ARG || (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_ZERO_INIT || inst->op == IR_AGG_RETURN || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
-                    bool needs_right = inst->op == IR_VA_COPY || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
+                    bool needs_left = inst->op == IR_VA_START || inst->op == IR_VA_END || inst->op == IR_VA_COPY || inst->op == IR_VA_ARG || (inst->op == IR_CALL && inst->callee == NULL) || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_COPY || inst->op == IR_CONVERT || inst->op == IR_NEG || inst->op == IR_FNEG || inst->op == IR_BIT_NOT || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_GLOBAL_STORE || inst->op == IR_MEMORY_LOAD || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || (inst->op >= IR_BIT_LOAD && inst->op <= IR_BIT_CONVERT) || inst->op == IR_ZERO_INIT || inst->op == IR_AGG_RETURN || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF || inst->op == IR_POINTER_MEMBER;
+                    bool needs_right = inst->op == IR_VA_COPY || binary_integer(inst->op) || binary_float(inst->op) || inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT || inst->op == IR_BIT_STORE || inst->op == IR_BIT_INIT || inst->op == IR_OBJECT_COPY || inst->op == IR_OBJECT_INIT || inst->op == IR_POINTER_OFFSET || inst->op == IR_POINTER_DIFF;
                     if (needs_left) check_use(inst->left, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);
                     else if (inst->left != CINDER_INVALID_VALUE) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR instruction has an unexpected left operand");
                     if (needs_right) check_use(inst->right, (CinderBlockId)b, i, function, definitions, positions, &cfg, inst->loc, diags);

@@ -1,0 +1,1 @@
+struct S { unsigned a:3; long p; signed b:5; long q; }; struct S change(struct S s){s.a=6;s.b=-9;s.q+=s.p;return s;} int main(void){struct S s={3,17,-3,29};s=change(s);return s.a!=6 || s.b!=-9 || s.p!=17 || s.q!=46;}

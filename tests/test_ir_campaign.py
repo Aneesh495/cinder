@@ -46,7 +46,7 @@ with records.open() as stream, archive.open('rb') as modules:
         extent = record['archive_bytes']
         assert 0 < extent <= 64 * 1024 * 1024
         text = modules.read(extent)
-        assert len(text) == extent and text.startswith(b'cinder-ir 4 lp64-le sysv-x86-64\n') and text.endswith(b'end-module\n')
+        assert len(text) == extent and text.startswith(b'cinder-ir 5 lp64-le sysv-x86-64\n') and text.endswith(b'end-module\n')
         offset += extent
         families[record['family']] += 1
         classes[record['classification']] += 1

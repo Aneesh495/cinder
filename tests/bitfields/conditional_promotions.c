@@ -1,0 +1,1 @@
+struct S { unsigned a:3; unsigned b:5; }; int main(void){struct S s={5,27};_Static_assert(_Generic(1?((struct S*)0)->a:((struct S*)0)->b,int:1,default:0),"conditional promotions");return _Generic(1?s.a:s.b,int:0,default:1) || (0?s.a:s.b)!=27;}

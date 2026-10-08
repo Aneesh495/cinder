@@ -201,6 +201,7 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
             }
             switch (inst->op) {
                 case IR_UNDEF: result.defined = false; break;
+                case IR_BIT_CONVERT: result.integer = cinder_interp_bit_value((uint64_t)values[inst->left].integer, inst->type, (unsigned)inst->integer); break;
                 case IR_CONST: result.integer = cinder_interp_integer((uint64_t)inst->integer, inst->type); result.pointer = inst->type->kind == TYPE_POINTER && result.integer == 0; break;
                 case IR_FCONST: result.floating = inst->floating; break;
                 case IR_ARG: case IR_FARG:
@@ -288,10 +289,12 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     if (!values[inst->left].pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "zero initializer has no pointer provenance"); goto done; }
                     if (!cinder_interp_zero(context, values[inst->left].address, (size_t)inst->integer, inst->loc)) goto done;
                     break;
-                case IR_MEMORY_LOAD: case IR_MEMORY_STORE: case IR_MEMORY_INIT: case IR_POINTER_OFFSET: case IR_POINTER_MEMBER: case IR_POINTER_DIFF: {
+                case IR_BIT_LOAD: case IR_BIT_STORE: case IR_BIT_INIT: case IR_MEMORY_LOAD: case IR_MEMORY_STORE: case IR_MEMORY_INIT: case IR_POINTER_OFFSET: case IR_POINTER_MEMBER: case IR_POINTER_DIFF: {
                     const InterpValue *pointer = &values[inst->left];
                     if (!pointer->pointer) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, inst->loc, "pointer has no object provenance"); goto done; }
-                    if (inst->op == IR_MEMORY_LOAD) { if (!cinder_interp_load(context, pointer->address, inst->type, &result, inst->loc)) goto done; }
+                    if (inst->op == IR_BIT_LOAD) { if (!cinder_interp_bit_load(context, pointer->address, inst->type, (unsigned)inst->operator_code, (unsigned)inst->integer, &result, inst->loc)) goto done; }
+                    else if (inst->op == IR_BIT_STORE || inst->op == IR_BIT_INIT) { if (!cinder_interp_bit_store(context, pointer->address, inst->type, (unsigned)inst->operator_code, (unsigned)inst->integer, &values[inst->right], inst->op == IR_BIT_INIT, inst->loc)) goto done; }
+                    else if (inst->op == IR_MEMORY_LOAD) { if (!cinder_interp_load(context, pointer->address, inst->type, &result, inst->loc)) goto done; }
                     else if ((inst->op == IR_MEMORY_STORE || inst->op == IR_MEMORY_INIT)) { if (!cinder_interp_store(context, pointer->address, inst->type, &values[inst->right], inst->op == IR_MEMORY_INIT, inst->loc)) goto done; }
                     else if (inst->op == IR_POINTER_OFFSET) {
                         const CinderType *index_type = cinder_ir_value_type(function, inst->right);
