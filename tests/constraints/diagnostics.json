@@ -9,5 +9,92 @@
     "first",
     "second",
     "\\x00"
+  ],
+  "register_bound_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_generic_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_prototype_bound_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_struct_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_union_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_definition_over_prototype.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_generic_control.c": [
+    "register array cannot be converted to a pointer"
+  ],
+  "register_parameter_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_array_index.c": [
+    "register array cannot be converted to a pointer"
+  ],
+  "register_member_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_member_array_decay.c": [
+    "register array cannot be converted to a pointer"
+  ],
+  "register_generic_unused_index.c": [
+    "register array cannot be converted to a pointer"
+  ],
+  "register_sizeof_index.c": [
+    "register array cannot be converted to a pointer"
+  ],
+  "register_array_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_array_decay.c": [
+    "register array cannot be converted to a pointer"
+  ],
+  "register_nested_member_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_sizeof_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "register_address.c": [
+    "cannot take the address of a register object or member"
+  ],
+  "va_start_function_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_shadowed_last.c": [
+    "va_start operand must resolve to the final parameter declaration"
+  ],
+  "va_start_char_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_short_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_definition_array_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_float_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_bool_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_array_typedef_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_register_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_definition_register_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
+  ],
+  "va_start_array_last.c": [
+    "va_start final parameter has register storage, adjusted array/function type, or default promotion"
   ]
 }

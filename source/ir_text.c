@@ -288,7 +288,7 @@ static void read_types(Reader *reader) {
         expect(reader, "identity"); type->identity = (uint32_t)number(reader, UINT32_MAX);
         if (type->identity == 0U) parse_error(reader, "type identity must be nonzero");
         for (size_t p = 0U; p < parameters && !reader->failed; ++p) {
-            expect(reader, "type-param"); CinderParam param; param.name = string(reader, false, false); param.type = type_ref(reader);
+            expect(reader, "type-param"); CinderParam param; param.name = string(reader, false, false); param.type = type_ref(reader); param.declaration_flags = 0U;
             if (param.type == NULL) parse_error(reader, "parameter has no type");
             cinder_vec_push((CinderVec *)&type->params, &param);
         }

@@ -746,3 +746,36 @@ reference diagnostics for the earlier oracle remain retained.
 
 See `docs/SWITCH.md`. Full acceptance remains incomplete, including the audited
 source-bound native report readers and remaining original prompt requirements.
+
+
+## Register addressability and variadic parameter increment
+
+Register storage is retained on objects, parameters, and inherited aggregate
+members. Source address requests and array pointer conversions are rejected,
+while scalar updates, array size queries, pointer dereference/cancellation, and
+aggregate ABI operations remain supported. Source-point constant expressions
+retain declaration identity, including prototype parameter scopes.
+
+Variadic builtins now resolve the actual final named parameter declaration.
+Same-spelling shadows are rejected. Evaluated va_start uses reject register,
+original array/function, and promotion-changing parameters; unused generic and
+sizeof uses retain their unevaluated behavior. Prototype attributes do not
+transfer to later definitions. Native ABI metadata is unchanged.
+
+GCC Release and Clang ASan/UBSan passed 30 authored programs against both
+references at O0/O2, 60 canonical CIR/object identities, 293 source rejections,
+and 106 memory UB cases with 57 malformed memory metadata mutations. All 180
+defined direct, assembled, and CIR-generated object executions passed in the
+Linux development VM and their frozen object/compiler hashes were audited.
+The GCC regression passed all 910 source observations. The sanitizer passed
+1,820 source CIR comparisons with 36 malformed mutations,
+100,000 typed IR comparisons, and 1,000 SSA cases. Evidence tampering checks
+and the strict GCC smoke test passed.
+
+Host diagnostics for inherited register-array conversions differ: Clang accepts
+one invalid member conversion while Cinder rejects it under the documented
+profile. The semantic UB rules and the 11 invalid variadic source cases have
+exact source hashes and non-mandatory reference policies; the original reference
+diagnostics are retained. No invalid native execution is used as evidence.
+See `docs/REGISTER.md`. Full acceptance and its audited report readers remain
+incomplete.

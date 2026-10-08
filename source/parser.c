@@ -286,6 +286,7 @@ static void declaration_attributes(CinderAst *ast, CinderDecl *decl, const Decla
     decl->alignment = spec->alignment;
     decl->has_alignment = spec->alignment != 0U;
     decl->is_noreturn = (spec->function_specifiers & 2U) != 0U;
+    decl->is_register = (spec->storage & STORAGE_REGISTER) != 0U;
     if (decl->kind == DECL_FUNCTION && (spec->storage & (STORAGE_AUTO | STORAGE_REGISTER)) != 0U) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "function declaration cannot have auto or register storage");
     if (spec->alignment_specified && (decl->kind != DECL_VAR || (spec->storage & STORAGE_REGISTER) != 0U)) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "alignment cannot apply to a typedef, function, or register object");
     if (spec->function_specifiers != 0U && (decl->kind != DECL_FUNCTION || (decl->name != NULL && strcmp(decl->name, "main") == 0))) cinder_diag(ast->diags, CINDER_ERROR, decl->loc, "function specifier requires a function other than main");
@@ -392,12 +393,17 @@ static DeclaratorNode *parse_declarator_node(CinderAst *ast, char **name, Cinder
                 CinderType *base = parse_declaration_specifiers(ast, &spec); char *param_name = NULL; CinderLoc loc = peek(ast)->loc;
                 if (spec.alignment_specified || spec.function_specifiers != 0U || (spec.storage & ~(unsigned)STORAGE_REGISTER) != 0U) cinder_diag(ast->diags, CINDER_ERROR, loc, "parameter has a forbidden alignment, function, or storage specifier");
                 CinderType *type = declarator_type(ast, base, &param_name, &loc, true);
+                unsigned flags = (spec.storage & STORAGE_REGISTER) != 0U ? CINDER_PARAM_REGISTER : 0U;
+                if (type->kind == TYPE_ARRAY || type->kind == TYPE_FUNCTION) flags |= CINDER_PARAM_ADJUSTED;
                 if (type->kind == TYPE_ARRAY) type = cinder_type_pointer(ast->types, type->base);
                 else if (type->kind == TYPE_FUNCTION) type = cinder_type_pointer(ast->types, type);
                 if (type->kind == TYPE_VOID) cinder_diag(ast->diags, CINDER_ERROR, loc, "void parameter must be the sole unnamed parameter");
-                ParameterNode *param = node_alloc(ast, sizeof(*param)); param->param = (CinderParam){param_name, type}; param->next = NULL;
+                ParameterNode *param = node_alloc(ast, sizeof(*param)); param->param = (CinderParam){param_name, type, flags}; param->next = NULL;
                 if (tail == NULL) fn->params = param; else tail->next = param;
-                tail = param; bind_name(ast, param_name, type, PARSE_OBJECT, 0, loc);
+                tail = param;
+                CinderDecl *parameter_binding = new_decl(ast, DECL_VAR, loc); parameter_binding->name = param_name; parameter_binding->type = type;
+                parameter_binding->is_register = (flags & CINDER_PARAM_REGISTER) != 0U; parameter_binding->parameter_adjusted = (flags & CINDER_PARAM_ADJUSTED) != 0U;
+                CinderParseBinding *binding = bind_name(ast, param_name, type, PARSE_OBJECT, 0, loc); if (binding != NULL) binding->decl = parameter_binding;
             } while (take(ast, ','));
             (void)expect(ast, ')', "')'"); --ast->scope_depth; ast->bindings.len = saved; direct = fn;
         }
@@ -522,7 +528,7 @@ static CinderExpr *parse_primary(CinderAst *ast) {
         if (binding != NULL && binding->kind == PARSE_ENUMERATOR) { CinderExpr *expr = new_expr(ast, EX_INT, token->loc); expr->as.integer = binding->value; expr->type = binding->type; return expr; }
         if (binding != NULL && binding->kind == PARSE_TYPEDEF) cinder_diag(ast->diags, CINDER_ERROR, token->loc, "typedef name is not an expression");
         CinderExpr *expr = new_expr(ast, EX_NAME, token->loc); expr->as.name = cinder_arena_strndup(&ast->arena, token->text, token->length);
-        if (binding != NULL) { expr->type = binding->type; expr->name_visible = binding->kind == PARSE_OBJECT; }
+        if (binding != NULL) { expr->type = binding->type; expr->name_visible = binding->kind == PARSE_OBJECT; expr->resolved_decl = binding->decl; }
         return expr;
     }
     if (take(ast, '(')) {
@@ -923,14 +929,17 @@ int cinder_parse(CinderAst *ast) {
             if (binding != NULL) binding->decl = decl;
             if (decl->kind == DECL_FUNCTION) {
                 for (size_t i = 0U; i < type->params.len; ++i) {
-                    CinderDecl *param = new_decl(ast, DECL_VAR, name_loc); param->name = type->params.data[i].name; param->type = type->params.data[i].type; cinder_vec_push((CinderVec *)&decl->params, &param);
+                    CinderDecl *param = new_decl(ast, DECL_VAR, name_loc); param->name = type->params.data[i].name; param->type = type->params.data[i].type;
+                    param->is_register = (type->params.data[i].declaration_flags & CINDER_PARAM_REGISTER) != 0U; param->parameter_adjusted = (type->params.data[i].declaration_flags & CINDER_PARAM_ADJUSTED) != 0U;
+                    cinder_vec_push((CinderVec *)&decl->params, &param);
                 }
                 if (is(ast, '{')) {
                     size_t saved = ast->bindings.len; ++ast->scope_depth;
                     for (size_t p = 0U; p < decl->params.len; ++p) {
                         CinderDecl *param = decl->params.data[p];
                         if (param->name == NULL) cinder_diag(ast->diags, CINDER_ERROR, name_loc, "function definition requires parameter names");
-                        bind_name(ast, param->name, param->type, PARSE_OBJECT, 0, name_loc);
+                        CinderParseBinding *parameter_binding = bind_name(ast, param->name, param->type, PARSE_OBJECT, 0, name_loc);
+                        if (parameter_binding != NULL) parameter_binding->decl = param;
                     }
                     --ast->scope_depth;
                     decl->is_definition = true; ast->current_function = decl; decl->body = parse_compound(ast); ast->current_function = NULL; definition = true;

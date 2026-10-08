@@ -3,7 +3,9 @@
 Block-scope `static` objects use owned ELF data, read-only data, or BSS with
 deterministic local symbols. They initialize once before execution, retain
 their values across calls and block re-entry, and preserve requested target
-alignment. Automatic declarations continue to use checked local lifetimes.
+alignment. Automatic declarations continue to use checked local lifetimes. Register
+address restrictions and variadic parameter eligibility are described in
+`docs/REGISTER.md`.
 Name expressions carry their resolved declaration through lowering, so a
 static or external object cannot accidentally use an automatic object's slot.
 
