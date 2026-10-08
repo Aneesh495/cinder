@@ -713,5 +713,36 @@ The GCC control regression passed 832 cases; the complete sanitizer CIR suite
 includes all 834 current ledger entries. Static-storage and nonreturning
 function regressions also passed. The seven new memory UB programs run only in
 the independent interpreter. See `docs/JUMPS.md`. Full acceptance remains
-incomplete; switch dispatch, other language families, and audited campaign
-readers remain open.
+incomplete; other language families and audited campaign readers remain open.
+
+
+## Switch dispatch increment
+
+Switch/case/default now implements integer promotions, converted constant
+matching, duplicate detection, source-order fallthrough, and nearest-switch
+association. Dispatch edges enter scopes without executing skipped initializers
+or conditions. Nested loop and switch statements have separate break and
+continue target/lifetime stacks. Cases inside loops, conditionals, and nested
+blocks work, including Duff's device and function labels using typedef names.
+
+GCC Release and Clang ASan/UBSan passed 46 authored reference/object/assembly
+programs and 92 canonical CIR execution/object identities. All 276 defined
+owned, assembled, and CIR-generated objects passed in the Linux development VM.
+Six generated 1,024-case object paths also passed native execution at O0/O2.
+A 1,024-case dispatch executed through canonical IR; 4,096 cases passed semantic
+analysis, with rejection at 4,097 and beyond the 128 nested-label limit. The
+sanitizer passed all 1,760 source CIR comparisons and 36 malformed mutations,
+264 source constraints, 106 memory UB cases and 57 malformed memory contracts,
+100,000 typed IR comparisons, and 1,000 SSA cases. The GCC regression passed all 880 current source observations. The existing
+goto contract regression and read-only evidence integrity checks also passed.
+
+An initial case-expression ownership defect was caught by ASan: the statement
+and discarded-constant ledger both freed the same generic association vector.
+Case statements now own their expressions and perform their full semantic
+constant checking directly. The failure and original source snapshot remain in
+the private audit. A new unselected-generic negative oracle was narrowed from
+void indirection to floating remainder after reviewing the language constraint;
+reference diagnostics for the earlier oracle remain retained.
+
+See `docs/SWITCH.md`. Full acceptance remains incomplete, including the audited
+source-bound native report readers and remaining original prompt requirements.

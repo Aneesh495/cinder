@@ -1,0 +1,1 @@
+int pick(int a,int b) { int n=0; switch(a) { case 1: switch(b) { case 1: n=3; break; default: n=5; } n+=7; break; default: switch(b) { case 1: n=11; break; default: n=13; } } return n; } int main(void) { return pick(1,1)!=10 || pick(1,2)!=12 || pick(2,1)!=11 || pick(2,2)!=13; }

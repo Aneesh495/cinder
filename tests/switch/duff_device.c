@@ -1,0 +1,1 @@
+void copy(int *out,int *in,int count) { int n=(count+3)/4; switch(count%4) { case 0: do { *out++=*in++; case 3: *out++=*in++; case 2: *out++=*in++; case 1: *out++=*in++; } while(--n>0); } } int main(void) { int a[7]={2,3,5,7,11,13,17}; int b[7]={0}; copy(b,a,7); for(int i=0;i<7;i++) if(a[i]!=b[i]) return 1; return 0; }

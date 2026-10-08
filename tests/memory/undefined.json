@@ -394,5 +394,33 @@
   {
     "source": "goto_ended_selection_literal.undefined.c",
     "classification": 10
+  },
+  {
+    "source": "switch_skipped_initializer.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "switch_skipped_array_initializer.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "switch_skipped_nested_initializer.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "switch_block_retired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "switch_continue_retired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "switch_control_literal_retired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "switch_loop_reentered.undefined.c",
+    "classification": 10
   }
 ]

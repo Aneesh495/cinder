@@ -3334,5 +3334,189 @@
   {
     "source": "../goto/enter_for_continue.c",
     "exit": 0
+  },
+  {
+    "source": "../switch/dispatch_signed.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/default_first.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/default_middle.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/fallthrough.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/stacked_cases.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/no_default.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/empty_switch.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/body_without_cases.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/noncompound_body.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/noncompound_default.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/boolean_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/character_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/unsigned_short_promotion.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/enum_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/unsigned_case_conversion.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/wide_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/signed_wide_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/constant_expressions.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/generic_case.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/control_evaluated_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/control_comma.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/nested_switch_labels.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/switch_in_for_continue.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/loop_in_switch_break.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/switch_in_while_continue.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/duff_device.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_inside_while.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_inside_for.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_inside_if.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_inside_else.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_nested_block_storage.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/skipped_initializer_effect.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/goto_into_switch.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/goto_out_of_switch.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/goto_case_backedge.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_after_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_object_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/static_before_case.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/compound_control.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/default_in_loop.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/typedef_label_substatement.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/typedef_stacked_labels.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_skips_loop_condition.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/case_skips_if_condition.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/no_match_literal_lifetime.c",
+    "exit": 0
+  },
+  {
+    "source": "../switch/switch_return_aggregate.c",
+    "exit": 0
   }
 ]

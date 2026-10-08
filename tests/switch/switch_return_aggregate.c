@@ -1,0 +1,1 @@
+struct S { int x; double y; }; struct S pick(int n) { switch(n) { case 1: return (struct S){3,7.0}; default: return (struct S){5,11.0}; } } int main(void) { struct S a=pick(1); struct S b=pick(9); return a.x!=3 || a.y!=7.0 || b.x!=5 || b.y!=11.0; }

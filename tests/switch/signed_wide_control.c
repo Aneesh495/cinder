@@ -1,0 +1,1 @@
+int pick(long x) { switch(x) { case (-9223372036854775807L-1L): return 4; case 0x100000001L: return 7; default: return 9; } } int main(void) { return pick(-9223372036854775807L-1L)!=4 || pick(0x100000001L)!=7 || pick(1L)!=9; }
