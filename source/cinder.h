@@ -326,6 +326,10 @@ CinderType *cinder_type_function(CinderTypeContext *types, CinderType *ret, cons
 CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, unsigned qualifiers);
 bool cinder_object_alignment_valid(const CinderType *type, size_t alignment);
 bool cinder_type_contains_flexible(const CinderType *type);
+bool cinder_type_anonymous_member(const CinderField *field);
+size_t cinder_type_member_path(const CinderType *type, const char *name, size_t *path, size_t capacity);
+bool cinder_type_members_unique(const CinderType *type);
+size_t cinder_type_named_members(const CinderType *type);
 CinderType *cinder_integer_promote(CinderTypeContext *types, CinderType *type);
 CinderType *cinder_arithmetic_type(CinderTypeContext *types, CinderType *left, CinderType *right);
 bool cinder_type_equal(const CinderType *a, const CinderType *b);
@@ -429,7 +433,7 @@ struct CinderExpr {
         struct { CinderExpr *condition; CinderExpr *yes; CinderExpr *no; } conditional;
         struct { CinderType *cast_type; CinderExpr *value; } cast;
         struct { CinderExpr *base; CinderExpr *index; } index;
-        struct { CinderExpr *base; char *name; size_t field; bool arrow; } member;
+        struct { CinderExpr *base; char *name; size_t field; bool arrow; CINDER_VEC_TYPE(size_t) path; } member;
         struct { CINDER_VEC_TYPE(CinderInitEntry) entries; } initializer;
         CinderDecl *compound_literal;
         struct { CinderExpr *control; CINDER_VEC_TYPE(CinderGenericAssociation) associations; size_t selected; } generic;
@@ -517,6 +521,7 @@ typedef struct {
     unsigned generic_depth;
     unsigned offsetof_depth;
     unsigned alignment_depth;
+    unsigned aggregate_depth;
     unsigned label_depth;
     unsigned statement_depth;
     CinderStmt *literal_scope;
@@ -530,6 +535,8 @@ int cinder_parse(CinderAst *ast);
 bool cinder_constant_integer(CinderAst *ast, const CinderExpr *expr, int64_t *value, CinderType **type);
 bool cinder_offsetof_value(CinderAst *ast, const CinderExpr *expr, size_t *value);
 size_t cinder_init_child_count(const CinderType *type);
+typedef enum { INIT_MEMBER_OK, INIT_MEMBER_UNKNOWN, INIT_MEMBER_FLEXIBLE, INIT_MEMBER_DEPTH } CinderInitMemberResult;
+CinderInitMemberResult cinder_init_member(CinderInitFrame *frames, size_t *depth, size_t capacity, const char *name);
 CinderType *cinder_init_child(CinderInitFrame frame, size_t *offset);
 void cinder_init_advance(CinderInitFrame *frames, size_t *depth);
 bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned depth);

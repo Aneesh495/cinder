@@ -19,6 +19,22 @@ CinderType *cinder_init_child(CinderInitFrame frame, size_t *offset) {
     return frame.type;
 }
 
+CinderInitMemberResult cinder_init_member(CinderInitFrame *frames, size_t *depth, size_t capacity, const char *name) {
+    size_t path[64]; size_t length = cinder_type_member_path(frames[*depth - 1U].type, name, path, CINDER_ARRAY_LEN(path));
+    if (length == 0U || length == SIZE_MAX) return INIT_MEMBER_UNKNOWN;
+    for (size_t p = 0U; p < length; ++p) {
+        CinderInitFrame *frame = &frames[*depth - 1U];
+        if (path[p] >= cinder_init_child_count(frame->type)) return INIT_MEMBER_FLEXIBLE;
+        frame->index = path[p];
+        if (p + 1U < length) {
+            if (*depth == capacity) return INIT_MEMBER_DEPTH;
+            size_t offset; CinderType *child = cinder_init_child(*frame, &offset);
+            frames[(*depth)++] = (CinderInitFrame){child, 0U, offset};
+        }
+    }
+    return INIT_MEMBER_OK;
+}
+
 void cinder_init_advance(CinderInitFrame *frames, size_t *depth) {
     while (*depth != 0U) {
         CinderInitFrame *frame = &frames[*depth - 1U];
@@ -64,10 +80,8 @@ bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned n
                 CinderInitFrame *frame = &frames[depth - 1U];
                 const CinderInitDesignator *designator = &entry->designators.data[d];
                 if (designator->member != NULL && (frame->type->kind == TYPE_STRUCT || frame->type->kind == TYPE_UNION)) {
-                    size_t field = 0U;
-                    while (field < frame->type->fields.len && (frame->type->fields.data[field].name == NULL || strcmp(frame->type->fields.data[field].name, designator->member) != 0)) ++field;
-                    if (field == frame->type->fields.len) return false;
-                    frame->index = field;
+                    if (cinder_init_member(frames, &depth, CINDER_ARRAY_LEN(frames), designator->member) != INIT_MEMBER_OK) return false;
+                    frame = &frames[depth - 1U];
                 } else if (designator->index != NULL && frame->type->kind == TYPE_ARRAY) {
                     int64_t index; CinderType *index_type;
                     if (!cinder_constant_integer(ast, designator->index, &index, &index_type) || index < 0 || (uint64_t)index >= cinder_init_child_count(frame->type) || frame->type->base->size == 0U || (uint64_t)index > 64U * 1024U * 1024U / frame->type->base->size) return false;

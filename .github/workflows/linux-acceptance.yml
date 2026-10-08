@@ -54,6 +54,8 @@ jobs:
         run: make test-runtime-headers
       - name: Flexible arrays and allocated native storage
         run: make test-flexible
+      - name: Anonymous members, nested initialization, and ABI
+        run: make test-anonymous
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -112,6 +114,9 @@ jobs:
             .agent-local/flexible
             .agent-local/flexible-contracts
             .agent-local/flexible-allocated
+            .agent-local/anonymous
+            .agent-local/anonymous-contracts
+            .agent-local/anonymous-abi-contracts
             .agent-local/flexible-abi-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary

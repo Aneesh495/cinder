@@ -450,5 +450,33 @@
   {
     "source": "flexible_tail_expired.undefined.c",
     "classification": 10
+  },
+  {
+    "source": "anonymous_uninitialized.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "anonymous_const_cast.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "anonymous_outer_const.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "anonymous_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "anonymous_array_past.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "anonymous_array_negative.undefined.c",
+    "classification": 9
+  },
+  {
+    "source": "anonymous_const_character.undefined.c",
+    "classification": 12
   }
 ]

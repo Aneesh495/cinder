@@ -300,11 +300,45 @@
         "tests/static_addresses/global_member_pointer.c",
         "tests/aggregates/assignment.c",
         "tests/aggregates/large_assignment.c",
-        "tests/aggregates/const_source_assignment.c"
+        "tests/aggregates/const_source_assignment.c",
+        "tests/anonymous/aggregate_argument.c",
+        "tests/anonymous/aggregate_return.c",
+        "tests/anonymous/array_member.c",
+        "tests/anonymous/array_of_records.c",
+        "tests/anonymous/array_size_query.c",
+        "tests/anonymous/arrow_member.c",
+        "tests/anonymous/arrow_once.c",
+        "tests/anonymous/braced_initializer.c",
+        "tests/anonymous/callback.c",
+        "tests/anonymous/compound_lvalue.c",
+        "tests/anonymous/const_member_read.c",
+        "tests/anonymous/designated_array_element.c",
+        "tests/anonymous/designated_resume.c",
+        "tests/anonymous/flat_initializer.c",
+        "tests/anonymous/flexible_recursive_prefix.c",
+        "tests/anonymous/flexible_struct_prefix.c",
+        "tests/anonymous/flexible_union_prefix.c",
+        "tests/anonymous/generic_lvalue.c",
+        "tests/anonymous/generic_member.c",
+        "tests/anonymous/inferred_array.c",
+        "tests/anonymous/local_static.c",
+        "tests/anonymous/member_increment_once.c",
+        "tests/anonymous/memory_return.c",
+        "tests/anonymous/named_boundary.c",
+        "tests/anonymous/offset_constant.c",
+        "tests/anonymous/outer_const_pointer.c",
+        "tests/anonymous/recursive_members.c",
+        "tests/anonymous/static_array_pointer.c",
+        "tests/anonymous/struct_members.c",
+        "tests/anonymous/union_member.c",
+        "tests/anonymous/union_resume.c",
+        "tests/anonymous/volatile_member.c"
       ],
       "boundary_cases": [
         "tests/memory/member_array.c",
-        "tests/memory/member_address.c"
+        "tests/memory/member_address.c",
+        "tests/test_anonymous_contracts.py",
+        "tests/anonymous/native/cases.json"
       ],
       "negative_cases": [
         "tests/constraints/duplicate_member.c",
@@ -312,11 +346,32 @@
         "tests/constraints/member_unknown.c",
         "tests/constraints/member_dot_pointer.c",
         "tests/constraints/member_arrow_scalar.c",
-        "tests/constraints/global_member_before_tag_complete.c"
+        "tests/constraints/global_member_before_tag_complete.c",
+        "tests/constraints/anonymous_const_write.c",
+        "tests/constraints/anonymous_duplicate_outer.c",
+        "tests/constraints/anonymous_duplicate_recursive.c",
+        "tests/constraints/anonymous_duplicate_siblings.c",
+        "tests/constraints/anonymous_flexible_embedded.c",
+        "tests/constraints/anonymous_initializer_hidden.c",
+        "tests/constraints/anonymous_named_hidden.c",
+        "tests/constraints/anonymous_register_address.c",
+        "tests/constraints/anonymous_register_array_decay.c",
+        "tests/constraints/anonymous_scalar_bare.c",
+        "tests/constraints/anonymous_tagged_bare.c",
+        "tests/constraints/anonymous_typedef_bare.c",
+        "tests/memory/anonymous_array_negative.undefined.c",
+        "tests/memory/anonymous_array_past.undefined.c",
+        "tests/memory/anonymous_const_cast.undefined.c",
+        "tests/memory/anonymous_const_character.undefined.c",
+        "tests/memory/anonymous_expired.undefined.c",
+        "tests/memory/anonymous_outer_const.undefined.c",
+        "tests/memory/anonymous_uninitialized.undefined.c"
       ],
-      "native_evidence": [],
+      "native_evidence": [
+        "make test-anonymous on the declared Linux x86-64 profile"
+      ],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Bind the complete native observations to audited C11/C12 acceptance readers."
       ],
       "implementation": [
         "source/sema.c",
@@ -335,13 +390,70 @@
       "valid_cases": [
         "tests/memory/union_bytes.c",
         "tests/aggregates/union_assignment.c",
-        "tests/aggregates/union_conditional.c"
+        "tests/aggregates/union_conditional.c",
+        "tests/anonymous/aggregate_argument.c",
+        "tests/anonymous/aggregate_return.c",
+        "tests/anonymous/array_member.c",
+        "tests/anonymous/array_of_records.c",
+        "tests/anonymous/array_size_query.c",
+        "tests/anonymous/arrow_member.c",
+        "tests/anonymous/arrow_once.c",
+        "tests/anonymous/braced_initializer.c",
+        "tests/anonymous/callback.c",
+        "tests/anonymous/compound_lvalue.c",
+        "tests/anonymous/const_member_read.c",
+        "tests/anonymous/designated_array_element.c",
+        "tests/anonymous/designated_resume.c",
+        "tests/anonymous/flat_initializer.c",
+        "tests/anonymous/flexible_recursive_prefix.c",
+        "tests/anonymous/flexible_struct_prefix.c",
+        "tests/anonymous/flexible_union_prefix.c",
+        "tests/anonymous/generic_lvalue.c",
+        "tests/anonymous/generic_member.c",
+        "tests/anonymous/inferred_array.c",
+        "tests/anonymous/local_static.c",
+        "tests/anonymous/member_increment_once.c",
+        "tests/anonymous/memory_return.c",
+        "tests/anonymous/named_boundary.c",
+        "tests/anonymous/offset_constant.c",
+        "tests/anonymous/outer_const_pointer.c",
+        "tests/anonymous/recursive_members.c",
+        "tests/anonymous/static_array_pointer.c",
+        "tests/anonymous/struct_members.c",
+        "tests/anonymous/union_member.c",
+        "tests/anonymous/union_resume.c",
+        "tests/anonymous/volatile_member.c"
       ],
-      "boundary_cases": [],
-      "negative_cases": [],
-      "native_evidence": [],
+      "boundary_cases": [
+        "tests/test_anonymous_contracts.py",
+        "tests/anonymous/native/cases.json"
+      ],
+      "negative_cases": [
+        "tests/constraints/anonymous_const_write.c",
+        "tests/constraints/anonymous_duplicate_outer.c",
+        "tests/constraints/anonymous_duplicate_recursive.c",
+        "tests/constraints/anonymous_duplicate_siblings.c",
+        "tests/constraints/anonymous_flexible_embedded.c",
+        "tests/constraints/anonymous_initializer_hidden.c",
+        "tests/constraints/anonymous_named_hidden.c",
+        "tests/constraints/anonymous_register_address.c",
+        "tests/constraints/anonymous_register_array_decay.c",
+        "tests/constraints/anonymous_scalar_bare.c",
+        "tests/constraints/anonymous_tagged_bare.c",
+        "tests/constraints/anonymous_typedef_bare.c",
+        "tests/memory/anonymous_array_negative.undefined.c",
+        "tests/memory/anonymous_array_past.undefined.c",
+        "tests/memory/anonymous_const_cast.undefined.c",
+        "tests/memory/anonymous_const_character.undefined.c",
+        "tests/memory/anonymous_expired.undefined.c",
+        "tests/memory/anonymous_outer_const.undefined.c",
+        "tests/memory/anonymous_uninitialized.undefined.c"
+      ],
+      "native_evidence": [
+        "make test-anonymous on the declared Linux x86-64 profile"
+      ],
       "open_requirements": [
-        "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
+        "Bind the complete native observations to audited C11/C12 acceptance readers."
       ],
       "implementation": [
         "source/sema.c",
@@ -1614,7 +1726,10 @@
         "tests/flexible_allocated/heap_record_tail.c",
         "tests/flexible_allocated/heap_shared_prefix.c",
         "tests/flexible_allocated/heap_string_tail.c",
-        "tests/flexible_allocated/heap_union_tail.c"
+        "tests/flexible_allocated/heap_union_tail.c",
+        "tests/anonymous/flexible_recursive_prefix.c",
+        "tests/anonymous/flexible_struct_prefix.c",
+        "tests/anonymous/flexible_union_prefix.c"
       ],
       "boundary_cases": [
         "tests/test_flexible_contracts.py",
@@ -1649,7 +1764,7 @@
         "make test-flexible on the declared Linux x86-64 profile"
       ],
       "open_requirements": [
-        "Anonymous member promotion and full source-bound audited acceptance remain open."
+        "Bind the complete native observations and reference ABI adjudication to an audited C40 acceptance reader."
       ]
     },
     {

@@ -879,10 +879,41 @@ startup/tool/library hashes and separate stage test workspaces. Unsupported
 hosts return nonzero instead of presenting a version print as a bootstrap.
 The manual native Linux workflow preserves full raw stage evidence.
 
-A current-source development attempt produced two byte-identical 43-module
-object sets and identical compiler/IR-tool executables. The complete authored
-suites are running; no final self-hosting pass is claimed yet. An independent
+The native workflow at commit `fc83de6` produced two byte-identical 43-module
+object sets and identical compiler/IR-tool executables. Both stages passed
+the authored suites and the 1,000-program subset: 8,000 native executions
+and 4,000 independent interpreter executions. Downloaded manifests, input
+snapshots, objects, executables and all 1,000 per-program reports were
+independently hash-checked against that published source revision. This
+is historical bootstrap evidence; later implementation changes require a
+fresh campaign before final source-bound acceptance. An independent
 pilot validated all nine generator families with 36 eligible programs, 216
 GCC/Clang/Cinder native executions and 72 Cinder interpreter executions. These
 pilot observations do not satisfy the 1,000-program bootstrap or separate
 20,000-program differential gate. See `docs/SELFHOSTING.md`.
+
+## Anonymous struct and union members
+
+Anonymous members preserve their physical nested aggregate layout. Promoted
+names resolve through a bounded member path shared by semantic checks,
+constant offsets, initializers, static addresses and original IR lowering.
+Duplicate promoted names and tagged/typedef/scalar bare declarations fail.
+Qualifiers propagate through every anonymous container, and the expression
+base is evaluated once. Flexible arrays count preceding promoted named
+members, including the standard's anonymous-prefix example.
+
+The authored ledger adds 32 independent translation units. Both strict host
+builds pass GCC/Clang reference comparisons, original object/assembly checks,
+canonical IR object identities, five malformed type graphs, 63/64 aggregate
+nesting and rejection at 65/1,024 levels. Seven additional interpreter cases
+check promoted bounds, indeterminate values, lifetime and read-only storage.
+Six mixed-toolchain profiles cover integer, SSE, mixed and MEMORY records,
+unions, returned aggregates and callbacks with register exhaustion. Linux
+native observations remain required before this revision is accepted.
+
+Diagnostic references now record both GCC and Clang. Clang accepts the exact
+const-qualified anonymous-container assignment that GCC and Cinder reject.
+Its source-bound exception records a reference diagnostic discrepancy while
+retaining the mandatory Cinder rejection. Register-array decay remains
+separately classified as undefined behavior with a non-mandatory diagnostic.
+The full acceptance report remains incomplete.

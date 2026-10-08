@@ -17,7 +17,7 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
     ast->constant_exprs.data = NULL; ast->constant_exprs.len = 0U; ast->constant_exprs.cap = 0U;
     ast->static_literals.data = NULL; ast->static_literals.len = 0U; ast->static_literals.cap = 0U;
     ast->stored_objects.data = NULL; ast->stored_objects.len = 0U; ast->stored_objects.cap = 0U;
-    ast->scope_depth = 0U; ast->declarator_depth = 0U; ast->generic_depth = 0U; ast->alignment_depth = 0U; ast->label_depth = 0U; ast->statement_depth = 0U;
+    ast->scope_depth = 0U; ast->declarator_depth = 0U; ast->generic_depth = 0U; ast->alignment_depth = 0U; ast->aggregate_depth = 0U; ast->label_depth = 0U; ast->statement_depth = 0U;
     ast->literal_scope = NULL; ast->literal_count = 0U;
     ast->offsetof_depth = 0U;
     ast->current_function = NULL;
@@ -58,6 +58,7 @@ static void free_expr(CinderExpr *expr) {
     } else if (expr->kind == EX_INDEX) {
         free_expr(expr->as.index.base); free_expr(expr->as.index.index);
     } else if (expr->kind == EX_MEMBER) {
+        free(expr->as.member.path.data);
         free_expr(expr->as.member.base);
     } else if (expr->kind == EX_INIT_LIST) {
         for (size_t i = 0U; i < expr->as.initializer.entries.len; ++i) {

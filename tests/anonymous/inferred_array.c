@@ -1,0 +1,1 @@
+struct S{struct{int x,y;};};static struct S a[]={[1].x=79,[3].y=83};_Static_assert(sizeof(a)==4*sizeof(struct S),"inferred promoted designator");int main(void){return a[0].x!=0||a[1].x!=79||a[3].y!=83;}

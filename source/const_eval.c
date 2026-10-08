@@ -46,12 +46,13 @@ static bool evaluate_offset(CinderAst *ast, const CinderExpr *expr, size_t *resu
         const CinderInitDesignator *part = &expr->as.offset.path.data[i];
         if (part->member != NULL) {
             if ((type->kind != TYPE_STRUCT && type->kind != TYPE_UNION) || !type->complete || type->completion_index > expr->parse_index) return false;
-            const CinderField *field = NULL;
-            for (size_t f = 0U; f < type->fields.len; ++f) {
-                if (type->fields.data[f].name != NULL && strcmp(type->fields.data[f].name, part->member) == 0) { field = &type->fields.data[f]; break; }
+            size_t path[64]; size_t length = cinder_type_member_path(type, part->member, path, CINDER_ARRAY_LEN(path));
+            if (length == 0U || length == SIZE_MAX) return false;
+            for (size_t p = 0U; p < length; ++p) {
+                const CinderField *field = &type->fields.data[path[p]];
+                if (field->bit_width != 0U || field->offset > SIZE_MAX - offset) return false;
+                offset += field->offset; type = field->type;
             }
-            if (field == NULL || field->bit_width != 0U || field->offset > SIZE_MAX - offset) return false;
-            offset += field->offset; type = field->type;
         } else {
             IntegerConstant index;
             if (type->kind != TYPE_ARRAY || !type->complete || type->base == NULL || !type->base->complete || type->base->size == 0U || !evaluate(ast, part->index, &index, depth + 1U)) return false;
@@ -146,7 +147,13 @@ CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsig
         if (expr->as.member.arrow) base = value_type(ast, base);
         if (base != NULL && expr->as.member.arrow && base->kind == TYPE_POINTER) base = base->base;
         if (base == NULL || (base->kind != TYPE_STRUCT && base->kind != TYPE_UNION)) return NULL;
-        for (size_t f = 0U; f < base->fields.len; ++f) if (base->fields.data[f].name != NULL && strcmp(base->fields.data[f].name, expr->as.member.name) == 0) return base->fields.data[f].type;
+        size_t path[64]; size_t length = cinder_type_member_path(base, expr->as.member.name, path, CINDER_ARRAY_LEN(path));
+        if (length == 0U || length == SIZE_MAX) return NULL;
+        for (size_t p = 0U; p < length; ++p) {
+            CinderType *child = base->fields.data[path[p]].type;
+            base = cinder_type_qualified(ast->types, child, child->qualifiers | base->qualifiers);
+        }
+        return base;
     }
     return NULL;
 }
