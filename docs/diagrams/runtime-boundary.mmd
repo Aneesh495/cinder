@@ -1,0 +1,10 @@
+flowchart LR
+  C[Compiler C modules] --> H[Authored Linux LP64 headers]
+  H --> CC[Original Cinder frontend and encoder]
+  CC --> ELF[Owned non-PIE ELF objects]
+  ELF --> L[Explicit cc linker boundary]
+  L --> LIBC[Verified system libc ABI]
+  LIBC --> N[Native runtime observations]
+  R[System-header GCC and Clang probes] --> N
+  H --> T[Source-bound prototype and layout contracts]
+  T --> N

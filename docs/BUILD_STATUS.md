@@ -810,3 +810,25 @@ were retained; unchanged binaries and complete reruns subsequently passed.
 No timeout is counted as a successful run. Full acceptance remains incomplete.
 The preceding register/varargs increment passed the complete native Linux
 workflow [37713251240](https://github.com/Aneesh495/cinder/actions/runs/37713251240).
+
+
+## Authored compiler libc/POSIX interfaces
+
+The owned runtime headers now declare the compiler's standard/POSIX calls,
+opaque streams, Linux errno accessor, target time/permission/process types,
+Linux `struct tm` layout, wait decoding, integer printf spellings, and authored
+IEEE finite classification. `__unix__` is an explicit target predefined macro.
+Both strict host builds passed 15 authored runtime probes with both references
+and optimization levels, 30 canonical CIR/object identities, and independent
+assembly section/relocation checks. The independent interpreter explicitly
+classifies unavailable external calls; these are native probes rather than
+additional source-interpreter successes. All 90 Cinder-owned native executions
+and 60 Linux GCC/Clang system-header references passed in the development VM,
+with frozen compiler and object hashes independently audited. ASan also passed
+74 preprocessor checks and 306 source rejections. The preceding offset compiler
+passed all 944 source regression observations.
+
+The actual CMake compiler-source syntax audit passed 41 of 42 modules using
+these headers. The remaining arena flexible array member is a real language
+blocker and will be implemented; no module is precompiled to bypass it.
+Stage 2/3 bootstrap remains unverified. See `docs/RUNTIME_HEADERS.md`.
