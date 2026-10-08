@@ -867,3 +867,22 @@ modules, linked a functioning Cinder compiler, and recompiled those sources into
 43 byte-identical objects. This is preliminary evidence, not the final bootstrap
 gate: the current source and both stages still need the complete authored suite
 and required generated native subset. Full acceptance remains incomplete.
+
+
+## Actual bootstrap runner and defined native generator
+
+`make selfhost` now performs a fresh host stage 1 build, Cinder compilation of
+every actual module into stages 2 and 3, exact object/executable comparisons,
+both authored semantic suites, and 1,000 generated native programs. It retains
+per-command and per-file artifacts, declared source-date/prefix settings,
+startup/tool/library hashes and separate stage test workspaces. Unsupported
+hosts return nonzero instead of presenting a version print as a bootstrap.
+The manual native Linux workflow preserves full raw stage evidence.
+
+A current-source development attempt produced two byte-identical 43-module
+object sets and identical compiler/IR-tool executables. The complete authored
+suites are running; no final self-hosting pass is claimed yet. An independent
+pilot validated all nine generator families with 36 eligible programs, 216
+GCC/Clang/Cinder native executions and 72 Cinder interpreter executions. These
+pilot observations do not satisfy the 1,000-program bootstrap or separate
+20,000-program differential gate. See `docs/SELFHOSTING.md`.
