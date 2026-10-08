@@ -332,13 +332,39 @@
         "tests/anonymous/struct_members.c",
         "tests/anonymous/union_member.c",
         "tests/anonymous/union_resume.c",
-        "tests/anonymous/volatile_member.c"
+        "tests/anonymous/volatile_member.c",
+        "tests/qualifiers/array_qualified_view_cast.c",
+        "tests/qualifiers/struct_qualified_view_cast.c",
+        "tests/qualifiers/union_anonymous_bitfield.c",
+        "tests/qualifiers/union_anonymous_member.c",
+        "tests/qualifiers/union_member_pointer_copy.c",
+        "tests/qualifiers/union_mutable_aggregate.c",
+        "tests/qualifiers/union_mutable_aggregate_return.c",
+        "tests/qualifiers/union_mutable_array.c",
+        "tests/qualifiers/union_mutable_arrow.c",
+        "tests/qualifiers/union_mutable_bit_array.c",
+        "tests/qualifiers/union_mutable_bitfield.c",
+        "tests/qualifiers/union_mutable_callback.c",
+        "tests/qualifiers/union_mutable_char_alias.c",
+        "tests/qualifiers/union_mutable_member.c",
+        "tests/qualifiers/union_mutable_member_array.c",
+        "tests/qualifiers/union_mutable_variadic_pointer.c",
+        "tests/qualifiers/union_nested_member.c",
+        "tests/qualifiers/union_qualified_view_cast.c",
+        "tests/qualifiers/union_static_anonymous_pointer.c",
+        "tests/qualifiers/union_static_array_pointer.c",
+        "tests/qualifiers/union_static_bit_pointer.c",
+        "tests/qualifiers/union_static_const_array_neighbor.c",
+        "tests/qualifiers/union_static_mutable_pointer.c",
+        "tests/qualifiers/union_static_nested_pointer.c",
+        "tests/qualifiers/union_static_qualified_pointer.c"
       ],
       "boundary_cases": [
         "tests/memory/member_array.c",
         "tests/memory/member_address.c",
         "tests/test_anonymous_contracts.py",
-        "tests/anonymous/native/cases.json"
+        "tests/anonymous/native/cases.json",
+        "tests/test_qualifier_contracts.py"
       ],
       "negative_cases": [
         "tests/constraints/duplicate_member.c",
@@ -365,10 +391,19 @@
         "tests/memory/anonymous_const_character.undefined.c",
         "tests/memory/anonymous_expired.undefined.c",
         "tests/memory/anonymous_outer_const.undefined.c",
-        "tests/memory/anonymous_uninitialized.undefined.c"
+        "tests/memory/anonymous_uninitialized.undefined.c",
+        "tests/memory/union_const_aggregate_member.undefined.c",
+        "tests/memory/union_const_array_cast.undefined.c",
+        "tests/memory/union_const_member_cast.undefined.c",
+        "tests/memory/union_const_member_char.undefined.c",
+        "tests/memory/union_const_root_cast.undefined.c",
+        "tests/memory/union_static_const_array_pointer.undefined.c",
+        "tests/memory/union_static_const_pointer.undefined.c",
+        "tests/memory/union_static_nested_const_pointer.undefined.c"
       ],
       "native_evidence": [
-        "make test-anonymous on the declared Linux x86-64 profile"
+        "make test-anonymous on the declared Linux x86-64 profile",
+        "make test-qualifiers on the declared Linux x86-64 profile"
       ],
       "open_requirements": [
         "Bind the complete native observations to audited C11/C12 acceptance readers."
@@ -422,11 +457,37 @@
         "tests/anonymous/struct_members.c",
         "tests/anonymous/union_member.c",
         "tests/anonymous/union_resume.c",
-        "tests/anonymous/volatile_member.c"
+        "tests/anonymous/volatile_member.c",
+        "tests/qualifiers/array_qualified_view_cast.c",
+        "tests/qualifiers/struct_qualified_view_cast.c",
+        "tests/qualifiers/union_anonymous_bitfield.c",
+        "tests/qualifiers/union_anonymous_member.c",
+        "tests/qualifiers/union_member_pointer_copy.c",
+        "tests/qualifiers/union_mutable_aggregate.c",
+        "tests/qualifiers/union_mutable_aggregate_return.c",
+        "tests/qualifiers/union_mutable_array.c",
+        "tests/qualifiers/union_mutable_arrow.c",
+        "tests/qualifiers/union_mutable_bit_array.c",
+        "tests/qualifiers/union_mutable_bitfield.c",
+        "tests/qualifiers/union_mutable_callback.c",
+        "tests/qualifiers/union_mutable_char_alias.c",
+        "tests/qualifiers/union_mutable_member.c",
+        "tests/qualifiers/union_mutable_member_array.c",
+        "tests/qualifiers/union_mutable_variadic_pointer.c",
+        "tests/qualifiers/union_nested_member.c",
+        "tests/qualifiers/union_qualified_view_cast.c",
+        "tests/qualifiers/union_static_anonymous_pointer.c",
+        "tests/qualifiers/union_static_array_pointer.c",
+        "tests/qualifiers/union_static_bit_pointer.c",
+        "tests/qualifiers/union_static_const_array_neighbor.c",
+        "tests/qualifiers/union_static_mutable_pointer.c",
+        "tests/qualifiers/union_static_nested_pointer.c",
+        "tests/qualifiers/union_static_qualified_pointer.c"
       ],
       "boundary_cases": [
         "tests/test_anonymous_contracts.py",
-        "tests/anonymous/native/cases.json"
+        "tests/anonymous/native/cases.json",
+        "tests/test_qualifier_contracts.py"
       ],
       "negative_cases": [
         "tests/constraints/anonymous_const_write.c",
@@ -447,10 +508,19 @@
         "tests/memory/anonymous_const_character.undefined.c",
         "tests/memory/anonymous_expired.undefined.c",
         "tests/memory/anonymous_outer_const.undefined.c",
-        "tests/memory/anonymous_uninitialized.undefined.c"
+        "tests/memory/anonymous_uninitialized.undefined.c",
+        "tests/memory/union_const_aggregate_member.undefined.c",
+        "tests/memory/union_const_array_cast.undefined.c",
+        "tests/memory/union_const_member_cast.undefined.c",
+        "tests/memory/union_const_member_char.undefined.c",
+        "tests/memory/union_const_root_cast.undefined.c",
+        "tests/memory/union_static_const_array_pointer.undefined.c",
+        "tests/memory/union_static_const_pointer.undefined.c",
+        "tests/memory/union_static_nested_const_pointer.undefined.c"
       ],
       "native_evidence": [
-        "make test-anonymous on the declared Linux x86-64 profile"
+        "make test-anonymous on the declared Linux x86-64 profile",
+        "make test-qualifiers on the declared Linux x86-64 profile"
       ],
       "open_requirements": [
         "Bind the complete native observations to audited C11/C12 acceptance readers."
@@ -779,16 +849,52 @@
       "valid_cases": [
         "tests/memory/qualified_pointer.c",
         "tests/literals/local_const_typedef.c",
-        "tests/static_addresses/global_const_pointer.c"
+        "tests/static_addresses/global_const_pointer.c",
+        "tests/qualifiers/array_qualified_view_cast.c",
+        "tests/qualifiers/struct_qualified_view_cast.c",
+        "tests/qualifiers/union_anonymous_bitfield.c",
+        "tests/qualifiers/union_anonymous_member.c",
+        "tests/qualifiers/union_member_pointer_copy.c",
+        "tests/qualifiers/union_mutable_aggregate.c",
+        "tests/qualifiers/union_mutable_aggregate_return.c",
+        "tests/qualifiers/union_mutable_array.c",
+        "tests/qualifiers/union_mutable_arrow.c",
+        "tests/qualifiers/union_mutable_bit_array.c",
+        "tests/qualifiers/union_mutable_bitfield.c",
+        "tests/qualifiers/union_mutable_callback.c",
+        "tests/qualifiers/union_mutable_char_alias.c",
+        "tests/qualifiers/union_mutable_member.c",
+        "tests/qualifiers/union_mutable_member_array.c",
+        "tests/qualifiers/union_mutable_variadic_pointer.c",
+        "tests/qualifiers/union_nested_member.c",
+        "tests/qualifiers/union_qualified_view_cast.c",
+        "tests/qualifiers/union_static_anonymous_pointer.c",
+        "tests/qualifiers/union_static_array_pointer.c",
+        "tests/qualifiers/union_static_bit_pointer.c",
+        "tests/qualifiers/union_static_const_array_neighbor.c",
+        "tests/qualifiers/union_static_mutable_pointer.c",
+        "tests/qualifiers/union_static_nested_pointer.c",
+        "tests/qualifiers/union_static_qualified_pointer.c"
       ],
       "boundary_cases": [
-        "tests/memory/character_representation.c"
+        "tests/memory/character_representation.c",
+        "tests/test_qualifier_contracts.py"
       ],
       "negative_cases": [
         "tests/constraints/member_const_write.c",
-        "tests/constraints/pointer_const_drop.c"
+        "tests/constraints/pointer_const_drop.c",
+        "tests/memory/union_const_aggregate_member.undefined.c",
+        "tests/memory/union_const_array_cast.undefined.c",
+        "tests/memory/union_const_member_cast.undefined.c",
+        "tests/memory/union_const_member_char.undefined.c",
+        "tests/memory/union_const_root_cast.undefined.c",
+        "tests/memory/union_static_const_array_pointer.undefined.c",
+        "tests/memory/union_static_const_pointer.undefined.c",
+        "tests/memory/union_static_nested_const_pointer.undefined.c"
       ],
-      "native_evidence": [],
+      "native_evidence": [
+        "make test-qualifiers on the declared Linux x86-64 profile"
+      ],
       "open_requirements": [
         "Complete source-linked valid, boundary, and negative coverage and native acceptance for the required boundary."
       ],

@@ -277,6 +277,14 @@ static void verify_addresses(const CinderIRModule *module, const CinderIRGlobal 
         if (storage == NULL || !same_value_type(storage, address->pointer_type) || global->type->size - address->offset < 8U) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer is outside compatible pointer storage");
         if (address->function != (address->target_type->kind == TYPE_FUNCTION) || address->domain_begin > address->domain_end || address->domain_end > (address->function ? 1U : address->target_type->size)) cinder_diag(diags, CINDER_FATAL, global->loc, "address initializer has an invalid target domain");
         if (address->function && (address->addend != 0 || address->domain_begin != 0U || address->domain_end != 1U)) cinder_diag(diags, CINDER_FATAL, global->loc, "function address initializer has a displacement");
+        if (address->origin_path.len > 256U || (address->function && address->origin_path.len != 0U)) cinder_diag(diags, CINDER_FATAL, global->loc, "invalid address member origin depth");
+        const CinderType *origin = address->target_type;
+        for (size_t p = 0U; p < address->origin_path.len && p < 256U; ++p) {
+            for (unsigned depth = 0U; origin != NULL && origin->kind == TYPE_ARRAY && depth < 256U; ++depth) origin = origin->base;
+            size_t field = address->origin_path.data[p];
+            if (origin == NULL || (origin->kind != TYPE_STRUCT && origin->kind != TYPE_UNION) || field >= origin->fields.len || origin->fields.data[field].is_bitfield) { cinder_diag(diags, CINDER_FATAL, global->loc, "invalid address physical member origin"); break; }
+            origin = origin->fields.data[field].type;
+        }
         bool object_declared = false;
         for (size_t g = 0U; g < module->globals.len; ++g) {
             const CinderIRGlobal *target = &module->globals.data[g];

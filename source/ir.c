@@ -926,7 +926,7 @@ void cinder_ir_destroy(CinderIRModule *module) {
     for (size_t i = 0U; i < module->functions.len; ++i) destroy_function(&module->functions.data[i]);
     for (size_t i = 0U; i < module->globals.len; ++i) {
         CinderIRGlobal *global = &module->globals.data[i]; free(global->name);
-        for (size_t a = 0U; a < global->addresses.len; ++a) free(global->addresses.data[a].symbol);
+        for (size_t a = 0U; a < global->addresses.len; ++a) { free(global->addresses.data[a].symbol); free(global->addresses.data[a].origin_path.data); }
         free(global->addresses.data);
     }
     free(module->globals.data); free(module->functions.data); cinder_arena_destroy(&module->arena);
@@ -944,7 +944,7 @@ static void lower_global_plan(CinderIRModule *module, CinderAst *ast, CinderDecl
         for (size_t r = 0U; r < global->addresses.len;) {
             size_t old = global->addresses.data[r].offset;
             if (old < action->offset + action->type->size && action->offset < old + 8U) {
-                free(global->addresses.data[r].symbol); global->addresses.data[r] = global->addresses.data[--global->addresses.len];
+                free(global->addresses.data[r].symbol); free(global->addresses.data[r].origin_path.data); global->addresses.data[r] = global->addresses.data[--global->addresses.len];
             } else ++r;
         }
         if (action->zero && action->bit_width == 0U) { memset(global->bytes + action->offset, 0, action->type->size); continue; }
@@ -975,7 +975,7 @@ static void lower_global_plan(CinderIRModule *module, CinderAst *ast, CinderDecl
             CinderIRAddress address;
             if (!cinder_static_address(module, ast, boolean, &address, diags) || address.addend < 0 || (uint64_t)address.addend < address.domain_begin || (uint64_t)address.addend > address.domain_end) cinder_diag(diags, CINDER_ERROR, value->loc, "boolean subobject requires a supported constant address");
             else global->bytes[action->offset] = address.symbol != NULL;
-            free(address.symbol); continue;
+            free(address.symbol); free(address.origin_path.data); continue;
         }
         int64_t integer = 0; double floating = 0.0;
         if (!cinder_constant_scalar(ast, value, action->type, &integer, &floating)) { cinder_diag(diags, CINDER_ERROR, value->loc, "global subobject initializer requires an arithmetic constant"); continue; }
@@ -1018,7 +1018,7 @@ static void lower_global_decl(CinderIRModule *module, CinderAst *ast, CinderDecl
         CinderIRAddress address;
         if (!cinder_static_address(module, ast, boolean, &address, diags) || address.addend < 0 || (uint64_t)address.addend < address.domain_begin || (uint64_t)address.addend > address.domain_end) cinder_diag(diags, CINDER_ERROR, decl->loc, "boolean initializer for '%s' is not a supported constant", decl->name);
         else { global.integer = address.symbol != NULL; global.has_initializer = true; }
-        free(address.symbol);
+        free(address.symbol); free(address.origin_path.data);
     }
     else if (decl->initializer != NULL && decl->initializer->kind == EX_STRING) {
         global.byte_count = decl->initializer->literal_length + 1U;

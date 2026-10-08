@@ -2,7 +2,7 @@ BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 CMAKE ?= cmake
 
-.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-constraints test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
+.PHONY: all bootstrap build test test-frontend test-globals test-multi test-preprocessor test-ir test-ir-text test-ir-campaign test-ssa test-control test-undefined test-memory test-literals test-linkage test-static-addresses test-initializers test-aggregates test-aggregate-abi test-variadic test-compound-literals test-static-assert test-generic test-alignment test-noreturn test-block-storage test-goto test-switch test-register test-offset test-runtime-headers test-flexible test-anonymous test-bitfields test-qualifiers test-constraints test-numeric test-storage test-allocation test-parallel-copy test-float test-varargs test-generated test-differential test-apps test-native-linux test-abi test-abi-callbacks test-abi-aggregates test-abi-variadic test-object test-object-campaign test-debug test-output fuzz selfhost benchmark demo acceptance verify clean
 
 all: build
 
@@ -127,6 +127,10 @@ test-bitfields: build
 	@python3 tests/test_initializers.py $(BUILD_DIR)/cindercc bitfields
 	@python3 tests/test_bitfield_contracts.py $(BUILD_DIR)/cindercc
 	@python3 tests/test_block_storage_contracts.py $(BUILD_DIR)/cindercc bitfields
+
+test-qualifiers: build
+	@python3 tests/test_initializers.py $(BUILD_DIR)/cindercc qualifiers
+	@python3 tests/test_qualifier_contracts.py $(BUILD_DIR)/cindercc
 
 test-memory: build
 	@python3 tests/test_memory.py $(BUILD_DIR)/cindercc

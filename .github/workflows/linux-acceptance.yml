@@ -58,6 +58,8 @@ jobs:
         run: make test-anonymous
       - name: Bitfield packing, masked updates, and ABI
         run: make test-bitfields
+      - name: Union alternatives and declared const origins
+        run: make test-qualifiers
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -121,6 +123,8 @@ jobs:
             .agent-local/anonymous-abi-contracts
             .agent-local/bitfields
             .agent-local/bitfield-contracts
+            .agent-local/qualifiers
+            .agent-local/qualifier-contracts
             .agent-local/bitfields-abi-contracts
             .agent-local/flexible-abi-contracts
             .agent-local/aggregate_abi

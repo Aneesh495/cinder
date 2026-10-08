@@ -498,5 +498,37 @@
   {
     "source": "bitfield_readonly_cast.c",
     "classification": 12
+  },
+  {
+    "source": "union_const_member_cast.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_const_member_char.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_const_array_cast.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_const_root_cast.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_static_const_pointer.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_static_const_array_pointer.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_static_nested_const_pointer.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "union_const_aggregate_member.undefined.c",
+    "classification": 12
   }
 ]

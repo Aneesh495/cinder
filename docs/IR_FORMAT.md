@@ -1,6 +1,6 @@
 # Canonical typed IR
 
-The schema header is `cinder-ir 5 lp64-le sysv-x86-64`. The format uses whitespace
+The schema header is `cinder-ir 6 lp64-le sysv-x86-64`. The format uses whitespace
 separated tokens and optional `#` comments between tokens. The writer emits a
 deterministic order. Type IDs follow first reachable use; recursive aggregate
 identities are collected before their members. Integers and floating values use
@@ -128,3 +128,14 @@ used for omitted initialization also use these contracts.
 Interpreter object initialization is tracked per bit. Assigning one field does
 not initialize a neighboring field, while reads of that assigned field do not
 inspect neighboring indeterminate bits. Aggregate copies preserve these masks.
+
+Schema 6 adds `origin N field...` to symbolic address records. It retains the
+physical member indices selected from the actual declared target object,
+peeling array element types between member selections. A union's const and
+mutable alternatives can share every byte-domain boundary, so byte offsets
+alone cannot identify immutable storage. The verifier rejects invalid,
+nonaddressable, scalar, function, or excessively deep member paths. Static
+pointer conversion preserves this origin across casts, separately from the
+pointer's access type. The interpreter uses the same declared-member rule for
+automatic addresses; a const-qualified view of a mutable object does not make
+its storage immutable. See `QUALIFIERS.md`.

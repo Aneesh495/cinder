@@ -35,7 +35,32 @@ void cinder_interp_retire(InterpContext *context, uint32_t id) {
 
 InterpValue cinder_interp_pointer_value(InterpPointer pointer) { InterpValue value; pointer_value(&value, pointer); return value; }
 
-InterpValue cinder_interp_address(const InterpContext *context, uint32_t id) { return cinder_interp_pointer_value((InterpPointer){id, 0, 0U, id == 0U ? 0U : context->objects.data[id - 1U].size}); }
+static bool declared_readonly(const CinderType *type) {
+    for (unsigned depth = 0U; type != NULL && depth < 256U; ++depth) {
+        if ((type->qualifiers & 1U) != 0U) return true;
+        if (type->kind != TYPE_ARRAY) return false;
+        type = type->base;
+    }
+    return type != NULL;
+}
+
+InterpValue cinder_interp_address(const InterpContext *context, uint32_t id) {
+    const CinderType *type = id == 0U ? NULL : context->objects.data[id - 1U].type;
+    return cinder_interp_pointer_value((InterpPointer){id, 0, 0U, id == 0U ? 0U : context->objects.data[id - 1U].size, type, declared_readonly(type)});
+}
+
+void cinder_interp_member_origin(InterpPointer parent, size_t field, size_t offset, InterpValue *value) {
+    const CinderType *type = parent.declared_type;
+    bool readonly = parent.readonly_origin;
+    for (unsigned depth = 0U; type != NULL && type->kind == TYPE_ARRAY && depth < 256U; ++depth) {
+        readonly = readonly || (type->qualifiers & 1U) != 0U; type = type->base;
+    }
+    if (type != NULL) readonly = readonly || (type->qualifiers & 1U) != 0U;
+    if (type != NULL && (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) && field < type->fields.len && type->fields.data[field].offset == offset) {
+        type = type->fields.data[field].type; readonly = readonly || declared_readonly(type);
+    } else type = NULL;
+    value->address.declared_type = type; value->address.readonly_origin = readonly;
+}
 
 static InterpObject *checked_object(InterpContext *context, InterpPointer pointer, size_t size, CinderLoc loc) {
     if (pointer.object == 0U || (size_t)pointer.object > context->objects.len) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "null or invalid object pointer"); return NULL; }
@@ -73,6 +98,7 @@ static bool permits_access(const CinderType *declared, size_t extent, size_t off
 
 static bool const_storage(const CinderType *type, size_t extent, size_t offset, size_t length, unsigned depth) {
     if (depth > 64U || (type->qualifiers & 1U) != 0U) return true;
+    if (type->kind == TYPE_UNION) return false;
     if (type->kind == TYPE_ARRAY && type->base->size != 0U) {
         while (length != 0U) {
             size_t within = offset % type->base->size, chunk = type->base->size - within;
@@ -104,7 +130,7 @@ static bool const_storage(const CinderType *type, size_t extent, size_t offset, 
 static InterpObject *checked_access(InterpContext *context, InterpPointer pointer, const CinderType *type, bool writing, bool initializing, CinderLoc loc) {
     InterpObject *object = checked_object(context, pointer, type->size, loc);
     if (object == NULL) return NULL;
-    if (writing && (object->readonly || (!initializing && const_storage(object->type, object->size, (size_t)pointer.offset, type->size, 0U)))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only object"); return NULL; }
+    if (writing && (object->readonly || (!initializing && (pointer.readonly_origin || const_storage(object->type, object->size, (size_t)pointer.offset, type->size, 0U))))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only object"); return NULL; }
     if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || type->size > 8U || type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION || !permits_access(object->type, object->size, (size_t)pointer.offset, type, writing && !initializing, 0U)) {
         cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "misaligned or incompatible typed object access"); return NULL;
     }
@@ -119,6 +145,7 @@ int64_t cinder_interp_bit_value(uint64_t bits, const CinderType *type, unsigned 
 
 static bool const_bit_storage(const CinderType *type, size_t extent, size_t begin, size_t width, unsigned depth) {
     if (depth > 64U || (type->qualifiers & 1U) != 0U) return true;
+    if (type->kind == TYPE_UNION) return false;
     if (type->kind == TYPE_ARRAY && type->base->size != 0U) {
         size_t unit = type->base->size * 8U;
         while (width != 0U) {
@@ -162,7 +189,7 @@ bool cinder_interp_bit_store(InterpContext *context, InterpPointer pointer, cons
     size_t bytes = (offset + width + 7U) / 8U;
     InterpObject *object = checked_object(context, pointer, bytes, loc); if (object == NULL) return false;
     size_t begin = (size_t)pointer.offset * 8U + offset;
-    if (object->readonly || (!initializing && const_bit_storage(object->type, object->size, begin, width, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only bitfield"); return false; }
+    if (object->readonly || (!initializing && (pointer.readonly_origin || const_bit_storage(object->type, object->size, begin, width, 0U)))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only bitfield"); return false; }
     if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || !permits_access(object->type, object->size, (size_t)pointer.offset, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "misaligned or incompatible bitfield storage write"); return false; }
     for (size_t p = 0U; p < object->pointers.len;) {
         size_t old = object->pointers.data[p].offset;
@@ -225,13 +252,21 @@ bool cinder_interp_zero(InterpContext *context, InterpPointer pointer, size_t co
     return true;
 }
 
+static bool const_aggregate(const CinderType *type, unsigned depth) {
+    if (depth > 64U || (type->qualifiers & 1U) != 0U) return true;
+    if (type->kind == TYPE_ARRAY) return const_aggregate(type->base, depth + 1U);
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION)
+        for (size_t f = 0U; f < type->fields.len; ++f) if (const_aggregate(type->fields.data[f].type, depth + 1U)) return true;
+    return false;
+}
+
 bool cinder_interp_object_copy(InterpContext *context, InterpPointer destination, InterpPointer source, const CinderType *type, bool initializing, CinderLoc loc) {
     InterpObject *from = checked_object(context, source, type->size, loc);
     InterpObject *to = checked_object(context, destination, type->size, loc);
     if (from == NULL || to == NULL) return false;
     size_t read = (size_t)source.offset, write = (size_t)destination.offset;
     if (type->align == 0U || read % type->align != 0U || write % type->align != 0U || !permits_access(from->type, from->size, read, type, false, 0U) || !permits_access(to->type, to->size, write, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer is misaligned or incompatible"); return false; }
-    if (to->readonly || (!initializing && const_storage(to->type, to->size, write, type->size, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "object transfer modifies read-only storage"); return false; }
+    if (to->readonly || (!initializing && (destination.readonly_origin || const_aggregate(type, 0U) || const_storage(to->type, to->size, write, type->size, 0U)))) { cinder_interp_fail(context, INTERP_READONLY, loc, "object transfer modifies read-only storage"); return false; }
     if (source.object == destination.object && read != write && read < write + type->size && write < read + type->size) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer has partially overlapping storage"); return false; }
     if (source.object == destination.object && read == write) return true;
     CINDER_VEC_TYPE(InterpStoredPointer) copied = {NULL, 0U, 0U};

@@ -143,7 +143,7 @@ def main():
         commands = [
             ['tests/run_smoke.sh'], ['tests/run_frontend.sh'], ['tests/run_globals.sh'], ['tests/run_multi.sh'], ['tests/run_preprocessor.sh'], ['tests/run_ir.sh'],
             ['python3', 'tests/test_preprocessor.py'], ['python3', 'tests/test_control.py'], ['python3', 'tests/test_constraints.py'], ['python3', 'tests/test_undefined.py'], ['python3', 'tests/test_memory.py'], ['python3', 'tests/test_literals.py'], ['python3', 'tests/test_linkage.py'], ['python3', 'tests/test_static_addresses.py'], ['python3', 'tests/test_numeric.py'], ['python3', 'tests/test_ir_text.py'],
-            ['python3', 'tests/test_alignment_contracts.py'], ['python3', 'tests/test_noreturn_contracts.py'], ['python3', 'tests/test_block_storage_contracts.py'], ['python3', 'tests/test_goto_contracts.py'], ['python3', 'tests/test_switch_contracts.py'], ['python3', 'tests/test_register_contracts.py'], ['python3', 'tests/test_offset_contracts.py'], ['python3', 'tests/test_runtime_headers.py'], ['python3', 'tests/test_flexible_contracts.py'], ['python3', 'tests/test_anonymous_contracts.py'], ['python3', 'tests/test_bitfield_contracts.py'],
+            ['python3', 'tests/test_alignment_contracts.py'], ['python3', 'tests/test_noreturn_contracts.py'], ['python3', 'tests/test_block_storage_contracts.py'], ['python3', 'tests/test_goto_contracts.py'], ['python3', 'tests/test_switch_contracts.py'], ['python3', 'tests/test_register_contracts.py'], ['python3', 'tests/test_offset_contracts.py'], ['python3', 'tests/test_runtime_headers.py'], ['python3', 'tests/test_flexible_contracts.py'], ['python3', 'tests/test_anonymous_contracts.py'], ['python3', 'tests/test_bitfield_contracts.py'], ['python3', 'tests/test_qualifier_contracts.py'],
             ['tests/run_float.sh'], ['tests/run_varargs.sh'], ['tests/run_apps.sh'], ['tests/run_abi.sh'], ['python3', 'tests/test_abi_boundary.py'], ['python3', 'tests/run_output.py'],
         ]
         for stage in ('stage2', 'stage3'):
@@ -153,7 +153,7 @@ def main():
             for command in commands:
                 invoke([*command, cc], stage+'-authored', cwd=workspace, timeout=1800)
                 print(stage, command[-1], 'passed', flush=True)
-            for group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment', 'noreturn', 'block_storage', 'goto', 'switch', 'register', 'offset', 'flexible', 'anonymous', 'bitfields'):
+            for group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment', 'noreturn', 'block_storage', 'goto', 'switch', 'register', 'offset', 'flexible', 'anonymous', 'bitfields', 'qualifiers'):
                 invoke(['python3', 'tests/test_initializers.py', cc, group], stage+'-authored-group', cwd=workspace, timeout=1800)
                 print(stage, group, 'passed', flush=True)
             invoke(['python3', 'tests/test_runtime_headers.py', cc, 'flexible_allocated'], stage+'-allocated', cwd=workspace, timeout=300)

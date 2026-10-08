@@ -81,6 +81,7 @@ static bool lvalue_address(AddressContext *context, const CinderExpr *expr, Cind
             address->domain_begin = (size_t)address->addend;
             if (field->type->size > SIZE_MAX - address->domain_begin) return false;
             address->domain_end = address->domain_begin + field->type->size; aggregate = field->type;
+            cinder_vec_push((CinderVec *)&address->origin_path, &index);
         }
         return true;
     }
@@ -118,5 +119,5 @@ bool cinder_static_address(CinderIRModule *module, CinderAst *ast, const CinderE
     memset(address, 0, sizeof(*address)); address->pointer_type = expr->type;
     AddressContext context = {module, ast, diags};
     if (value_address(&context, expr, address, 0U)) return true;
-    free(address->symbol); address->symbol = NULL; return false;
+    free(address->symbol); free(address->origin_path.data); address->origin_path.data = NULL; address->origin_path.len = 0U; address->origin_path.cap = 0U; address->symbol = NULL; return false;
 }
