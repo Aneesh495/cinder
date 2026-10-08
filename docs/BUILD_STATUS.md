@@ -686,4 +686,32 @@ the narrowed conversion rule passed the complete initializer suite and a fresh
 244-execution native storage run. An unused extern
 void declaration initially mislabeled as invalid was checked against both
 references and the standard, then moved to the authored positive ledger.
+The final sanitizer also passed all 1,588 source CIR comparisons and 36 malformed
+CIR mutations. The increment is published as `4359f22`; its full hosted Linux run passed:
+[37707676446](https://github.com/Aneesh495/cinder/actions/runs/37707676446).
 See `docs/BLOCK_STORAGE.md`. Full acceptance remains incomplete.
+
+
+## Label and goto increment
+
+Function-wide labels now resolve forward and backward jumps in a separate
+namespace, diagnose duplicate and undefined targets, and preserve labels after
+terminated statements. Lexical scope transitions end objects in departed scopes
+and begin objects in entered scopes without executing skipped initializers.
+Resolved declaration slots remain available when a jump bypasses a declaration.
+Reached declarations reset indeterminate storage without changing object
+identity; scalar SSA promotion represents those resets explicitly.
+
+GCC Release and Clang ASan/UBSan passed 40 authored reference/object/assembly
+programs and 80 canonical CIR execution/object-identity comparisons, four
+malformed reset metadata rejections, and label/statement nesting boundaries.
+All 240 defined native owned, assembled, and CIR-generated objects passed in
+the Linux development VM. The sanitizer passed all 1,668 source CIR comparisons
+and 36 malformed CIR mutations, 241 source rejections, 99 memory UB cases and
+57 malformed memory contracts, 100,000 IR comparisons, and 1,000 SSA cases.
+The GCC control regression passed 832 cases; the complete sanitizer CIR suite
+includes all 834 current ledger entries. Static-storage and nonreturning
+function regressions also passed. The seven new memory UB programs run only in
+the independent interpreter. See `docs/JUMPS.md`. Full acceptance remains
+incomplete; switch dispatch, other language families, and audited campaign
+readers remain open.

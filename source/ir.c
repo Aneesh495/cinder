@@ -68,6 +68,7 @@ typedef struct {
     CINDER_VEC_TYPE(int) active_slots;
     CINDER_VEC_TYPE(size_t) loop_scopes;
     CINDER_VEC_TYPE(int) expression_temporaries;
+    CinderControlMap control;
 } LowerContext;
 
 static int find_local(const LowerContext *context, const char *name) {
@@ -80,6 +81,11 @@ static const char *object_symbol(const CinderExpr *expr) {
     if (decl == NULL || (decl->kind == DECL_VAR && !decl->is_static && !decl->is_extern && decl->canonical == NULL)) return NULL;
     if (decl->canonical != NULL) decl = decl->canonical;
     return decl->storage_symbol == NULL ? decl->name : decl->storage_symbol;
+}
+
+static int object_slot(const LowerContext *context, const CinderExpr *expr) {
+    if (expr->resolved_decl != NULL && expr->resolved_decl->lowering_slot >= 0) return expr->resolved_decl->lowering_slot;
+    return find_local(context, expr->as.name);
 }
 
 static CinderValueId lower_expr(LowerContext *context, CinderExpr *expr);
@@ -292,7 +298,7 @@ static CinderValueId lower_address(LowerContext *context, CinderExpr *target) {
     }
     if (target->kind == EX_NAME) {
         const char *symbol = object_symbol(target);
-        int slot = symbol == NULL ? find_local(context, target->as.name) : -1;
+        int slot = symbol == NULL ? object_slot(context, target) : -1;
         CinderIRInst *address = add_inst_ptr(context->function, context->current, target->type->kind == TYPE_FUNCTION ? IR_FUNCTION_ADDRESS : slot >= 0 ? IR_LOCAL_ADDRESS : IR_GLOBAL_ADDRESS, target->loc);
         address->dst = new_value(context->function); address->type = cinder_type_pointer(context->function->types, target->type); address->slot = slot;
         if (slot < 0) { if (symbol == NULL) symbol = target->as.name; address->callee = cinder_strndup(symbol, strlen(symbol)); }
@@ -327,7 +333,7 @@ static void store_lvalue(LowerContext *context, CinderExpr *target, CinderValueI
         store->left = address; store->right = value; store->type = target->type; return;
     }
     const char *symbol = object_symbol(target);
-    int slot = symbol == NULL ? find_local(context, target->as.name) : -1;
+    int slot = symbol == NULL ? object_slot(context, target) : -1;
     if (slot >= 0) store_slot(context, slot, value, loc);
     else if (symbol != NULL) {
         CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_GLOBAL_STORE, loc);
@@ -488,7 +494,7 @@ static CinderValueId lower_expr_impl(LowerContext *context, CinderExpr *expr) {
     if (expr->kind == EX_INDEX || expr->kind == EX_MEMBER) return load_address(context, lower_address(context, expr), expr->type, expr->loc);
     if (expr->kind == EX_NAME) {
         const char *symbol = object_symbol(expr);
-        int slot = symbol == NULL ? find_local(context, expr->as.name) : -1;
+        int slot = symbol == NULL ? object_slot(context, expr) : -1;
         if (slot >= 0) {
             CinderIRInst *inst = add_inst_ptr(context->function, context->current, IR_LOCAL_LOAD, expr->loc);
             inst->dst = new_value(context->function); inst->slot = slot; return inst->dst;
@@ -610,7 +616,7 @@ static void ensure_block_jump(LowerContext *context, CinderBlockId target, Cinde
 static void begin_declarations(LowerContext *context, CinderDecl *first) {
     for (CinderDecl *decl = first; decl != NULL; decl = decl->next) {
         if (decl->kind != DECL_VAR || decl->name == NULL || decl->is_static || decl->is_extern) continue;
-        decl->lowering_slot = new_local(context, decl->type);
+        if (decl->lowering_slot < 0) decl->lowering_slot = new_local(context, decl->type);
         context->function->local_alignments.data[decl->lowering_slot] = decl->alignment;
         CinderIRInst *begin = add_inst_ptr(context->function, context->current, IR_LOCAL_BEGIN, decl->loc); begin->slot = decl->lowering_slot; begin->type = decl->type;
         cinder_vec_push((CinderVec *)&context->active_slots, &decl->lowering_slot);
@@ -622,6 +628,48 @@ static void end_scope(LowerContext *context, size_t mark, CinderLoc loc) {
         int slot = context->active_slots.data[i - 1U];
         CinderIRInst *end = add_inst_ptr(context->function, context->current, IR_LOCAL_END, loc); end->slot = slot; end->type = context->function->local_types.data[slot];
     }
+}
+
+static void prepare_control(LowerContext *context, CinderStmt *body) {
+    cinder_control_init(&context->control);
+    (void)cinder_control_build(&context->control, body, context->diags);
+    for (size_t s = 0U; s < context->control.scopes.len; ++s) {
+        CinderControlScope *scope = &context->control.scopes.data[s];
+        for (size_t d = 0U; d < scope->objects.len; ++d) {
+            CinderDecl *decl = scope->objects.data[d]; decl->lowering_slot = new_local(context, decl->type);
+            context->function->local_alignments.data[decl->lowering_slot] = decl->alignment;
+        }
+    }
+    for (size_t l = 0U; l < context->control.labels.len; ++l) {
+        CinderStmt *label = context->control.labels.data[l]; label->as.label.block = create_block(context, label->as.label.name);
+    }
+}
+
+static bool ancestor_scope(const CinderControlMap *map, int ancestor, int scope) {
+    for (int current = scope; current >= 0; current = map->scopes.data[current].parent) if (current == ancestor) return true;
+    return ancestor < 0;
+}
+
+static void transition_scopes(LowerContext *context, int from, int to, CinderLoc loc) {
+    int common = from;
+    while (!ancestor_scope(&context->control, common, to)) common = context->control.scopes.data[common].parent;
+    for (int scope = from; scope != common; scope = context->control.scopes.data[scope].parent) {
+        CinderControlScope *leaving = &context->control.scopes.data[scope];
+        for (size_t d = leaving->objects.len; d > 0U; --d) {
+            CinderDecl *decl = leaving->objects.data[d - 1U];
+            CinderIRInst *end = add_inst_ptr(context->function, context->current, IR_LOCAL_END, loc); end->slot = decl->lowering_slot; end->type = decl->type;
+        }
+    }
+    CINDER_VEC_TYPE(int) entering = {NULL, 0U, 0U};
+    for (int scope = to; scope != common; scope = context->control.scopes.data[scope].parent) cinder_vec_push((CinderVec *)&entering, &scope);
+    for (size_t s = entering.len; s > 0U; --s) {
+        CinderControlScope *scope = &context->control.scopes.data[entering.data[s - 1U]];
+        for (size_t d = 0U; d < scope->objects.len; ++d) {
+            CinderDecl *decl = scope->objects.data[d];
+            CinderIRInst *begin = add_inst_ptr(context->function, context->current, IR_LOCAL_BEGIN, loc); begin->slot = decl->lowering_slot; begin->type = decl->type;
+        }
+    }
+    free(entering.data);
 }
 
 static CinderValueId initializer_address(LowerContext *context, CinderValueId base, size_t offset, CinderType *type, CinderLoc loc) {
@@ -675,6 +723,7 @@ static void lower_initializer_plan(LowerContext *context, CinderDecl *decl, int 
 
 static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
     if (stmt == NULL) return;
+    if (stmt->kind != ST_LABEL && block_at(context->function, context->current)->terminator.kind != TERM_UNREACHABLE) context->current = create_block(context, "dead.statement");
     size_t literal_mark = context->active_slots.len;
     for (size_t i = 0U; i < stmt->literal_objects.len; ++i)
         if (stmt->literal_objects.data[i]->literal_evaluated) begin_declarations(context, stmt->literal_objects.data[i]);
@@ -686,6 +735,7 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
                 if (decl->kind != DECL_VAR || decl->name == NULL || decl->is_static || decl->is_extern) continue;
                 if (decl->lowering_slot < 0) begin_declarations(context, decl);
                 int slot = decl->lowering_slot;
+                CinderIRInst *reset = add_inst_ptr(context->function, context->current, IR_LOCAL_RESET, decl->loc); reset->slot = slot; reset->type = decl->type;
                 size_t expression_mark = context->expression_temporaries.len;
                 LocalSlot local = {decl->name, slot, decl->type}; cinder_vec_push((CinderVec *)&context->locals, &local);
                 if (decl->init_actions.len != 0U) lower_initializer_plan(context, decl, slot);
@@ -722,7 +772,6 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
             for (size_t i = 0U; i < stmt->as.block.items.len; ++i) if (stmt->as.block.items.data[i]->kind == ST_DECL) begin_declarations(context, stmt->as.block.items.data[i]->as.decl);
             for (size_t i = 0U; i < stmt->as.block.items.len; ++i) {
                 lower_stmt(context, stmt->as.block.items.data[i]);
-                if (block_at(context->function, context->current)->terminator.kind != TERM_UNREACHABLE) break;
             }
             if (block_at(context->function, context->current)->terminator.kind == TERM_UNREACHABLE) end_scope(context, lifetime_mark, stmt->loc);
             context->active_slots.len = lifetime_mark; context->locals.len = scope_mark;
@@ -776,6 +825,15 @@ static void lower_stmt(LowerContext *context, CinderStmt *stmt) {
         }
         case ST_BREAK: if (context->break_blocks.len > 0U) { end_scope(context, context->loop_scopes.data[context->loop_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->break_blocks.data[context->break_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
         case ST_CONTINUE: if (context->continue_blocks.len > 0U) { end_scope(context, context->loop_scopes.data[context->loop_scopes.len - 1U], stmt->loc); CinderIRBlock *block = block_at(context->function, context->current); block->terminator.kind = TERM_JUMP; block->terminator.target = context->continue_blocks.data[context->continue_blocks.len - 1U]; set_successor(context->function, context->current, block->terminator.target); } break;
+        case ST_LABEL:
+            ensure_block_jump(context, stmt->as.label.block, stmt->loc);
+            context->current = stmt->as.label.block; lower_stmt(context, stmt->as.label.body); break;
+        case ST_GOTO:
+            if (stmt->as.jump.target != NULL) {
+                transition_scopes(context, stmt->control_scope, stmt->as.jump.target->control_scope, stmt->loc);
+                ensure_block_jump(context, stmt->as.jump.target->as.label.block, stmt->loc);
+            }
+            break;
     }
     if (stmt->literal_objects.len != 0U) {
         if (block_at(context->function, context->current)->terminator.kind == TERM_UNREACHABLE) end_scope(context, literal_mark, stmt->loc);
@@ -970,7 +1028,8 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
         CinderIRBlock entry = make_block(&function, "entry"); cinder_vec_push((CinderVec *)&function.blocks, &entry);
         LowerContext context; memset(&context, 0, sizeof(context)); context.function = &function; context.module = module; context.diags = diags; context.current = 0U; context.locals.data = NULL; context.locals.len = 0U; context.locals.cap = 0U; context.break_blocks.data = NULL; context.break_blocks.len = 0U; context.break_blocks.cap = 0U; context.continue_blocks.data = NULL; context.continue_blocks.len = 0U; context.continue_blocks.cap = 0U;
         size_t integer_param_count = 0U;
-        for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; cinder_vec_push((CinderVec *)&context.locals, &local); if (aggregate_value(param->type)) { CinderIRInst *copy = add_inst_ptr(&function, 0U, IR_AGG_ARG, param->loc); copy->slot = local.slot; copy->operator_code = (int)p; copy->type = param->type; ++integer_param_count; continue; } bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
+        for (size_t p = 0U; p < decl->params.len; ++p) { CinderDecl *param = decl->params.data[p]; LocalSlot local = {param->name, new_local(&context, param->type), param->type}; param->lowering_slot = local.slot; cinder_vec_push((CinderVec *)&context.locals, &local); if (aggregate_value(param->type)) { CinderIRInst *copy = add_inst_ptr(&function, 0U, IR_AGG_ARG, param->loc); copy->slot = local.slot; copy->operator_code = (int)p; copy->type = param->type; ++integer_param_count; continue; } bool is_float = param->type != NULL && (param->type->kind == TYPE_FLOAT || param->type->kind == TYPE_DOUBLE); CinderIRInst *arg = add_inst_ptr(&function, 0U, is_float ? IR_FARG : IR_ARG, param->loc); arg->dst = new_value(&function); arg->slot = (int)p; arg->operator_code = is_float ? (int)function.float_param_count++ : (int)integer_param_count++; arg->type = param->type; CinderValueId argument_value = arg->dst; CinderIRInst *store = add_inst_ptr(&function, 0U, IR_LOCAL_INIT, param->loc); store->left = argument_value; store->type = param->type; store->slot = local.slot; }
+        prepare_control(&context, decl->body);
         lower_stmt(&context, decl->body);
         if (block_at(&function, context.current)->terminator.kind == TERM_UNREACHABLE) {
             CinderValueId returned = CINDER_INVALID_VALUE;
@@ -987,14 +1046,14 @@ int cinder_lower_ir(CinderIRModule *module, CinderAst *ast, CinderDiagnostics *d
             CinderIRBlock *block = block_at(&function, context.current); block->terminator.kind = TERM_RETURN; block->terminator.value = returned;
         }
         if (function.is_noreturn && function_can_return(&function)) cinder_diag(diags, CINDER_WARNING, decl->loc, "function '%s' declared _Noreturn appears capable of returning", decl->name);
-        free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.expression_temporaries.data);
+        free(context.locals.data); free(context.break_blocks.data); free(context.continue_blocks.data); free(context.active_slots.data); free(context.loop_scopes.data); free(context.expression_temporaries.data); cinder_control_destroy(&context.control);
         cinder_vec_push((CinderVec *)&module->functions, &function);
     }
     return diags->errors == 0U ? 0 : 1;
 }
 
 const char *cinder_ir_op_name(CinderIROp op) {
-    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","function.address","object.copy","object.init","local.init","memory.init","zero.init","local.freeze","aggregate.arg","aggregate.return","va.start","va.copy","va.end","undef"};
+    static const char *names[] = {"nop","const","fconst","global.load","global.store","local.load","local.store","arg","farg","va_arg","copy","add","sub","mul","fadd","fsub","fmul","fdiv","fneg","fcmp.eq","fcmp.ne","fcmp.lt","fcmp.le","fcmp.gt","fcmp.ge","div.s","div.u","mod.s","mod.u","neg","not","and","or","xor","shl","shr.s","shr.u","cmp.eq","cmp.ne","cmp.lt.s","cmp.le.s","cmp.gt.s","cmp.ge.s","cmp.lt.u","cmp.le.u","cmp.gt.u","cmp.ge.u","call","phi","convert","local.address","global.address","memory.load","memory.store","pointer.offset","pointer.diff","pointer.member","local.begin","local.end","local.reset","function.address","object.copy","object.init","local.init","memory.init","zero.init","local.freeze","aggregate.arg","aggregate.return","va.start","va.copy","va.end","undef"};
     return op < CINDER_ARRAY_LEN(names) ? names[op] : "unknown";
 }
 

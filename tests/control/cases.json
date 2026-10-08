@@ -3174,5 +3174,165 @@
   {
     "source": "../block_storage/extern_void_unused.c",
     "exit": 0
+  },
+  {
+    "source": "../goto/forward.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/backward.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/chain.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_after_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/consecutive_labels.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/empty_statement.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_typedef_namespace.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_object_namespace.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_tag_namespace.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_parameter_namespace.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/per_function_namespace.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_in_if.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/label_in_else.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/enter_block_after_initializer.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/leave_block.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/enter_nested_blocks.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/sibling_blocks.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/same_block_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/reinitialize_scalar.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/reinitialize_const_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/reinitialize_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/reinitialize_aggregate.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/reinitialize_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/static_reentry.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/enter_while_body.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/enter_do_body.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/enter_for_body.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/leave_for_body.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/goto_break.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/goto_continue.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/compound_literal_repeat.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/parent_lifetime_survives.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/aligned_enter.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/loop_nested_exit.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/floating_backedge.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/callback.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/aggregate_return.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/nonreturning_loop.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/irreducible_backedges.c",
+    "exit": 0
+  },
+  {
+    "source": "../goto/enter_for_continue.c",
+    "exit": 0
   }
 ]

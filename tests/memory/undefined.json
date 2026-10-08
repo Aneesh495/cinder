@@ -366,5 +366,33 @@
   {
     "source": "block_static_readonly_array.undefined.c",
     "classification": 12
+  },
+  {
+    "source": "goto_skipped_initializer.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "goto_ended_block.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "goto_ended_compound_literal.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "goto_reentered_block.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "goto_reached_uninitialized_declaration.undefined.c",
+    "classification": 4
+  },
+  {
+    "source": "goto_skipped_const_store.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "goto_ended_selection_literal.undefined.c",
+    "classification": 10
   }
 ]

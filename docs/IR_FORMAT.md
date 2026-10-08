@@ -65,6 +65,13 @@ Address, typed memory, pointer arithmetic/member, and local lifetime opcodes
 retain their types and operands in canonical text. The parser verifies object
 slots, pointer strides, field offsets, and scalar access widths before use.
 
+`local.reset` is an effect-only declaration operation with a valid local slot
+and the exact storage type, with no value operands. It clears initialized and
+stored-pointer metadata while preserving object identity. SSA promotion
+converts it to an undefined scalar value. Native encoding emits no instruction
+for the indeterminate reset itself. Jump edges use lifetime begin/end operations
+for lexical scopes entered or left; common ancestor objects remain alive.
+
 `object.copy` and `object.init` transfer the complete extent of a typed array
 or aggregate through two compatible object pointers. They are effect-only
 instructions. Initialization is explicit because const objects can be

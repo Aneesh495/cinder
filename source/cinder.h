@@ -389,6 +389,8 @@ typedef enum {
     ST_BREAK,
     ST_CONTINUE,
     ST_DECL,
+    ST_LABEL,
+    ST_GOTO,
 } CinderStmtKind;
 
 typedef enum {
@@ -430,6 +432,7 @@ struct CinderExpr {
 struct CinderStmt {
     CinderStmtKind kind;
     CinderLoc loc;
+    int control_scope;
     CINDER_VEC_TYPE(CinderDecl *) literal_objects;
     union {
         CinderExpr *expr;
@@ -439,6 +442,8 @@ struct CinderStmt {
         struct { CinderExpr *condition; CinderStmt *body; } loop;
         struct { CinderStmt *init; CinderExpr *condition; CinderExpr *step; CinderStmt *body; } for_stmt;
         CinderDecl *decl;
+        struct { char *name; CinderStmt *body; uint32_t block; } label;
+        struct { char *name; CinderStmt *target; } jump;
     } as;
 };
 
@@ -499,6 +504,8 @@ typedef struct {
     unsigned declarator_depth;
     unsigned generic_depth;
     unsigned alignment_depth;
+    unsigned label_depth;
+    unsigned statement_depth;
     CinderStmt *literal_scope;
     size_t literal_count;
     CinderDecl *current_function;
@@ -515,6 +522,22 @@ bool cinder_infer_initializer_shape(CinderAst *ast, CinderDecl *decl, unsigned d
 CinderType *cinder_expression_type(CinderAst *ast, const CinderExpr *expr, unsigned depth);
 size_t cinder_generic_selection(const CinderType *control, const CinderExpr *expr);
 void cinder_dump_ast(const CinderAst *ast, CinderSourceManager *sources, FILE *out);
+
+typedef struct {
+    CinderStmt *owner;
+    int parent;
+    CINDER_VEC_TYPE(CinderDecl *) objects;
+} CinderControlScope;
+
+typedef struct {
+    CINDER_VEC_TYPE(CinderControlScope) scopes;
+    CINDER_VEC_TYPE(CinderStmt *) labels;
+    CINDER_VEC_TYPE(CinderStmt *) jumps;
+} CinderControlMap;
+
+void cinder_control_init(CinderControlMap *map);
+void cinder_control_destroy(CinderControlMap *map);
+bool cinder_control_build(CinderControlMap *map, CinderStmt *body, CinderDiagnostics *diags);
 
 /* ---------- semantic analysis ---------- */
 typedef struct {
@@ -611,6 +634,7 @@ typedef enum {
     IR_POINTER_MEMBER,
     IR_LOCAL_BEGIN,
     IR_LOCAL_END,
+    IR_LOCAL_RESET,
     IR_FUNCTION_ADDRESS,
     IR_OBJECT_COPY,
     IR_OBJECT_INIT,

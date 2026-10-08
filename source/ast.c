@@ -17,7 +17,7 @@ void cinder_ast_init(CinderAst *ast, CinderTypeContext *types, CinderTokenStream
     ast->constant_exprs.data = NULL; ast->constant_exprs.len = 0U; ast->constant_exprs.cap = 0U;
     ast->static_literals.data = NULL; ast->static_literals.len = 0U; ast->static_literals.cap = 0U;
     ast->stored_objects.data = NULL; ast->stored_objects.len = 0U; ast->stored_objects.cap = 0U;
-    ast->scope_depth = 0U; ast->declarator_depth = 0U; ast->generic_depth = 0U; ast->alignment_depth = 0U;
+    ast->scope_depth = 0U; ast->declarator_depth = 0U; ast->generic_depth = 0U; ast->alignment_depth = 0U; ast->label_depth = 0U; ast->statement_depth = 0U;
     ast->literal_scope = NULL; ast->literal_count = 0U;
     ast->current_function = NULL;
 }
@@ -95,6 +95,8 @@ static void free_stmt(CinderStmt *stmt) {
         case ST_DECL:
             for (CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { free_expr(decl->initializer); free(decl->params.data); free(decl->init_actions.data); }
             break;
+        case ST_LABEL: free_stmt(stmt->as.label.body); break;
+        case ST_GOTO: break;
         case ST_EMPTY:
         case ST_BREAK:
         case ST_CONTINUE:
@@ -193,6 +195,8 @@ static void dump_stmt(const CinderStmt *stmt, FILE *out, unsigned depth) {
         case ST_FOR: fputs("for\n", out); dump_stmt(stmt->as.for_stmt.init, out, depth + 1U); dump_expr(stmt->as.for_stmt.condition, out, depth + 1U); dump_expr(stmt->as.for_stmt.step, out, depth + 1U); dump_stmt(stmt->as.for_stmt.body, out, depth + 1U); break;
         case ST_BREAK: fputs("break\n", out); break;
         case ST_CONTINUE: fputs("continue\n", out); break;
+        case ST_LABEL: fprintf(out, "label %s\n", stmt->as.label.name); dump_stmt(stmt->as.label.body, out, depth + 1U); break;
+        case ST_GOTO: fprintf(out, "goto %s\n", stmt->as.jump.name == NULL ? "<missing>" : stmt->as.jump.name); break;
         case ST_DECL:
             for (const CinderDecl *decl = stmt->as.decl; decl != NULL; decl = decl->next) { fprintf(out, "decl %s : %s\n", decl->name, cinder_type_name(decl->type)); dump_expr(decl->initializer, out, depth + 1U); }
             break;

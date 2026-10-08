@@ -355,6 +355,8 @@ static void sema_stmt(CinderSema *sema, CinderStmt *stmt, CinderScope *scope, Ci
             break;
         case ST_EMPTY:
         case ST_DECL: break;
+        case ST_LABEL: sema_stmt(sema, stmt->as.label.body, scope, return_type, loop_depth); break;
+        case ST_GOTO: break;
     }
 }
 
@@ -707,6 +709,8 @@ int cinder_sema_run(CinderSema *sema) {
             sema->function_body = decl->body;
             sema->function = decl;
             sema_stmt(sema, decl->body, &scope, decl->type->return_type, 0U);
+            CinderControlMap control; cinder_control_init(&control);
+            (void)cinder_control_build(&control, decl->body, sema->diags); cinder_control_destroy(&control);
             sema->function_body = NULL;
             sema->function = NULL;
             for (size_t p = 0U; p < scope.symbols.len; ++p) free(scope.symbols.data[p].name);
