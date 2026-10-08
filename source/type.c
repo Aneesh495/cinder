@@ -256,13 +256,31 @@ static size_t type_align_up(size_t value, size_t align) {
     return value > SIZE_MAX - mask ? SIZE_MAX : (value + mask) & ~mask;
 }
 
+static bool contains_flexible(const CinderType *type, unsigned depth) {
+    if (type == NULL || depth >= 256U) return false;
+    if (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION) return false;
+    for (size_t i = 0U; i < type->fields.len; ++i) {
+        const CinderType *member = type->fields.data[i].type;
+        if (member != NULL && member->kind == TYPE_ARRAY && !member->complete) return true;
+        if (contains_flexible(member, depth + 1U)) return true;
+    }
+    return false;
+}
+
+bool cinder_type_contains_flexible(const CinderType *type) { return contains_flexible(type, 0U); }
+
 int cinder_type_layout_aggregate(CinderType *type, CinderDiagnostics *diags, CinderLoc loc) {
     if (type == NULL || (type->kind != TYPE_STRUCT && type->kind != TYPE_UNION)) return 1;
     size_t size = 0U;
     size_t align = 1U;
+    size_t named = 0U;
     for (size_t i = 0U; i < type->fields.len; ++i) {
         CinderField *field = &type->fields.data[i];
-        if (field->type == NULL || !field->type->complete || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_ERROR, loc, "field '%s' requires a complete object type", field->name == NULL ? "<unnamed>" : field->name); continue; }
+        bool flexible = field->type != NULL && field->type->kind == TYPE_ARRAY && !field->type->complete && field->type->base != NULL && field->type->base->complete;
+        if (flexible && (type->kind != TYPE_STRUCT || i + 1U != type->fields.len || field->name == NULL || named == 0U)) { cinder_diag(diags, CINDER_ERROR, loc, "flexible array requires a final named struct member after another named member"); continue; }
+        if (field->type == NULL || (!field->type->complete && !flexible) || field->type->kind == TYPE_VOID || field->type->kind == TYPE_FUNCTION) { cinder_diag(diags, CINDER_ERROR, loc, "field '%s' requires a complete object type", field->name == NULL ? "<unnamed>" : field->name); continue; }
+        if (type->kind == TYPE_STRUCT && cinder_type_contains_flexible(field->type)) { cinder_diag(diags, CINDER_ERROR, loc, "struct member cannot contain a flexible array member"); continue; }
+        if (field->name != NULL) ++named;
         if (!cinder_object_alignment_valid(field->type, field->alignment)) { cinder_diag(diags, CINDER_ERROR, loc, "member alignment is invalid or weaker than its type"); continue; }
         size_t field_align = field->alignment == 0U ? field->type->align : field->alignment;
         if (field_align > align) align = field_align;

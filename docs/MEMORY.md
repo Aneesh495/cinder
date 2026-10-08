@@ -33,8 +33,11 @@ reference execution, IR interpretation, emitted objects, and native Linux
 execution. `make test-memory` records separate UB classes through serialized
 IR and never executes emitted undefined programs.
 
-Bitfields, allocated storage/library models, restrict contracts, and goto scope entry
-remain open. The abstract VM does not expose host addresses or padding values
+Named flexible tails use the containing object extent, including fixed tail
+padding and recursive union storage. Bounds, initialization, const qualification
+and lifetime checks apply. See `FLEXIBLE_ARRAYS.md`.
+
+Bitfields, allocated storage/library models and restrict contracts remain open. The abstract VM does not expose host addresses or padding values
 as differential equality oracles.
 
 Aggregate parameters receive independent mutable object copies, including

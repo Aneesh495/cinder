@@ -325,6 +325,7 @@ CinderType *cinder_type_array(CinderTypeContext *types, CinderType *base, size_t
 CinderType *cinder_type_function(CinderTypeContext *types, CinderType *ret, const CinderParamVec *params);
 CinderType *cinder_type_qualified(CinderTypeContext *types, CinderType *base, unsigned qualifiers);
 bool cinder_object_alignment_valid(const CinderType *type, size_t alignment);
+bool cinder_type_contains_flexible(const CinderType *type);
 CinderType *cinder_integer_promote(CinderTypeContext *types, CinderType *type);
 CinderType *cinder_arithmetic_type(CinderTypeContext *types, CinderType *left, CinderType *right);
 bool cinder_type_equal(const CinderType *a, const CinderType *b);

@@ -23,6 +23,7 @@ static bool classify_part(const CinderType *type, size_t offset, CinderABIValue 
     if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
         for (size_t f = 0U; f < type->fields.len; ++f) {
             const CinderField *field = &type->fields.data[f];
+            if (field->type != NULL && field->type->kind == TYPE_ARRAY && !field->type->complete) continue;
             if (field->offset > type->size || field->type == NULL || field->type->size > type->size - field->offset || !classify_part(field->type, offset + field->offset, value, depth + 1U)) return false;
         }
         return type->fields.len != 0U;

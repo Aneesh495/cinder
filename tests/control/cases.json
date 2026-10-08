@@ -3774,5 +3774,141 @@
   {
     "source": "../offset/header_preprocessing.c",
     "exit": 0
+  },
+  {
+    "source": "../flexible/layout_byte.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/layout_double.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/layout_record.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/layout_array.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/layout_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/layout_alignment.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/layout_tail_padding.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_designated.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_zero.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_static.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_assignment.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_argument_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_argument_sse.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_return_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_return_sse.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_argument_mixed.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_return_memory.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_callback.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_union.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_union_recursive.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/pointer_member.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/flexible_address.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/padding_byte_access.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/padding_short_access.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/padding_one_past.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/flexible_typedef.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/flexible_qualified.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/flexible_generic.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/flexible_compound.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/flexible_static_pointer.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/union_storage_tail.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/union_storage_recursive.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_variadic_integer.c",
+    "exit": 0
+  },
+  {
+    "source": "../flexible/fixed_variadic_mixed.c",
+    "exit": 0
   }
 ]

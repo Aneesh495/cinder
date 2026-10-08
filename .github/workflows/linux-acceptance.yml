@@ -52,6 +52,8 @@ jobs:
         run: make test-offset
       - name: Authored target libc and POSIX interfaces
         run: make test-runtime-headers
+      - name: Flexible arrays and allocated native storage
+        run: make test-flexible
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -107,6 +109,10 @@ jobs:
             .agent-local/offset
             .agent-local/offset-contracts
             .agent-local/runtime-headers
+            .agent-local/flexible
+            .agent-local/flexible-contracts
+            .agent-local/flexible-allocated
+            .agent-local/flexible-abi-contracts
             .agent-local/aggregate_abi
             .agent-local/abi-boundary
             .agent-local/abi-callbacks

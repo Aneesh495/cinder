@@ -72,6 +72,8 @@ bool cinder_interp_zero(InterpContext *context, InterpPointer pointer, size_t co
 bool cinder_interp_object_copy(InterpContext *context, InterpPointer destination, InterpPointer source, const CinderType *type, bool initializing, CinderLoc loc);
 bool cinder_interp_offset(InterpContext *context, InterpPointer pointer, int64_t index, int direction, size_t stride, InterpValue *value, CinderLoc loc);
 bool cinder_interp_member(InterpContext *context, InterpPointer pointer, size_t offset, size_t size, InterpValue *value, CinderLoc loc);
+bool cinder_interp_flexible_member(InterpContext *context, InterpPointer pointer, size_t offset, const CinderType *element, InterpValue *value, CinderLoc loc);
+bool cinder_interp_extended_member(InterpContext *context, InterpPointer pointer, size_t offset, InterpValue *value, CinderLoc loc);
 bool cinder_interp_difference(InterpContext *context, InterpPointer left, InterpPointer right, size_t stride, int64_t *value, CinderLoc loc);
 bool cinder_interp_compare(InterpContext *context, CinderIROp op, const InterpValue *left, const InterpValue *right, int64_t *value, CinderLoc loc);
 void cinder_interp_memory_destroy(InterpContext *context);

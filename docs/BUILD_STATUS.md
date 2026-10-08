@@ -789,8 +789,7 @@ index expression is semantically checked even when unevaluated. Bounds, enums,
 assertions, cases, static initializers, direct native objects and serialized IR
 use the same target layout. Owned `stdbool.h`, `stdint.h` and `limits.h` describe
 the Linux LP64 profile. `max_align_t` promises alignment 16 with a private
-representation; matching a libc-specific sizeof is not claimed. Other runtime
-headers and a real self-host build remain open. See `docs/RUNTIME_HEADERS.md`.
+representation; matching a libc-specific sizeof is not claimed. The remaining library surface and a verified self-host campaign remain open. See `docs/RUNTIME_HEADERS.md`.
 
 Strict GCC and sanitizer builds passed 34 authored offset/header cases against
 both references at both optimization levels, original object/assembly byte and
@@ -828,7 +827,43 @@ with frozen compiler and object hashes independently audited. ASan also passed
 74 preprocessor checks and 306 source rejections. The preceding offset compiler
 passed all 944 source regression observations.
 
-The actual CMake compiler-source syntax audit passed 41 of 42 modules using
-these headers. The remaining arena flexible array member is a real language
-blocker and will be implemented; no module is precompiled to bypass it.
-Stage 2/3 bootstrap remains unverified. See `docs/RUNTIME_HEADERS.md`.
+The initial syntax audit passed 41 of 42 modules and identified the arena
+flexible member as a real blocker. The flexible-array implementation below
+removes that blocker without precompiling a module. The full stage 2/3
+bootstrap campaign remains unverified. See `docs/RUNTIME_HEADERS.md`.
+
+
+## Named flexible array storage
+
+Legal final members now affect target alignment and tail padding while retaining
+zero fixed size. Initializers and assignments operate on the fixed header;
+System V classification omits the incomplete tail. Illegal struct/array
+embedding is rejected, including recursive unions. Typed interpreter bounds
+include fixed tail padding and containing union storage. Tail accesses preserve
+initialization, const qualification and lifetime checks. Native allocations
+exercise actual malloc/calloc/realloc storage with scalar, pointer, record,
+multidimensional and string tails.
+
+Strict GCC and sanitizer builds passed 34 authored fixed-header cases against
+both references at both optimization levels, 68 canonical CIR/object identities,
+11 malformed type graphs, eight cross-unit ABI profiles, and 12 allocation
+probes. The sanitizer rejected 322 constraint sources and classified 113 memory
+UB sources plus 57 malformed memory contracts. All 354 final owned/assembled/
+parsed executions and 216 Linux reference executions passed in the development
+VM with independently verified frozen source, compiler and object hashes.
+Clang's small by-value flexible-header ABI differs from GCC's declared target
+contract. Six incompatible case/level profiles remain explicitly ineligible,
+with source hashes and independent LLVM signatures; the original failed native
+call and providers are retained. Both references interoperate through tested
+pointer interfaces and the compatible memory-return profile.
+
+The complete regression ledger passed 978 defined source observations and 1,956
+canonical source IR/object comparisons plus 36 mutations. The sanitizer also
+passed 100,000 typed IR comparisons, 1,000 SSA cases, preprocessor provenance,
+smoke and evidence tampering checks. See `docs/FLEXIBLE_ARRAYS.md`.
+
+A frozen development bootstrap attempt compiled all 43 actual production
+modules, linked a functioning Cinder compiler, and recompiled those sources into
+43 byte-identical objects. This is preliminary evidence, not the final bootstrap
+gate: the current source and both stages still need the complete authored suite
+and required generated native subset. Full acceptance remains incomplete.

@@ -19,7 +19,9 @@ use explicit object transfers. Fixed aggregate parameters and returns use the
 System V INTEGER/SSE/MEMORY classes, whole-argument register rollback, and
 hidden result pointers. Dynamic hosted `va_list` state supports loops, copies, helpers, promoted scalar
 and aggregate arguments through the same ABI. Bitfields, debug information,
-and advanced C11/C17 constructs remain open.
+and some advanced C11/C17 constructs remain open. Named flexible array members
+preserve their fixed header layout, initialization and ABI, with allocated
+tail storage exercised by native tests. See `FLEXIBLE_ARRAYS.md`.
 Long double, complex, atomics, thread-local execution, variable-length arrays,
 GNU inline assembly/vector extensions, and C++ input are excluded and diagnosed.
 

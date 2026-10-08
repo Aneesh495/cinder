@@ -314,6 +314,7 @@ static CinderType *apply_declarator(CinderAst *ast, DeclaratorNode *node, Cinder
     for (; node != NULL && node->kind != DECLARATOR_NAME; node = node->child) {
         if (node->kind == DECLARATOR_POINTER) base = cinder_type_qualified(ast->types, cinder_type_pointer(ast->types, base), node->qualifiers);
         else if (node->kind == DECLARATOR_ARRAY) {
+            if (cinder_type_contains_flexible(base)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "array element cannot contain a flexible array member");
             if (base->kind == TYPE_VOID || base->kind == TYPE_FUNCTION || (!base->complete && base->kind != TYPE_ERROR)) cinder_diag(ast->diags, CINDER_ERROR, peek(ast)->loc, "array element requires a complete object type");
             base = cinder_type_array(ast->types, base, node->length);
             if (node->incomplete) base->complete = false;

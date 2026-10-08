@@ -4,7 +4,11 @@
 
 size_t cinder_init_child_count(const CinderType *type) {
     if (type->kind == TYPE_ARRAY) return type->complete ? type->array_len : SIZE_MAX;
-    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) return type->fields.len;
+    if (type->kind == TYPE_STRUCT && type->fields.len != 0U) {
+        const CinderType *last = type->fields.data[type->fields.len - 1U].type;
+        return type->fields.len - (size_t)(last->kind == TYPE_ARRAY && !last->complete);
+    }
+    if (type->kind == TYPE_UNION) return type->fields.len;
     return 1U;
 }
 

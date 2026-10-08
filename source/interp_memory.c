@@ -56,35 +56,39 @@ static bool compatible_scalar(const CinderType *declared, const CinderType *acce
 
 /* Resolve the declared subobject independently of frontend field metadata.
  * Character accesses may inspect any byte of an object representation. */
-static bool permits_access(const CinderType *declared, size_t offset, const CinderType *access, bool writing, unsigned depth) {
+static bool permits_access(const CinderType *declared, size_t extent, size_t offset, const CinderType *access, bool writing, unsigned depth) {
     if (depth > 64U || (writing && (declared->qualifiers & 1U) != 0U)) return false;
     if (offset == 0U && compatible_scalar(declared, access)) return true;
-    if (declared->kind == TYPE_ARRAY && declared->base->size != 0U && offset < declared->size) return permits_access(declared->base, offset % declared->base->size, access, writing, depth + 1U);
+    if (declared->kind == TYPE_ARRAY && declared->base->size != 0U && offset < extent) return permits_access(declared->base, declared->base->size, offset % declared->base->size, access, writing, depth + 1U);
     if (declared->kind == TYPE_STRUCT || declared->kind == TYPE_UNION) {
         for (size_t f = 0U; f < declared->fields.len; ++f) {
             const CinderField *field = &declared->fields.data[f];
-            if (offset >= field->offset && offset - field->offset < field->type->size && permits_access(field->type, offset - field->offset, access, writing, depth + 1U)) return true;
+            bool flexible = (field->type->kind == TYPE_ARRAY && !field->type->complete) || cinder_type_contains_flexible(field->type);
+            size_t field_extent = flexible && field->offset <= extent ? extent - field->offset : field->type->size;
+            if (offset >= field->offset && offset - field->offset < field_extent && permits_access(field->type, field_extent, offset - field->offset, access, writing, depth + 1U)) return true;
         }
     }
-    return access->kind == TYPE_CHAR && offset < declared->size;
+    return access->kind == TYPE_CHAR && offset < extent;
 }
 
-static bool const_storage(const CinderType *type, size_t offset, size_t length, unsigned depth) {
+static bool const_storage(const CinderType *type, size_t extent, size_t offset, size_t length, unsigned depth) {
     if (depth > 64U || (type->qualifiers & 1U) != 0U) return true;
     if (type->kind == TYPE_ARRAY && type->base->size != 0U) {
         while (length != 0U) {
             size_t within = offset % type->base->size, chunk = type->base->size - within;
             if (chunk > length) chunk = length;
-            if (const_storage(type->base, within, chunk, depth + 1U)) return true;
+            if (const_storage(type->base, type->base->size, within, chunk, depth + 1U)) return true;
             offset += chunk; length -= chunk;
         }
     } else if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION) {
         for (size_t f = 0U; f < type->fields.len; ++f) {
             const CinderField *field = &type->fields.data[f];
-            if (field->offset < offset + length && offset < field->offset + field->type->size) {
+            bool flexible = (field->type->kind == TYPE_ARRAY && !field->type->complete) || cinder_type_contains_flexible(field->type);
+            size_t field_extent = flexible && field->offset <= extent ? extent - field->offset : field->type->size;
+            if (field->offset < offset + length && offset < field->offset + field_extent) {
                 size_t begin = offset > field->offset ? offset : field->offset;
-                size_t end = offset + length < field->offset + field->type->size ? offset + length : field->offset + field->type->size;
-                if (const_storage(field->type, begin - field->offset, end - begin, depth + 1U)) return true;
+                size_t end = offset + length < field->offset + field_extent ? offset + length : field->offset + field_extent;
+                if (const_storage(field->type, field_extent, begin - field->offset, end - begin, depth + 1U)) return true;
             }
         }
     }
@@ -94,8 +98,8 @@ static bool const_storage(const CinderType *type, size_t offset, size_t length, 
 static InterpObject *checked_access(InterpContext *context, InterpPointer pointer, const CinderType *type, bool writing, bool initializing, CinderLoc loc) {
     InterpObject *object = checked_object(context, pointer, type->size, loc);
     if (object == NULL) return NULL;
-    if (writing && (object->readonly || (!initializing && const_storage(object->type, (size_t)pointer.offset, type->size, 0U)))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only object"); return NULL; }
-    if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || type->size > 8U || type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION || !permits_access(object->type, (size_t)pointer.offset, type, writing && !initializing, 0U)) {
+    if (writing && (object->readonly || (!initializing && const_storage(object->type, object->size, (size_t)pointer.offset, type->size, 0U)))) { cinder_interp_fail(context, INTERP_READONLY, loc, "write to a read-only object"); return NULL; }
+    if (type->align == 0U || (size_t)pointer.offset % type->align != 0U || type->size > 8U || type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION || !permits_access(object->type, object->size, (size_t)pointer.offset, type, writing && !initializing, 0U)) {
         cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "misaligned or incompatible typed object access"); return NULL;
     }
     return object;
@@ -153,8 +157,8 @@ bool cinder_interp_object_copy(InterpContext *context, InterpPointer destination
     InterpObject *to = checked_object(context, destination, type->size, loc);
     if (from == NULL || to == NULL) return false;
     size_t read = (size_t)source.offset, write = (size_t)destination.offset;
-    if (type->align == 0U || read % type->align != 0U || write % type->align != 0U || !permits_access(from->type, read, type, false, 0U) || !permits_access(to->type, write, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer is misaligned or incompatible"); return false; }
-    if (to->readonly || (!initializing && const_storage(to->type, write, type->size, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "object transfer modifies read-only storage"); return false; }
+    if (type->align == 0U || read % type->align != 0U || write % type->align != 0U || !permits_access(from->type, from->size, read, type, false, 0U) || !permits_access(to->type, to->size, write, type, false, 0U)) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer is misaligned or incompatible"); return false; }
+    if (to->readonly || (!initializing && const_storage(to->type, to->size, write, type->size, 0U))) { cinder_interp_fail(context, INTERP_READONLY, loc, "object transfer modifies read-only storage"); return false; }
     if (source.object == destination.object && read != write && read < write + type->size && write < read + type->size) { cinder_interp_fail(context, INTERP_INVALID_ACCESS, loc, "object transfer has partially overlapping storage"); return false; }
     if (source.object == destination.object && read == write) return true;
     CINDER_VEC_TYPE(InterpStoredPointer) copied = {NULL, 0U, 0U};
@@ -192,6 +196,21 @@ bool cinder_interp_member(InterpContext *context, InterpPointer pointer, size_t 
     if (offset > available || size > available - offset) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, loc, "member address exceeds aggregate bounds"); return false; }
     pointer.offset += (int64_t)offset; pointer.begin = (size_t)pointer.offset; pointer.end = pointer.begin + size;
     pointer_value(value, pointer); return true;
+}
+
+bool cinder_interp_flexible_member(InterpContext *context, InterpPointer pointer, size_t offset, const CinderType *element, InterpValue *value, CinderLoc loc) {
+    if (checked_object(context, pointer, 0U, loc) == NULL) return false;
+    size_t available = pointer.end - (size_t)pointer.offset;
+    if (offset > available || element == NULL || !element->complete || element->size == 0U) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, loc, "flexible member exceeds its containing object"); return false; }
+    size_t extent = (available - offset) / element->size * element->size;
+    return cinder_interp_member(context, pointer, offset, extent, value, loc);
+}
+
+bool cinder_interp_extended_member(InterpContext *context, InterpPointer pointer, size_t offset, InterpValue *value, CinderLoc loc) {
+    if (checked_object(context, pointer, 0U, loc) == NULL) return false;
+    size_t available = pointer.end - (size_t)pointer.offset;
+    if (offset > available) { cinder_interp_fail(context, INTERP_POINTER_BOUNDS, loc, "flexible aggregate exceeds its containing object"); return false; }
+    return cinder_interp_member(context, pointer, offset, available - offset, value, loc);
 }
 
 bool cinder_interp_difference(InterpContext *context, InterpPointer left, InterpPointer right, size_t stride, int64_t *value, CinderLoc loc) {
