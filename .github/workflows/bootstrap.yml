@@ -30,6 +30,11 @@ jobs:
         run: make build
       - name: Compile and execute all bootstrap stages
         run: make selfhost
+      - name: Read-only native evidence and tamper checks
+        run: |
+          for manifest in .agent-local/selfhost/*/manifest.json; do
+            python3 -B tests/test_native_evidence.py "$(dirname "$manifest")"
+          done
       - name: Upload raw stage and execution evidence
         if: always()
         uses: actions/upload-artifact@v4

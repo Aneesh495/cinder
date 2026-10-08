@@ -908,8 +908,10 @@ canonical IR object identities, five malformed type graphs, 63/64 aggregate
 nesting and rejection at 65/1,024 levels. Seven additional interpreter cases
 check promoted bounds, indeterminate values, lifetime and read-only storage.
 Six mixed-toolchain profiles cover integer, SSE, mixed and MEMORY records,
-unions, returned aggregates and callbacks with register exhaustion. Linux
-native observations remain required before this revision is accepted.
+unions, returned aggregates and callbacks with register exhaustion. The frozen development Linux VM passed 268 original/assembled/parsed object
+executions and 160 GCC/Clang reference executions; object, source, provider
+and executable hashes were independently rechecked. This functional VM
+evidence does not substitute for the native hosted acceptance profile.
 
 Diagnostic references now record both GCC and Clang. Clang accepts the exact
 const-qualified anonymous-container assignment that GCC and Cinder reject.
@@ -917,3 +919,17 @@ Its source-bound exception records a reference diagnostic discrepancy while
 retaining the mandatory Cinder rejection. Register-array decay remains
 separately classified as undefined behavior with a non-mandatory diagnostic.
 The full acceptance report remains incomplete.
+
+## Read-only native evidence readers
+
+Bootstrap and generated native campaigns now preserve copied startup/tool/libc
+artifacts and reference/original compiler binaries in addition to their recorded
+hashes. Schema 2 readers rehash every source, object, executable and report;
+require target ELF headers, full original module inventories, strict fresh host
+stage 1 compile commands, complete authored commands and both native levels;
+and regenerate the bounded input specification for every eligible program.
+Generated failures, duplicate source programs, interpreter discrepancies,
+missing compiler levels and host fallback cannot satisfy a reader. Raw schema 1
+bootstrap evidence remains historical proof and cannot silently satisfy the
+stronger schema 2 contract. No reader has been connected to final acceptance
+until a complete real native positive run and evidence mutation checks pass.

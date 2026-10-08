@@ -43,8 +43,14 @@ compilations produce retained failures rather than eligible successes.
 The development TCG VM is declared with
 `CINDER_EXECUTION_PROFILE=emulated make selfhost`. It provides additional
 functional evidence and cannot substitute for the native acceptance or
-performance profiles. The final audited acceptance reader remains open until
-the complete native campaign and its source-bound artifacts have been reviewed.
+performance profiles. Run `python3 -B tools/verify_native.py bootstrap --artifacts RUN_DIRECTORY
+--compiler build/cindercc` to inspect a retained schema 2 campaign without
+executing artifacts. The reader checks every actual module, stage binary,
+source snapshot, dependency copy, authored execution and generated program.
+The native workflow also runs 20 tampering probes against a complete campaign.
+A source change, missing object, failed reference, emulated profile or inflated
+count fails verification. Full acceptance remains open until these readers and
+all other required campaigns are connected and complete.
 
 `make test-differential` uses the same bounded generator for the separate
 20,000-program native campaign. The older `make test-generated` remains an
