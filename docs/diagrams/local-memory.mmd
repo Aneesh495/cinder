@@ -1,0 +1,10 @@
+flowchart TD
+  Root[Declared local object] --> Qualifiers[Reject declared or view volatility]
+  Qualifiers --> Address[Exact SSA address and integer type]
+  Address --> First[Retain first access and its validity checks]
+  First --> Load[Reuse matching successful load or write value]
+  First --> Store[Remove identical ordinary store after ordinary store]
+  Init[Initializer or read] --> Readonly[Cannot establish write permission]
+  Effects[Calls, writes, globals, aggregate and bit operations] --> Clear[Invalidate cached facts]
+  Lifetime[Begin, reset, freeze and retirement] --> Clear
+  Unknown[Unknown roots, floating or volatile storage] --> Clear

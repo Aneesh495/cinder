@@ -4602,5 +4602,73 @@
   {
     "source": "../optimization/copy_const_origin_phi.c",
     "exit": 41
+  },
+  {
+    "source": "../optimization/memory_repeated_load.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_store_load.c",
+    "exit": 13
+  },
+  {
+    "source": "../optimization/memory_duplicate_store.c",
+    "exit": 13
+  },
+  {
+    "source": "../optimization/memory_member_load.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_array_load.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_byte_load.c",
+    "exit": 6
+  },
+  {
+    "source": "../optimization/memory_bool_store.c",
+    "exit": 1
+  },
+  {
+    "source": "../optimization/memory_volatile_kept.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_cast_volatile_kept.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_volatile_store_kept.c",
+    "exit": 13
+  },
+  {
+    "source": "../optimization/memory_float_kept.c",
+    "exit": 5
+  },
+  {
+    "source": "../optimization/memory_argument_kept.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_call_kept.c",
+    "exit": 30
+  },
+  {
+    "source": "../optimization/memory_byte_alias_kept.c",
+    "exit": 7
+  },
+  {
+    "source": "../optimization/memory_lifetime_kept.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_cross_block_kept.c",
+    "exit": 26
+  },
+  {
+    "source": "../optimization/memory_bit_effect_kept.c",
+    "exit": 26
   }
 ]

@@ -530,5 +530,17 @@
   {
     "source": "union_const_aggregate_member.undefined.c",
     "classification": 12
+  },
+  {
+    "source": "memory_cache_expired.undefined.c",
+    "classification": 10
+  },
+  {
+    "source": "memory_cache_const.undefined.c",
+    "classification": 12
+  },
+  {
+    "source": "memory_cache_const_init.undefined.c",
+    "classification": 12
   }
 ]

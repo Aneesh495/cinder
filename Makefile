@@ -139,6 +139,7 @@ test-optimizer: build
 	@python3 tests/test_dead_code.py $(BUILD_DIR)/cindercc
 	@python3 tests/test_strength_reduction.py $(BUILD_DIR)/cindercc
 	@python3 tests/test_copy_cleanup.py $(BUILD_DIR)/cindercc
+	@python3 tests/test_local_memory.py $(BUILD_DIR)/cindercc
 
 test-rewrites: build
 	@python3 -B tools/run_rewrite_checks.py $(BUILD_DIR)/cindercc

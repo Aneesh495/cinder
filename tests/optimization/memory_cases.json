@@ -1,0 +1,104 @@
+[
+  {
+    "source": "memory_repeated_load.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": true
+  },
+  {
+    "source": "memory_store_load.c",
+    "expected": 13,
+    "opcode": "memory.load",
+    "changes": true
+  },
+  {
+    "source": "memory_duplicate_store.c",
+    "expected": 13,
+    "opcode": "memory.store",
+    "changes": true
+  },
+  {
+    "source": "memory_member_load.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": true
+  },
+  {
+    "source": "memory_array_load.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": true
+  },
+  {
+    "source": "memory_byte_load.c",
+    "expected": 6,
+    "opcode": "memory.load",
+    "changes": true
+  },
+  {
+    "source": "memory_bool_store.c",
+    "expected": 1,
+    "opcode": "memory.load",
+    "changes": true
+  },
+  {
+    "source": "memory_volatile_kept.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_cast_volatile_kept.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_volatile_store_kept.c",
+    "expected": 13,
+    "opcode": "memory.store",
+    "changes": false
+  },
+  {
+    "source": "memory_float_kept.c",
+    "expected": 5,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_argument_kept.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_call_kept.c",
+    "expected": 30,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_byte_alias_kept.c",
+    "expected": 7,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_lifetime_kept.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_cross_block_kept.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": false
+  },
+  {
+    "source": "memory_bit_effect_kept.c",
+    "expected": 26,
+    "opcode": "memory.load",
+    "changes": false
+  }
+]
