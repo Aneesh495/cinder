@@ -62,6 +62,8 @@ jobs:
         run: make test-qualifiers
       - name: Optimizer semantic and transformation boundaries
         run: make test-optimizer
+      - name: Independent integer rewrite validation
+        run: make test-rewrites
       - name: Authored aggregate ABI checks
         run: make test-aggregate-abi
       - name: Scalar callback ABI campaign
@@ -131,6 +133,8 @@ jobs:
             .agent-local/sparse-optimization
             .agent-local/value-numbering
             .agent-local/dead-code
+            .agent-local/strength-reduction
+            .agent-local/rewrite-checks
             .agent-local/bitfields-abi-contracts
             .agent-local/flexible-abi-contracts
             .agent-local/aggregate_abi

@@ -2,8 +2,8 @@
 
 The current pipeline performs copy propagation and exact-width constant
 folding, constant-edge CFG simplification, sparse conditional constants,
-dominance-based integer value numbering, local memory forwarding, and dead
-instruction elimination. The remaining required loop, strength, pass-record,
+dominance-based integer value numbering, unsigned strength reduction, local
+memory forwarding, and dead instruction elimination. The remaining loop, pass-record,
 and machine representation work is tracked separately by full acceptance.
 
 Constant facts are normalized to the declared width, signedness, and Boolean
@@ -44,6 +44,24 @@ incoming value. Calls, memory reads, and floating arithmetic remain observable.
 Unused total unsigned/bit operations with defined operands may be removed.
 The source suite includes unused overflow and uninitialized expressions that
 must still be classified as invalid by the interpreter.
+
+Unsigned multiplication by a power of two becomes a left shift, unsigned
+division becomes a logical right shift, and unsigned remainder becomes a
+low-bit mask. Constants are interpreted at the operation's actual width. The
+shift must be smaller than that width; zero and other factors retain the
+original operation. Multiplication or division by one becomes a copy, including
+signed division by one. Other signed multiplication, division, and remainder
+are retained. The pass creates a fresh shift/mask constant rather than changing
+a constant shared by other operations. Each replacement still reads its input,
+including remainder by one, so an indeterminate operand remains invalid.
+
+`make test-rewrites` feeds real straight-line CIR fragments through the
+production optimizer and evaluates both versions with a separate Python
+integer model. The domain includes every byte value for every eligible shift,
+a complete 16-bit division domain, wider boundaries and deterministic samples,
+signed overflow, zero division, and indeterminate inputs. The read-only evidence
+reader reconstructs every observation and rejects rehashed numeric and IR
+corruptions. [Rewrite validation](REWRITE_VALIDATION.md) specifies its limits.
 
 Analyses are rebuilt for each transformation; no CFG/dominance cache crosses a
 shape change. The normal driver and canonical-IR tool verify transformed IR

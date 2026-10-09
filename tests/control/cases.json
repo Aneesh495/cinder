@@ -4490,5 +4490,73 @@
   {
     "source": "../optimization/dead_float_kept.c",
     "exit": 0
+  },
+  {
+    "source": "../optimization/strength_unsigned_multiply.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_unsigned_divide.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_unsigned_remainder.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_wide_multiply.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_wide_divide.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_wide_remainder.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_signed_identity.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_unsigned_identity.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_signed_multiply_kept.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_signed_divide_kept.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_signed_remainder_kept.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_nonpower_kept.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_zero_factor_kept.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_volatile_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_call_once.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_full_word_shift.c",
+    "exit": 0
+  },
+  {
+    "source": "../optimization/strength_remainder_one_reads.c",
+    "exit": 0
   }
 ]
