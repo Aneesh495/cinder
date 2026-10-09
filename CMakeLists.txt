@@ -43,6 +43,7 @@ set(CINDER_SOURCES
   source/opt_sparse.c
   source/opt_values.c
   source/opt_strength.c
+  source/opt_copy.c
   source/mir.c
   source/regalloc.c
   source/stack_layout.c

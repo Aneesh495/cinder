@@ -336,6 +336,7 @@ int cinder_verify_ir(const CinderIRModule *module, CinderDiagnostics *diags) {
                 if (inst->noreturn_call && inst->op != IR_CALL) cinder_diag(diags, CINDER_FATAL, inst->loc, "noreturn contract is valid only on a call instruction");
                 if (inst->op < IR_NOP || inst->op > IR_UNDEF) cinder_diag(diags, CINDER_FATAL, inst->loc, "invalid IR opcode");
                 if (inst->op == IR_PHI && ordinary) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR phi follows an ordinary instruction");
+                if (inst->op == IR_PHI && b == 0U) cinder_diag(diags, CINDER_FATAL, inst->loc, "IR entry block cannot contain a phi transfer");
                 if (inst->op != IR_PHI && inst->op != IR_NOP) ordinary = true;
                 if (inst->op != IR_NOP && inst->type == NULL) cinder_diag(diags, CINDER_FATAL, inst->loc, "typed IR instruction has no type");
                 bool has_result = inst->op != IR_NOP && inst->op != IR_LOCAL_STORE && inst->op != IR_LOCAL_INIT && inst->op != IR_GLOBAL_STORE && inst->op != IR_MEMORY_STORE && inst->op != IR_MEMORY_INIT && inst->op != IR_BIT_STORE && inst->op != IR_BIT_INIT && inst->op != IR_ZERO_INIT && inst->op != IR_OBJECT_COPY && inst->op != IR_OBJECT_INIT && inst->op != IR_LOCAL_BEGIN && inst->op != IR_LOCAL_END && inst->op != IR_LOCAL_RESET && inst->op != IR_LOCAL_FREEZE && inst->op != IR_AGG_ARG && inst->op != IR_AGG_RETURN && inst->op != IR_VA_START && inst->op != IR_VA_COPY && inst->op != IR_VA_END && !(inst->op == IR_CALL && inst->type != NULL && inst->type->kind == TYPE_VOID);

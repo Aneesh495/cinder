@@ -5,12 +5,12 @@
 #include <string.h>
 
 int main(int argc, char **argv) {
-    const char *input = NULL, *output = NULL;
+    const char *input = NULL, *output = NULL, *pass = NULL;
     bool interpret = false, object = false, assembly = false, verify = false, classify = false;
     int level = 0;
     for (int a = 1; a < argc; ++a) {
         if (strcmp(argv[a], "--help") == 0) {
-            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
+            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [--pass=copy-cleanup] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
         }
         if (strcmp(argv[a], "--verify") == 0) verify = true;
         else if (strcmp(argv[a], "--interpret") == 0) interpret = true;
@@ -20,11 +20,12 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[a], "-O0") == 0) level = 0;
         else if (strcmp(argv[a], "-O1") == 0) level = 1;
         else if (strcmp(argv[a], "-O2") == 0) level = 2;
+        else if (strncmp(argv[a], "--pass=", 7U) == 0 && pass == NULL) pass = argv[a] + 7U;
         else if (strcmp(argv[a], "-o") == 0 && a + 1 < argc) output = argv[++a];
         else if (argv[a][0] == '-' || input != NULL) { fprintf(stderr, "cinderir: invalid argument '%s'\n", argv[a]); return 2; }
         else input = argv[a];
     }
-    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify + (unsigned)classify > 1U || (object && output == NULL)) {
+    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify + (unsigned)classify > 1U || (object && output == NULL) || (pass != NULL && level != 0)) {
         fputs("cinderir: one input and one mode are required; -c requires -o\n", stderr); return 2;
     }
     CinderSourceManager sources; cinder_sources_init(&sources);
@@ -36,7 +37,7 @@ int main(int argc, char **argv) {
     CinderSourceFile *source = cinder_source_get(&sources, file);
     if (source == NULL || cinder_parse_ir(&module, source->bytes, source->size, &diags) != 0) goto done;
     CinderOptStats stats;
-    if (cinder_optimize(&module, level, &stats, &diags) != 0 || cinder_verify_ir(&module, &diags) != 0) goto done;
+    if ((pass == NULL ? cinder_optimize(&module, level, &stats, &diags) : cinder_optimize_only(&module, pass, &stats, &diags)) != 0 || cinder_verify_ir(&module, &diags) != 0) goto done;
     if (verify) { puts("IR verified"); result = 0; goto done; }
     if (interpret || classify) {
         CinderInterpResult observed = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags);

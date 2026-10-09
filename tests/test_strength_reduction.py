@@ -12,7 +12,7 @@ irtool = compiler.parent / 'cinderir'
 inputs = [pathlib.Path(__file__), pathlib.Path('tests/optimization/strength_cases.json')] + sorted(pathlib.Path('tests/optimization').glob('strength_*.c'))
 hashes = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
 identity = hashlib.sha256(compiler.read_bytes() + irtool.read_bytes() + json.dumps(hashes, sort_keys=True).encode()).hexdigest()
-root = pathlib.Path('.agent-local/value-numbering') / identity
+root = pathlib.Path('.agent-local/strength-reduction') / identity
 root.mkdir(parents=True, exist_ok=True)
 native = platform.system() == 'Linux' and platform.machine() == 'x86_64'
 rows = []
