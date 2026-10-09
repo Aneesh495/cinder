@@ -1,4 +1,4 @@
-#include "cinder.h"
+#include "opt_private.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +26,37 @@ static void prepend(CinderIRBlock *block, const CinderIRInst *inst) {
 static bool promotable(const CinderType *type) {
     if (type == NULL || (type->qualifiers & 2U) != 0U) return false;
     return type->kind == TYPE_BOOL || type->kind == TYPE_CHAR || type->kind == TYPE_SHORT || type->kind == TYPE_INT || type->kind == TYPE_LONG || type->kind == TYPE_LLONG || type->kind == TYPE_ENUM || type->kind == TYPE_POINTER || cinder_ir_floating(type);
+}
+
+/* An unaddressed slot can still contain an invalid read/write/lifetime
+ * operation in independently parsed CIR. Promotion must retain that guard.
+ * The may-state join distinguishes live storage from retired storage. */
+static bool scope_safe(const CinderIRFunction *function, const CinderCFGAnalysis *cfg, size_t slot, const bool *defined) {
+    unsigned char *output = cinder_alloc(function->blocks.len * sizeof(*output));
+    memset(output, 0, function->blocks.len * sizeof(*output));
+    bool changed = true, safe = true;
+    while (changed && safe) {
+        changed = false;
+        for (size_t r = 0U; r < cfg->rpo_count; ++r) {
+            CinderBlockId b = cfg->rpo[r];
+            const CinderIRBlock *block = &function->blocks.data[b];
+            unsigned char state = b == 0U ? 1U : 0U;
+            for (size_t p = 0U; p < block->predecessors.len; ++p) state |= output[block->predecessors.data[p]];
+            for (size_t i = 0U; i < block->instructions.len; ++i) {
+                const CinderIRInst *inst = &block->instructions.data[i];
+                if (inst->slot < 0 || (size_t)inst->slot != slot) continue;
+                if (inst->op == IR_LOCAL_BEGIN) state = (unsigned char)(state == 0U ? 0U : 1U);
+                else if (inst->op == IR_LOCAL_END) state = (unsigned char)(state == 0U ? 0U : 2U);
+                else if (inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT || inst->op == IR_LOCAL_RESET) {
+                    if ((state & 2U) != 0U) safe = false;
+                    if (inst->op == IR_LOCAL_STORE && (function->local_types.data[slot]->qualifiers & 1U) != 0U) safe = false;
+                    if ((inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) && !defined[inst->left]) safe = false;
+                }
+            }
+            if (output[b] != state) { output[b] = state; changed = true; }
+        }
+    }
+    free(output); return safe;
 }
 
 static void local_liveness(const CinderIRFunction *function, const CinderCFGAnalysis *cfg, size_t slot, bool *definitions, bool *input) {
@@ -96,7 +127,7 @@ static int insert_phis(CinderIRFunction *function, const CinderCFGAnalysis *cfg,
     return inserted;
 }
 
-static void rename_slots(CinderIRFunction *function, const CinderCFGAnalysis *cfg, const bool *eligible, CinderValueId *current) {
+static void rename_slots(CinderIRFunction *function, const CinderCFGAnalysis *cfg, const bool *eligible, CinderValueId *current, size_t original_values) {
     CINDER_VEC_TYPE(RenameUndo) undo = {NULL, 0U, 0U};
     RenameFrame *stack = cinder_alloc(function->blocks.len * sizeof(*stack));
     size_t depth = 1U;
@@ -109,6 +140,7 @@ static void rename_slots(CinderIRFunction *function, const CinderCFGAnalysis *cf
             for (size_t i = 0U; i < block->instructions.len; ++i) {
                 CinderIRInst *inst = &block->instructions.data[i];
                 if (inst->slot < 0 || (size_t)inst->slot >= function->local_count || !eligible[inst->slot]) continue;
+                if (inst->op == IR_PHI && inst->dst < original_values) continue;
                 size_t slot = (size_t)inst->slot;
                 if (inst->op == IR_LOCAL_BEGIN || inst->op == IR_LOCAL_RESET) {
                     RenameUndo change = {slot, current[slot]}; cinder_vec_push((CinderVec *)&undo, &change);
@@ -130,7 +162,7 @@ static void rename_slots(CinderIRFunction *function, const CinderCFGAnalysis *cf
                 CinderIRBlock *successor = &function->blocks.data[block->successors.data[s]];
                 for (size_t i = 0U; i < successor->instructions.len; ++i) {
                     CinderIRInst *phi = &successor->instructions.data[i];
-                    if (phi->op != IR_PHI) continue;
+                    if (phi->op != IR_PHI || phi->dst < original_values || phi->slot < 0 || (size_t)phi->slot >= function->local_count || !eligible[phi->slot]) continue;
                     for (size_t p = 0U; p < phi->phi_blocks.len; ++p)
                         if (phi->phi_blocks.data[p] == frame->block) phi->args.data[p] = current[phi->slot];
                 }
@@ -155,6 +187,9 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
     CinderCFGAnalysis cfg; cinder_cfg_init(&cfg);
     if (cinder_analyze_cfg(function, &cfg, diags) != 0) { cinder_cfg_destroy(&cfg); return -1; }
     bool *eligible = cinder_alloc(function->local_count * sizeof(*eligible));
+    bool *touched = cinder_alloc(function->local_count * sizeof(*touched));
+    bool *defined = cinder_opt_defined_values(function);
+    memset(touched, 0, function->local_count * sizeof(*touched));
     CinderValueId *current = cinder_alloc(function->local_count * sizeof(*current));
     for (size_t slot = 0U; slot < function->local_count; ++slot) {
         eligible[slot] = promotable(function->local_types.data[slot]); current[slot] = CINDER_INVALID_VALUE;
@@ -163,7 +198,16 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
         for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
             const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
             if (inst->op == IR_LOCAL_ADDRESS && inst->slot >= 0 && (size_t)inst->slot < function->local_count) eligible[inst->slot] = false;
+            if ((inst->op == IR_LOCAL_LOAD || inst->op == IR_LOCAL_STORE || inst->op == IR_LOCAL_INIT) && inst->slot >= 0 && (size_t)inst->slot < function->local_count) touched[inst->slot] = true;
         }
+    bool any = false;
+    for (size_t slot = 0U; slot < function->local_count; ++slot) {
+        eligible[slot] = eligible[slot] && touched[slot] && scope_safe(function, &cfg, slot, defined);
+        any = any || eligible[slot];
+    }
+    free(defined); free(touched);
+    if (!any) { free(current); free(eligible); cinder_cfg_destroy(&cfg); return 0; }
+    size_t original_values = function->value_count;
     int inserted = insert_phis(function, &cfg, eligible);
     CinderIRBlock *entry = &function->blocks.data[0];
     for (size_t slot = 0U; slot < function->local_count; ++slot) {
@@ -171,13 +215,13 @@ int cinder_insert_join_phis(CinderIRFunction *function, CinderDiagnostics *diags
         CinderIRInst undef = instruction(IR_UNDEF, function->local_types.data[slot], (CinderValueId)function->value_count++, -1);
         current[slot] = undef.dst; prepend(entry, &undef);
     }
-    rename_slots(function, &cfg, eligible, current);
+    rename_slots(function, &cfg, eligible, current, original_values);
     /* Unreachable predecessor inputs have no dynamic observation. Bind them to
      * an explicit undef definition so the serialized SSA remains well formed. */
     for (size_t b = 0U; b < function->blocks.len; ++b)
         for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
             CinderIRInst *phi = &function->blocks.data[b].instructions.data[i];
-            if (phi->op != IR_PHI) continue;
+            if (phi->op != IR_PHI || phi->dst < original_values || phi->slot < 0 || (size_t)phi->slot >= function->local_count || !eligible[phi->slot]) continue;
             for (size_t p = 0U; p < phi->args.len; ++p)
                 if (phi->args.data[p] == CINDER_INVALID_VALUE) phi->args.data[p] = current[phi->slot];
         }

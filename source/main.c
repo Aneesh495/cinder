@@ -30,6 +30,13 @@ int main(int argc, char **argv) {
         if (strcmp(arg, "--serialize-ir") == 0) { options.serialize_ir = true; continue; }
         if (strcmp(arg, "--emit-ir") == 0) { options.dump_ir = true; continue; }
         if (strcmp(arg, "--dump-mir") == 0) { options.dump_mir = true; continue; }
+        if (strcmp(arg, "--dump-passes") == 0) { options.dump_passes = true; continue; }
+        if (strcmp(arg, "--pass-stats") == 0 || strcmp(arg, "--pass-trace") == 0) {
+            if (i + 1 >= argc || argv[i + 1][0] == '\0') { fprintf(stderr, "cindercc: %s requires a path\n", arg); free(inputs.data); free(includes.data); free(defines.data); return 2; }
+            const char *path = argv[++i];
+            if (strcmp(arg, "--pass-stats") == 0) options.pass_stats = path; else options.pass_trace = path;
+            continue;
+        }
         if (strcmp(arg, "--dump-regalloc") == 0) { options.dump_regalloc = true; continue; }
         if (strcmp(arg, "--interpret") == 0) { options.interpret = true; continue; }
         if (strcmp(arg, "--explorer") == 0) { if (i + 1 >= argc) { fprintf(stderr, "cindercc: --explorer requires a directory\n"); free(inputs.data); free(includes.data); free(defines.data); return 2; } options.explorer = argv[++i]; continue; }
@@ -49,6 +56,9 @@ int main(int argc, char **argv) {
         cinder_vec_push((CinderVec *)&inputs, &arg);
     }
     if (inputs.len == 0U) { fprintf(stderr, "cindercc: no input file\n"); free(inputs.data); free(includes.data); free(defines.data); return 2; }
+    if ((options.preprocess_only || options.syntax_only) && (options.dump_passes || options.pass_stats != NULL || options.pass_trace != NULL)) {
+        fputs("cindercc: pass inspection requires IR lowering\n", stderr); free(inputs.data); free(includes.data); free(defines.data); return 2;
+    }
     options.input = inputs.data[0]; options.inputs = inputs.data; options.input_count = inputs.len;
     const char *runtime_include = CINDER_RUNTIME_INCLUDE;
     cinder_vec_push((CinderVec *)&includes, &runtime_include);

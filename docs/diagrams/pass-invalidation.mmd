@@ -1,0 +1,16 @@
+flowchart TD
+  INPUT[Typed module and selected optimization level] --> BEFORE[Verify and save actual input CIR]
+  BEFORE --> EXEC[Execute pass with process CPU timing]
+  EXEC --> CHANGED{Transformation events greater than zero}
+  CHANGED -->|No| KEEP[Preserve all analysis contracts]
+  CHANGED -->|Yes| SHAPE{CFG or sparse constants}
+  SHAPE -->|Yes| ALL[Invalidate CFG dominance loops uses effects liveness]
+  SHAPE -->|No| VALUES[Preserve CFG dominance loops; invalidate uses effects liveness]
+  ALL --> EPOCH[Advance analysis epoch]
+  VALUES --> EPOCH
+  KEEP --> AFTER[Verify and save actual output CIR]
+  EPOCH --> AFTER
+  AFTER --> RECORD[Record dimensions events contracts and CPU seconds]
+  RECORD --> NEXT{More selected passes}
+  NEXT -->|Yes| BEFORE
+  NEXT -->|No| PUBLISH[Atomically publish JSON pipeline index]

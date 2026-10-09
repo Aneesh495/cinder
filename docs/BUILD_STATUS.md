@@ -1,6 +1,49 @@
 # Build status
 
-Updated: 2026-10-07
+Updated: 2026-10-09
+
+## Verified optimizer records checkpoint
+
+Normal source compilation now uses the ten-pass engine described in
+[PASS_PIPELINE.md](PASS_PIPELINE.md). Each actual pass verifies its input and
+output, records transformation events and dimensions, declares analysis
+invalidation and measures algorithm CPU time. Atomic JSON and canonical CIR
+traces are available through the CLI. Scalar promotion additionally preserves
+retired-slot and indeterminate-write guards, existing phi operands and
+repeated-pass byte identity.
+
+Current frozen GCC/ASan builds passed all ten selected positive/negative pairs,
+twelve independent CIR promotion guards, 21 pass-proof tamper rejections,
+353 constraint cases, 136 memory-undefined cases and 57 malformed mutations,
+25 arithmetic-undefined cases, all older optimizer fixtures, sixteen target
+header probes and CTest smoke. The complete source regression passed 1,190
+reference/interpreter/object cases and 2,380 CIR round trips with 36 rejection
+mutations. ASan additionally passed 100,000 typed IR cases, 1,000 physical phi
+cycles and 183,565 defined-input rewrite checks with 11,243 invalid inputs and
+twelve independently rehashed proof mutations.
+
+The owned Linux VM independently executed all forty isolated pass objects with
+eighty GCC/Clang reference outcomes, twelve defined promotion guard objects,
+and six clock-header original/assembled/parsed objects with four references.
+Frozen source, compiler, object and executable hashes were checked afterward.
+These VM observations establish target functional behavior; native hosted CI
+and bootstrap are run separately after publication. They do not satisfy native
+performance measurements. The public read-only pass reader requires actual
+Linux x86-64 records by default and rejects altered or incomplete stage chains.
+
+Evidence: `.agent-local/pass-pipeline/`, `.agent-local/promotion-guards/`,
+`.agent-local/ir-campaign/`, `.agent-local/rewrite-checks/` and the corresponding
+`pipeline-final`, `promotion-pipeline-final`, `clock-pipeline-final` directories
+under `.agent-local/linux-vm/share/`. The original trace-path lifetime sanitizer
+failure and its frozen reproducer are retained privately; the output path now
+lives through atomic commit/abort and both final sanitizer suites pass.
+
+Remaining work includes genuine HIR/MIR boundaries, debug information and
+debugger recordings, dependency output and reproducible driver options,
+substantial application fixtures, coverage-guided fuzz/recovery campaigns,
+native performance measurements and complete acceptance runner/reader wiring.
+`make acceptance` and `make verify` still reject incomplete full acceptance.
+The older sections below retain the sequence of implementation checkpoints.
 
 ## Repository and publication
 

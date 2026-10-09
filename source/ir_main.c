@@ -5,16 +5,19 @@
 #include <string.h>
 
 int main(int argc, char **argv) {
-    const char *input = NULL, *output = NULL, *pass = NULL;
-    bool interpret = false, object = false, assembly = false, verify = false, classify = false;
+    const char *input = NULL, *output = NULL, *pass = NULL, *pass_stats = NULL, *pass_trace = NULL;
+    bool interpret = false, object = false, assembly = false, verify = false, classify = false, dump_passes = false;
     int level = 0;
     for (int a = 1; a < argc; ++a) {
         if (strcmp(argv[a], "--help") == 0) {
-            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [--pass=copy-cleanup|local-memory|loop-motion] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
+            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [--pass=NAME] [--pass-stats PATH] [--pass-trace DIR] [-o PATH] input.cir\nPasses: constant-fold, cfg-simplify, mem2reg, sparse-constants, dead-code, value-numbering, copy-cleanup, local-memory, loop-motion, strength-reduction.\n--dump-passes prints records only. Without a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
         }
         if (strcmp(argv[a], "--verify") == 0) verify = true;
         else if (strcmp(argv[a], "--interpret") == 0) interpret = true;
         else if (strcmp(argv[a], "--classify") == 0) classify = true;
+        else if (strcmp(argv[a], "--dump-passes") == 0) dump_passes = true;
+        else if (strcmp(argv[a], "--pass-stats") == 0 && a + 1 < argc) pass_stats = argv[++a];
+        else if (strcmp(argv[a], "--pass-trace") == 0 && a + 1 < argc) pass_trace = argv[++a];
         else if (strcmp(argv[a], "-c") == 0) object = true;
         else if (strcmp(argv[a], "-S") == 0) assembly = true;
         else if (strcmp(argv[a], "-O0") == 0) level = 0;
@@ -25,7 +28,7 @@ int main(int argc, char **argv) {
         else if (argv[a][0] == '-' || input != NULL) { fprintf(stderr, "cinderir: invalid argument '%s'\n", argv[a]); return 2; }
         else input = argv[a];
     }
-    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify + (unsigned)classify > 1U || (object && output == NULL) || (pass != NULL && level != 0)) {
+    if (input == NULL || (unsigned)interpret + (unsigned)object + (unsigned)assembly + (unsigned)verify + (unsigned)classify + (unsigned)dump_passes > 1U || (object && output == NULL) || (pass != NULL && level != 0)) {
         fputs("cinderir: one input and one mode are required; -c requires -o\n", stderr); return 2;
     }
     CinderSourceManager sources; cinder_sources_init(&sources);
@@ -37,7 +40,9 @@ int main(int argc, char **argv) {
     CinderSourceFile *source = cinder_source_get(&sources, file);
     if (source == NULL || cinder_parse_ir(&module, source->bytes, source->size, &diags) != 0) goto done;
     CinderOptStats stats;
-    if ((pass == NULL ? cinder_optimize(&module, level, &stats, &diags) : cinder_optimize_only(&module, pass, &stats, &diags)) != 0 || cinder_verify_ir(&module, &diags) != 0) goto done;
+    if ((pass == NULL ? cinder_optimize_trace(&module, level, pass_trace, &stats, &diags) : cinder_optimize_only_trace(&module, pass, pass_trace, &stats, &diags)) != 0 || cinder_verify_ir(&module, &diags) != 0) goto done;
+    if (pass_stats != NULL && cinder_save_pass_stats(&stats, pass_stats, &diags) != 0) goto done;
+    if (dump_passes) { result = cinder_write_pass_stats(&stats, stdout) != 0 || fflush(stdout) != 0; goto done; }
     if (verify) { puts("IR verified"); result = 0; goto done; }
     if (interpret || classify) {
         CinderInterpResult observed = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags);

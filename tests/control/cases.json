@@ -4742,5 +4742,21 @@
   {
     "source": "../optimization/loop_call_kept.c",
     "exit": 40
+  },
+  {
+    "source": "../optimization/pipeline_constant_fold.c",
+    "exit": 35
+  },
+  {
+    "source": "../optimization/pipeline_mem2reg.c",
+    "exit": 17
+  },
+  {
+    "source": "../optimization/pipeline_volatile_slot.c",
+    "exit": 13
+  },
+  {
+    "source": "../optimization/pipeline_float_fold_kept.c",
+    "exit": 2
   }
 ]

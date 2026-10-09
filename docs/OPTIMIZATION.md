@@ -4,8 +4,9 @@ The current pipeline performs copy propagation and exact-width constant
 folding, constant-edge CFG simplification, sparse conditional constants,
 dominance-based integer value numbering, unsigned strength reduction, local
 memory forwarding, redundant copy/phi cleanup, natural-loop invariant motion,
-and dead instruction elimination. The remaining pass-record,
-and machine representation work is tracked separately by full acceptance.
+and dead instruction elimination. Each pass has its own verified boundaries,
+transformation record, analysis contract and process CPU timing. The machine
+representation and remaining full acceptance work are tracked separately.
 
 Constant facts are normalized to the declared width, signedness, and Boolean
 representation before arithmetic or comparison. Invalid signed arithmetic is
@@ -49,13 +50,14 @@ reading it. The independent interpreter checks both used and unused
 indeterminate phis. Entry-block phis are rejected by the verifier: first entry
 has no predecessor from which to select an input.
 
-`cinderir --pass=copy-cleanup input.cir -o output.cir` runs copy cleanup;
-`--pass=local-memory` runs the isolated memory pass and `--pass=loop-motion`
-runs natural-loop motion. Each runs
-with verification before and after it. Combining an isolated pass with `-O1`
-or `-O2` is rejected. `make test-optimizer` retains isolated before/after
+`cinderir --pass=NAME input.cir -o output.cir` runs any one of the ten passes
+listed in [PASS_PIPELINE.md](PASS_PIPELINE.md), with verification before and
+after it. Combining an isolated pass with `-O1` or `-O2` is rejected.
+`make test-optimizer` retains isolated before/after
 observations and objects for integer, pointer, floating, effect, and cycle
 fixtures, in addition to testing the complete normal pipeline.
+`make test-passes` checks all ten positive/negative pairs, their actual stage
+records, scalar promotion guards and the read-only evidence reader.
 
 Local memory facts are confined to one block and an exact SSA address and
 integer type. Roots must come from an actually declared nonvolatile local

@@ -2,6 +2,9 @@
 #define CINDER_TIME_H
 
 typedef long time_t;
+typedef long clock_t;
+#define CLOCKS_PER_SEC 1000000L
+clock_t clock(void);
 /* Linux x86-64 glibc/musl ABI, including the extensions needed for its extent. */
 struct tm {
     int tm_sec;

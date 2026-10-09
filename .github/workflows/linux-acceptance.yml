@@ -62,6 +62,8 @@ jobs:
         run: make test-qualifiers
       - name: Optimizer semantic and transformation boundaries
         run: make test-optimizer
+      - name: Ten-pass records, promotion guards and evidence tampering
+        run: make test-passes
       - name: Independent integer rewrite validation
         run: make test-rewrites
       - name: Authored aggregate ABI checks
@@ -134,6 +136,8 @@ jobs:
             .agent-local/value-numbering
             .agent-local/dead-code
             .agent-local/loop-motion
+            .agent-local/pass-pipeline
+            .agent-local/promotion-guards
             .agent-local/local-memory
             .agent-local/copy-cleanup
             .agent-local/strength-reduction

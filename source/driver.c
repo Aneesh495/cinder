@@ -50,7 +50,7 @@ static void discard_object(char *path) {
 
 void cinder_print_help(FILE *out) {
     fputs("Cinder c17-core compiler\n\nUsage: cindercc [options] file.c\n\n", out);
-    fputs("  -E                 preprocess only\n  -S                 emit x86-64 assembly\n  -c                 emit ELF64 relocatable object\n  -o PATH             output path\n  -I DIR              quoted/angle include directory\n  -DNAME[=VALUE]      define a preprocessing macro\n  -fsyntax-only       stop after semantic analysis\n  -O0/-O1/-O2        select conservative optimization level\n  --dump-tokens       print preprocessing tokens\n  --dump-ast          print parsed/typed AST\n  --emit-ir           print typed CFG IR\n  --serialize-ir      write canonical round-trip IR\n  --dump-mir          print machine lowering boundary\n  --dump-regalloc     print allocation intervals and frame\n  --interpret         execute main in the independent IR interpreter\n  --explorer DIR      write an offline stage summary report\n  -fverify-each       verify IR at each boundary\n  -g                  request debug profile (currently source contract only)\n  --help              show this help\n  --version           show compiler version\n", out);
+    fputs("  -E                 preprocess only\n  -S                 emit x86-64 assembly\n  -c                 emit ELF64 relocatable object\n  -o PATH             output path\n  -I DIR              quoted/angle include directory\n  -DNAME[=VALUE]      define a preprocessing macro\n  -fsyntax-only       stop after semantic analysis\n  -O0/-O1/-O2        select conservative optimization level\n  --dump-tokens       print preprocessing tokens\n  --dump-ast          print parsed/typed AST\n  --emit-ir           print typed CFG IR\n  --serialize-ir      write canonical round-trip IR\n  --dump-mir          print machine lowering boundary\n  --dump-regalloc     print allocation intervals and frame\n  --dump-passes       print verified optimizer records as JSON\n  --pass-stats PATH   save optimizer records atomically\n  --pass-trace DIR    retain before/after CIR in an existing directory\n  --interpret         execute main in the independent IR interpreter\n  --explorer DIR      write an offline stage summary report\n  -fverify-each       verify IR at each boundary\n  -g                  request debug profile (currently source contract only)\n  --help              show this help\n  --version           show compiler version\n", out);
 }
 
 void cinder_print_version(FILE *out) { fprintf(out, "cindercc %s (C17-core, ELF64 x86-64 backend)\n", CINDER_VERSION); }
@@ -61,7 +61,7 @@ int cinder_driver_run(const CinderOptions *options) {
     if (options->input_count > 1U) return cinder_driver_run_multi(options);
     CinderSourceManager sources; CinderDiagnostics diags; CinderTokenStream tokens; CinderTypeContext types; CinderAst ast; CinderSema sema; CinderIRModule module; CinderMachineObject machine;
     cinder_sources_init(&sources); cinder_diags_init(&diags); cinder_tokens_init(&tokens); cinder_types_init(&types);
-    bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->interpret || options->explorer != NULL);
+    bool inspection_only = options->output == NULL && !options->emit_assembly && !options->emit_object && (options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes || options->interpret || options->explorer != NULL);
     int result = 1;
     CinderOutput assembly_output = {0};
     if (cinder_preprocess(&sources, options->input, options->include_dirs, options->include_count, options->defines, options->define_count, &diags) != 0) goto done;
@@ -81,21 +81,22 @@ int cinder_driver_run(const CinderOptions *options) {
     }
     if (cinder_lex(&sources, &tokens, &diags) != 0) goto done;
     if (options->dump_tokens) cinder_dump_tokens(&tokens, &sources, stdout);
-    if (inspection_only && !options->dump_ast && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
+    if (inspection_only && !options->dump_ast && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done; }
     cinder_ast_init(&ast, &types, &tokens, &diags);
     if (cinder_parse(&ast) != 0) goto done_ast;
     if (options->dump_ast) cinder_dump_ast(&ast, &sources, stdout);
-    if (inspection_only && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->interpret && options->explorer == NULL) { result = 0; goto done_ast; }
+    if (inspection_only && !options->dump_ir && !options->serialize_ir && !options->dump_mir && !options->dump_regalloc && !options->dump_passes && !options->interpret && options->explorer == NULL) { result = 0; goto done_ast; }
     cinder_sema_init(&sema, &ast, &types, &diags);
     if (cinder_sema_run(&sema) != 0) goto done_sema;
     if (options->syntax_only) { result = 0; goto done_sema; }
     cinder_ir_init(&module, &types);
     if (cinder_lower_ir(&module, &ast, &diags) != 0) goto done_ir;
-    for (size_t f = 0U; f < module.functions.len; ++f) if (cinder_insert_join_phis(&module.functions.data[f], &diags) < 0) goto done_ir;
     if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
-    if (options->dump_ir) cinder_dump_ir(&module, stdout);
+    if (options->dump_ir) { fputs("; before scalar promotion\n", stdout); cinder_dump_ir(&module, stdout); }
     CinderOptStats stats;
-    if (cinder_optimize(&module, options->optimization, &stats, &diags) != 0) goto done_ir;
+    if (cinder_optimize_source(&module, options->optimization, options->pass_trace, &stats, &diags) != 0) goto done_ir;
+    if (options->pass_stats != NULL && cinder_save_pass_stats(&stats, options->pass_stats, &diags) != 0) goto done_ir;
+    if (options->dump_passes && (cinder_write_pass_stats(&stats, stdout) != 0 || fflush(stdout) != 0)) goto done_ir;
     for (size_t f = 0U; f < module.functions.len; ++f) if (cinder_mir_boundary(&module.functions.data[f], &diags) != 0) goto done_ir;
     if (cinder_verify_ir(&module, &diags) != 0) goto done_ir;
     if (options->dump_ir) { fputs("; optimized IR\n", stdout); cinder_dump_ir(&module, stdout); }
@@ -216,11 +217,12 @@ static const char *default_assembly_name(const char *input) {
 
 static int cinder_driver_run_multi(const CinderOptions *options) {
     if (options->input_count < 2U) return 1;
+    if (options->pass_stats != NULL || options->pass_trace != NULL) { fputs("cindercc: pass file paths require one translation unit\n", stderr); return 1; }
     if (options->explorer != NULL || options->interpret) { fprintf(stderr, "cindercc: --explorer and --interpret require one translation unit\n"); return 1; }
     if (options->preprocess_only && options->output != NULL) { fprintf(stderr, "cindercc: -E with multiple inputs cannot use one output path\n"); return 1; }
     if (options->emit_assembly && options->output != NULL) { fprintf(stderr, "cindercc: -S with multiple inputs requires one output per translation unit\n"); return 1; }
     if (options->emit_object && options->output != NULL) { fprintf(stderr, "cindercc: -c with multiple inputs requires one output per translation unit\n"); return 1; }
-    if (options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc) {
+    if (options->preprocess_only || options->syntax_only || options->dump_tokens || options->dump_ast || options->dump_ir || options->serialize_ir || options->dump_mir || options->dump_regalloc || options->dump_passes) {
         for (size_t i = 0U; i < options->input_count; ++i) {
             CinderOptions child = *options;
             child.input = options->inputs[i]; child.inputs = NULL; child.input_count = 1U;
