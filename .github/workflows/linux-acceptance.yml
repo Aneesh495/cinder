@@ -145,5 +145,6 @@ jobs:
             .agent-local/variadic
             .agent-local/allocation
             .agent-local/objects
+            artifacts
             build
           if-no-files-found: ignore
