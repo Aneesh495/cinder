@@ -824,6 +824,7 @@ unsigned cinder_sparse_constants(CinderIRFunction *function, CinderDiagnostics *
 unsigned cinder_number_values(CinderIRFunction *function, CinderDiagnostics *diags);
 unsigned cinder_reduce_strength(CinderIRFunction *function);
 unsigned cinder_cleanup_copies(CinderIRFunction *function, CinderDiagnostics *diags);
+unsigned cinder_move_loop_invariants(CinderIRFunction *function, CinderDiagnostics *diags);
 /* ---------- interpreter and optimization ---------- */
 typedef enum {
     INTERP_DEFINED,

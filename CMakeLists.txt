@@ -45,6 +45,7 @@ set(CINDER_SOURCES
   source/opt_strength.c
   source/opt_copy.c
   source/opt_memory.c
+  source/opt_loop.c
   source/mir.c
   source/regalloc.c
   source/stack_layout.c

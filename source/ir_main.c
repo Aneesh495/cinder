@@ -10,7 +10,7 @@ int main(int argc, char **argv) {
     int level = 0;
     for (int a = 1; a < argc; ++a) {
         if (strcmp(argv[a], "--help") == 0) {
-            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [--pass=copy-cleanup|local-memory] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
+            fputs("Usage: cinderir [--verify|--interpret|--classify|-c|-S] [-O0|-O1|-O2] [--pass=copy-cleanup|local-memory|loop-motion] [-o PATH] input.cir\nWithout a mode, write canonical IR. Native objects target Linux x86-64.\n", stdout); return 0;
         }
         if (strcmp(argv[a], "--verify") == 0) verify = true;
         else if (strcmp(argv[a], "--interpret") == 0) interpret = true;

@@ -953,9 +953,35 @@ and executable hashes were checked. This is emulated functional evidence.
 `make test-optimizer`, CI and both native bootstrap stages run the new suite.
 
 The published copy-cleanup revision passed native Linux validation and its
-complete deterministic bootstrap. Broader local source and canonical-IR
-regressions for this memory revision are still running. A reference compiler
-timeout was retained separately and the unchanged suite is being rerun. The
+complete deterministic bootstrap. The complete 1,168-case source suite and 2,336 canonical-IR/backend
+comparisons with 36 malformed-input rejections passed. A reference compiler
+timeout was retained separately before the unchanged suite passed on rerun. The
 full acceptance remains incomplete: loop motion and pass records, actual HIR
 and machine representation, debugger, applications, fuzzing, recovery and
 performance work remain open.
+
+## Natural loops and conservative invariant motion
+
+Dominance-checked backedges now define natural-loop membership. The optimizer
+requires one verified existing preheader and moves only total integer
+operations with defined invariant operands. It retains irreducible regions,
+multiple-entry headers, effects, pointers, floating operations, loads, division,
+signed arithmetic and unproved shifts. Moved operations preserve their original
+SSA IDs and locations. The normal `-O2` pipeline and `--pass=loop-motion` use
+the same implementation. See `docs/LOOP_MOTION.md`.
+
+Both strict GCC and Clang ASan/UBSan builds pass 18 source motion/retention
+fixtures and ten constructed zero-trip, trap and preheader guards. Existing
+optimizer suites, arithmetic/memory undefined classifications and the complete
+independent rewrite checker with evidence tampering tests pass. A frozen
+development Linux VM executed 66 original normal/isolated/guard objects and
+72 GCC/Clang references, with an independent source/object/ELF/executable audit.
+This remains emulated functional evidence. Broader local regressions are still
+running against frozen binaries. CI and both bootstrap stages include the suite.
+
+The earlier memory revision finished all 1,168 source cases, 2,336 canonical-IR
+object comparisons and 36 rejection mutations. Its exact published tip is
+`5c7f6ca18183716c0d5dc2cc7e89b24763c652da`; native bootstrap is running at
+`https://github.com/Aneesh495/cinder/actions/runs/37883644974`. Pass contracts,
+timing and invalidation records, full representation boundaries and the
+remaining acceptance campaigns are still open.
