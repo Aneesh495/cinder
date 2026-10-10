@@ -35,6 +35,19 @@ void cinder_interp_retire(InterpContext *context, uint32_t id) {
 
 InterpValue cinder_interp_pointer_value(InterpPointer pointer) { InterpValue value; pointer_value(&value, pointer); return value; }
 
+/* Integer arithmetic can temporarily change an address representation. It
+ * retains authority for its original object domain, never an arbitrary
+ * object guessed from the numeric bits. Bounds and lifetime remain checked
+ * by the eventual pointer operation. */
+bool cinder_interp_word_pointer(const InterpValue *word, InterpValue *value) {
+    if (!word->integer_word || word->word_uncertain || word->address.object == 0U) return false;
+    uint64_t bits = (uint64_t)word->integer;
+    if (bits >> 32U != word->address.object) return false;
+    InterpPointer pointer = word->address;
+    pointer.offset = (int64_t)(bits & UINT64_C(0xffffffff));
+    pointer_value(value, pointer); return true;
+}
+
 static bool declared_readonly(const CinderType *type) {
     for (unsigned depth = 0U; type != NULL && depth < 256U; ++depth) {
         if ((type->qualifiers & 1U) != 0U) return true;
@@ -217,8 +230,14 @@ bool cinder_interp_load(InterpContext *context, InterpPointer pointer, const Cin
     if (type->kind == TYPE_POINTER && bits == 0U) {
         value->pointer = true; value->address = (InterpPointer){0};
     } else if (!value->fp && type->size == 8U) {
-        for (size_t p = 0U; p < object->pointers.len; ++p) if (object->pointers.data[p].offset == offset && (uint64_t)pointer_bits(object->pointers.data[p].pointer) == bits) {
-            value->pointer = true; value->address = object->pointers.data[p].pointer; return true;
+        for (size_t p = 0U; p < object->pointers.len; ++p) if (object->pointers.data[p].offset == offset) {
+            const InterpStoredPointer *stored = &object->pointers.data[p];
+            value->integer_word = true; value->word_uncertain = stored->word_kind == 2U; value->address = stored->pointer;
+            if (type->kind == TYPE_POINTER) {
+                if (value->word_uncertain) { cinder_interp_fail(context, INTERP_UNSUPPORTED, loc, "pointer representation combines different object domains"); return false; }
+                (void)cinder_interp_word_pointer(value, value);
+            }
+            return true;
         }
     }
     return true;
@@ -235,7 +254,11 @@ bool cinder_interp_store(InterpContext *context, InterpPointer pointer, const Ci
         else ++p;
     }
     for (size_t i = 0U; i < type->size; ++i) { object->bytes[offset + i] = (unsigned char)(bits >> (i * 8U)); object->initialized[offset + i] = 255U; }
-    if (!cinder_ir_floating(type) && type->size == 8U && value->pointer && value->address.object != 0U && bits == (uint64_t)pointer_bits(value->address)) { InterpStoredPointer stored = {offset, value->address}; cinder_vec_push((CinderVec *)&object->pointers, &stored); }
+    if (!cinder_ir_floating(type) && type->size == 8U && value->address.object != 0U &&
+        ((value->pointer && bits == (uint64_t)pointer_bits(value->address)) || value->integer_word)) {
+        InterpStoredPointer stored = {offset, value->address, value->word_uncertain ? 2U : value->integer_word ? 1U : 0U};
+        cinder_vec_push((CinderVec *)&object->pointers, &stored);
+    }
     return true;
 }
 
@@ -273,7 +296,7 @@ bool cinder_interp_object_copy(InterpContext *context, InterpPointer destination
     for (size_t p = 0U; p < from->pointers.len; ++p) {
         const InterpStoredPointer *pointer = &from->pointers.data[p];
         if (pointer->offset >= read && pointer->offset - read <= type->size && 8U <= type->size - (pointer->offset - read)) {
-            InterpStoredPointer value = {write + pointer->offset - read, pointer->pointer}; cinder_vec_push((CinderVec *)&copied, &value);
+            InterpStoredPointer value = {write + pointer->offset - read, pointer->pointer, pointer->word_kind}; cinder_vec_push((CinderVec *)&copied, &value);
         }
     }
     for (size_t p = 0U; p < to->pointers.len;) {

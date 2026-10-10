@@ -258,8 +258,8 @@ static CinderValueId lower_truth(LowerContext *context, CinderExpr *expr) {
     return truth;
 }
 
-static void store_slot(LowerContext *context, int slot, CinderValueId value, CinderLoc loc) {
-    CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_LOCAL_STORE, loc);
+static void store_slot(LowerContext *context, int slot, CinderValueId value, CinderLoc loc, bool initializing) {
+    CinderIRInst *store = add_inst_ptr(context->function, context->current, initializing ? IR_LOCAL_INIT : IR_LOCAL_STORE, loc);
     store->left = value; store->type = context->function->local_types.data[slot];
     store->slot = slot;
 }
@@ -361,7 +361,7 @@ static void store_lvalue(LowerContext *context, CinderExpr *target, CinderValueI
     }
     const char *symbol = object_symbol(target);
     int slot = symbol == NULL ? object_slot(context, target) : -1;
-    if (slot >= 0) store_slot(context, slot, value, loc);
+    if (slot >= 0) store_slot(context, slot, value, loc, false);
     else if (symbol != NULL) {
         CinderIRInst *store = add_inst_ptr(context->function, context->current, IR_GLOBAL_STORE, loc);
         store->left = value; store->type = target->type; store->callee = cinder_strndup(symbol, strlen(symbol));
@@ -384,11 +384,14 @@ static CinderValueId lower_choice(LowerContext *context, CinderExpr *condition, 
     branch_to(context, test, yes_block, no_block, loc);
     context->current = yes_block;
     CinderValueId yes_value = logical ? (conjunction ? lower_truth(context, yes) : emit_constant(context, 1, loc)) : lower_expr(context, yes);
-    store_slot(context, slot, yes_value, loc);
+    /* Each selected arm initializes the expression's internal result object.
+     * Top-level qualifiers inherited from a const aggregate member cannot
+     * turn that initialization into a forbidden ordinary source write. */
+    store_slot(context, slot, yes_value, loc, true);
     ensure_block_jump(context, merge, loc);
     context->current = no_block;
     CinderValueId no_value = logical ? (conjunction ? emit_constant(context, 0, loc) : lower_truth(context, no)) : lower_expr(context, no);
-    store_slot(context, slot, no_value, loc);
+    store_slot(context, slot, no_value, loc, true);
     ensure_block_jump(context, merge, loc);
     context->current = merge;
     CinderIRInst *load = add_inst_ptr(context->function, merge, IR_LOCAL_LOAD, loc);

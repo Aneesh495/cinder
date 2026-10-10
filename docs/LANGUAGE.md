@@ -29,6 +29,11 @@ GNU inline assembly/vector extensions, and C++ input are excluded and diagnosed.
 
 Tests only compare defined programs or record an explicit ineligible classification. Signed overflow, invalid shifts, division by zero, unsequenced side effects, invalid lifetimes, out-of-bounds access, unspecified padding, raw pointer-address observations, and unconstrained NaN payloads are not equality oracles. Cinder's optimization passes must preserve the declared definedness preconditions.
 
+Full-width integer address round trips preserve interpreter object authority
+through integer operations and storage. Combining different authority domains
+has a declared interpreter limitation, separate from native compilation. See
+[`POINTER_WORDS.md`](POINTER_WORDS.md) for the model and its negative boundaries.
+
 ## Diagnostics
 
 Fatal lexical, preprocessing, semantic, unsupported-profile, verifier, and output errors produce a nonzero exit status and do not publish a new successful artifact. Diagnostics preserve a primary source range. Macro/include provenance is retained by the token model and is expanded as the implementation gains source-manager coverage.

@@ -2,6 +2,45 @@
 
 Updated: 2026-10-09
 
+## Integer address authority and conditional initialization
+
+Full-width integer address values now retain separate interpreter authority
+through arithmetic, reversible bit operations, phis, calls, variadic arguments
+and storage. Bounds, lifetime and const origin remain enforced when restored
+pointers are accessed. Byte overwrites and narrowing cannot invent authority;
+nonzero words mixing different domains are explicitly unsupported by the
+interpreter. See [POINTER_WORDS.md](POINTER_WORDS.md).
+
+The preceding optimizer commit `ac854e7` passed native Linux validation
+[37887721615](https://github.com/Aneesh495/cinder/actions/runs/37887721615).
+Its forty native pass objects and all ten actual stage pairs were independently
+rechecked from downloaded raw artifacts against a `git archive` of that exact
+commit. Bootstrap
+[37887782994](https://github.com/Aneesh495/cinder/actions/runs/37887782994)
+failed on a real raw-IR const store in `source/source.c`. The conditional
+lowerer used an ordinary store for its internal result slot. Selected branches
+now initialize that result with `local.init`; source assignments and the
+const-store verifier restriction remain intact. The failed hosted artifact
+and local reproducer are retained privately.
+
+Current frozen GCC/ASan builds passed twenty-one authored integer-address cases
+against both reference compilers, canonical CIR/object identity and eight
+separate model guards. All 51 implementation modules compiled to original
+target objects with verification before promotion. The Linux VM independently
+executed eighty-four original/assembled objects and eighty-four GCC/Clang
+reference programs; frozen source, object and executable hashes were audited.
+ASan also passed the complete ten-pass proof and its 21 tamper controls,
+promotion guards, 136 memory-undefined cases, 57 malformed mutations,
+25 arithmetic-undefined cases and qualifier-origin contracts. The full source
+regression and new 100,000-IR/1,000-phi campaigns are running against these
+frozen binaries. Hosted validation and bootstrap are rerun after publication.
+
+Evidence: `.agent-local/pointer_words/`,
+`.agent-local/pointer-word-contracts/`,
+`.agent-local/linux-vm/share/pointer-words-final/`,
+`.agent-local/selfhost-object-audit/` and
+`.agent-local/bootstrap-const-choice-failure/`. Full acceptance is incomplete.
+
 ## Verified optimizer records checkpoint
 
 Normal source compilation now uses the ten-pass engine described in

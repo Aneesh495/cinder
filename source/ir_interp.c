@@ -47,6 +47,20 @@ static bool scalar_convert(const CinderIRInst *inst, int64_t integer, double flo
     return true;
 }
 
+static bool word_domain_equal(InterpPointer left, InterpPointer right) {
+    return left.object == right.object && left.begin == right.begin && left.end == right.end &&
+           left.declared_type == right.declared_type && left.readonly_origin == right.readonly_origin;
+}
+
+static void integer_word(const CinderType *type, const InterpValue *left, const InterpValue *right, InterpValue *result) {
+    if (type->size != 8U || cinder_ir_floating(type)) return;
+    const InterpValue *origin = left->integer_word ? left : right != NULL && right->integer_word ? right : NULL;
+    if (origin == NULL) return;
+    result->integer_word = true; result->address = origin->address; result->word_uncertain = origin->word_uncertain;
+    if (right != NULL && left->integer_word && right->integer_word)
+        result->word_uncertain = left->word_uncertain || right->word_uncertain || !word_domain_equal(left->address, right->address);
+}
+
 static bool eval_binary(const CinderIRInst *inst, int64_t left, int64_t right, int64_t *result) {
     CinderIROp op = inst->op;
     const CinderType *type = inst->source_type != NULL ? inst->source_type : inst->type;
@@ -323,13 +337,22 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         break;
                     }
                     if (inst->type->kind == TYPE_POINTER) {
-                        result = *source; result.fp = false; result.pointer = source->pointer || source->integer == 0;
+                        if (inst->source_type->kind != TYPE_POINTER && source->integer != 0 && source->word_uncertain) {
+                            cinder_interp_fail(context, INTERP_UNSUPPORTED, inst->loc, "integer address combines different object domains"); goto done;
+                        }
+                        result = *source; result.fp = false; result.pointer = source->pointer;
+                        if (!result.pointer && source->integer == 0) result = cinder_interp_pointer_value((InterpPointer){0});
+                        else if (!result.pointer) (void)cinder_interp_word_pointer(source, &result);
                         if (inst->source_type->kind == TYPE_POINTER && inst->source_type->base->kind == TYPE_ARRAY && inst->source_type->base->complete && result.pointer && result.address.object != 0U) {
                             if (!cinder_interp_member(context, result.address, 0U, inst->source_type->base->size, &result, inst->loc)) goto done;
                         }
                         break;
                     }
-                    if (source->pointer && !cinder_ir_floating(inst->type) && inst->type->size == 8U) { result = *source; result.fp = false; break; }
+                    if ((source->pointer || source->integer_word) && !cinder_ir_floating(inst->type) && inst->type->size == 8U) {
+                        result = *source; result.fp = false; result.pointer = false;
+                        result.integer_word = source->address.object != 0U;
+                        result.integer = cinder_interp_integer((uint64_t)source->integer, inst->type); break;
+                    }
                     if (!scalar_convert(inst, source->integer, source->floating, source->fp, &result.integer, &result.floating, &result.fp)) {
                         cinder_interp_fail(context, INTERP_CONVERSION_RANGE, inst->loc, "undefined out-of-range scalar conversion"); goto done;
                     }
@@ -339,8 +362,11 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                     if (!inst->type->is_unsigned && (values[inst->left].integer == INT64_MIN || (inst->type->size < 8U && values[inst->left].integer == -(INT64_C(1) << (inst->type->size * 8U - 1U))))) {
                         cinder_interp_fail(context, INTERP_SIGNED_OVERFLOW, inst->loc, "undefined signed negation overflow"); goto done;
                     }
-                    result.integer = cinder_interp_integer(UINT64_C(0) - (uint64_t)values[inst->left].integer, inst->type); break;
-                case IR_BIT_NOT: result.integer = cinder_interp_integer((uint64_t)~values[inst->left].integer, inst->type); break;
+                    result.integer = cinder_interp_integer(UINT64_C(0) - (uint64_t)values[inst->left].integer, inst->type);
+                    integer_word(inst->type, &values[inst->left], NULL, &result); break;
+                case IR_BIT_NOT:
+                    result.integer = cinder_interp_integer((uint64_t)~values[inst->left].integer, inst->type);
+                    integer_word(inst->type, &values[inst->left], NULL, &result); break;
                 case IR_FNEG: result.floating = -values[inst->left].floating; break;
                 case IR_FADD: case IR_FSUB: case IR_FMUL: case IR_FDIV:
                 case IR_FCMP_EQ: case IR_FCMP_NE: case IR_FCMP_LT: case IR_FCMP_LE: case IR_FCMP_GT: case IR_FCMP_GE:
@@ -386,7 +412,8 @@ static bool interpret_function(InterpContext *context, const CinderIRFunction *f
                         if ((inst->op == IR_DIV_S || inst->op == IR_MOD_S || inst->op == IR_DIV_U || inst->op == IR_MOD_U) && values[inst->right].integer == 0) { classification = INTERP_DIVISION_ZERO; reason = "undefined division by zero"; }
                         cinder_interp_fail(context, classification, inst->loc, reason); goto done;
                     }
-                    result.integer = cinder_interp_integer((uint64_t)result.integer, inst->type); break;
+                    result.integer = cinder_interp_integer((uint64_t)result.integer, inst->type);
+                    integer_word(inst->type, &values[inst->left], &values[inst->right], &result); break;
             }
             if (inst->dst != CINDER_INVALID_VALUE) values[inst->dst] = result;
         }
@@ -470,7 +497,7 @@ CinderInterpResult cinder_interpret(const CinderIRModule *module, const char *fu
             value = cinder_interp_pointer_value(value.address);
             InterpObject *object = &context.objects.data[globals[g] - 1U];
             for (size_t byte = 0U; byte < 8U; ++byte) object->bytes[address->offset + byte] = (unsigned char)((uint64_t)value.integer >> (byte * 8U));
-            InterpStoredPointer stored = {address->offset, value.address}; cinder_vec_push((CinderVec *)&object->pointers, &stored);
+            InterpStoredPointer stored = {address->offset, value.address, 0U}; cinder_vec_push((CinderVec *)&object->pointers, &stored);
         }
     }
     size_t argument_storage = arg_count == 0U ? 1U : arg_count;
