@@ -2,6 +2,22 @@
 
 Updated: 2026-10-09
 
+## Acceptance reader dispatch
+
+The nonvacuous-pass gate now calls the independently exercised raw-artifact
+reader. Native generation retains the complete proof and reports the computed
+ten-pass result; read-only verification reconstructs the outcome and rejects
+inflated counts, different units, skipped status and escaped raw paths. The
+native artifact package from `ac854e7` passed this dispatch independently with
+forty actual native executions. macOS semantic/object checks cannot satisfy
+the native gate. Nineteen other required full-campaign readers remain open, so
+overall acceptance still fails honestly.
+
+The `cb329bd` frozen builds subsequently completed all 1,211 source regression
+cases, 2,422 CIR round trips with 36 malformed mutations, 100,000 typed IR
+executions and 1,000 physical phi cycles. Current hosted bootstrap/CI results
+are checked separately before claiming those native stage outcomes.
+
 ## Integer address authority and conditional initialization
 
 Full-width integer address values now retain separate interpreter authority

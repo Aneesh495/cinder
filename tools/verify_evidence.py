@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 from evidence_integrity import EvidenceError, artifact_path, verify_bindings
-from gate_registry import AUDITED_REPORT_READERS, GATES
+from gate_registry import AUDITED_REPORT_READERS, GATES, read_gate_report
 
 def verify(root, manifest, compiler):
     data = json.loads(manifest.read_text())
@@ -31,6 +31,7 @@ def verify(root, manifest, compiler):
             raise EvidenceError(f'required report bindings disagree: {key}')
         if key not in AUDITED_REPORT_READERS:
             raise EvidenceError(f'full raw-artifact reader is not implemented: {key}')
+        read_gate_report(key, report, root, manifest.parent, compiler)
     return data
 
 def main():

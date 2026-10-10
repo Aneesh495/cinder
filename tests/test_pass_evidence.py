@@ -9,6 +9,7 @@ import tempfile
 sys.path.insert(0, str(pathlib.Path('tools').resolve()))
 from evidence_integrity import EvidenceError, digest
 from pass_evidence import verify_passes
+from gate_registry import GATES, read_gate_report
 
 compiler = pathlib.Path(sys.argv[1]).resolve()
 reports = pathlib.Path('.agent-local/pass-pipeline').glob('*/observations.json')
@@ -17,6 +18,28 @@ original = max((p for p in reports if json.loads(p.read_text()).get('compiler_sh
 source = pathlib.Path('.').resolve()
 native = json.loads((original / 'observations.json').read_text())['native']
 verify_passes(original, source, compiler, require_native=native)
+envelope = dict(status='pass', unit=GATES['nonvacuous-passes']['unit'], observations=10,
+                raw_directory=original.name)
+if native:
+    proof = read_gate_report('nonvacuous-passes', envelope, source, original.parent, compiler)
+    assert proof['passes'] == 10 and proof['native_executions'] == 40
+else:
+    try:
+        read_gate_report('nonvacuous-passes', envelope, source, original.parent, compiler)
+    except EvidenceError:
+        pass
+    else:
+        raise AssertionError('local semantic proof became a native acceptance gate')
+for field, value in (('observations', 0), ('observations', 999999), ('unit', 'attempted-functions'),
+                     ('status', 'skipped'), ('raw_directory', '../escape')):
+    altered = dict(envelope)
+    altered[field] = value
+    try:
+        read_gate_report('nonvacuous-passes', altered, source, original.parent, compiler)
+    except (EvidenceError, ValueError, OSError):
+        pass
+    else:
+        raise AssertionError('accepted substituted gate envelope: ' + field)
 
 
 def copy_file(old, new):

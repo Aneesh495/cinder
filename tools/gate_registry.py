@@ -24,4 +24,23 @@ GATES = {
 
 # Connect dedicated readers only after their complete campaign artifacts exist.
 # A threshold and a self-reported status are insufficient evidence.
-AUDITED_REPORT_READERS = frozenset()
+AUDITED_REPORT_READERS = frozenset(('nonvacuous-passes',))
+
+
+def read_gate_report(key, report, source, base, compiler):
+    """Reconstruct a gate outcome from its dedicated retained-artifact reader."""
+    from evidence_integrity import EvidenceError, artifact_path
+    if key not in AUDITED_REPORT_READERS:
+        raise EvidenceError('full raw-artifact reader is not implemented: ' + key)
+    if report.get('status') != 'pass' or report.get('unit') != GATES[key]['unit']:
+        raise EvidenceError('gate report has no matching successful unit: ' + key)
+    if key == 'nonvacuous-passes':
+        from pass_evidence import verify_passes
+        raw = artifact_path(base, report.get('raw_directory', ''))
+        observed = verify_passes(raw, source, compiler)
+        count = observed['passes']
+    else:
+        raise EvidenceError('no dispatch for audited reader: ' + key)
+    if type(report.get('observations')) is not int or report['observations'] != count or count < GATES[key]['minimum']:
+        raise EvidenceError('declared gate progress disagrees with raw observations: ' + key)
+    return observed
