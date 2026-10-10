@@ -95,6 +95,10 @@ add_executable(cinder_mir_probe EXCLUDE_FROM_ALL tests/mir_probe.c)
 cinder_target_profile(cinder_mir_probe)
 target_link_libraries(cinder_mir_probe PRIVATE cinder_core)
 
+add_executable(cinder_mir_abi_probe EXCLUDE_FROM_ALL tests/mir_abi_probe.c)
+cinder_target_profile(cinder_mir_abi_probe)
+target_link_libraries(cinder_mir_abi_probe PRIVATE cinder_core)
+
 add_executable(cinderir source/ir_main.c)
 cinder_target_profile(cinderir)
 target_link_libraries(cinderir PRIVATE cinder_core)

@@ -25,14 +25,14 @@ static void destroy_graph(CinderIRFunction *function) {
     for (size_t b = 0U; b < function->blocks.len; ++b) {
         CinderIRBlock *block = &function->blocks.data[b];
         for (size_t i = 0U; i < block->instructions.len; ++i) {
-            free(block->instructions.data[i].args.data); free(block->instructions.data[i].phi_blocks.data);
+            free(block->instructions.data[i].args.data); free(block->instructions.data[i].arg_floats.data); free(block->instructions.data[i].phi_blocks.data);
         }
         free(block->instructions.data); free(block->predecessors.data); free(block->successors.data);
     }
     free(function->blocks.data); free(function->local_types.data); free(function->local_alignments.data);
 }
 
-static void create_graph(CinderIRFunction *function, CinderType *integer, CinderType *floating, unsigned kind) {
+static void create_graph(CinderIRFunction *function, CinderType *integer, CinderType *floating, CinderType *integer_call, CinderType *floating_call, unsigned kind) {
     memset(function, 0, sizeof(*function)); function->name = "allocation_probe";
     size_t block_count = 4U + random_word() % 9U;
     for (size_t b = 0U; b < block_count; ++b) {
@@ -58,7 +58,9 @@ static void create_graph(CinderIRFunction *function, CinderType *integer, Cinder
             if ((random_word() & 7U) == 0U) {
                 CinderIRInst call = instruction(IR_CALL, (CinderValueId)function->value_count++, CINDER_INVALID_VALUE, CINDER_INVALID_VALUE, integer);
                 call.callee = "opaque";
+                call.callee_type = fp ? floating_call : integer_call; call.source_type = call.callee_type;
                 cinder_vec_push((CinderVec *)&call.args, &inst.dst);
+                cinder_vec_push((CinderVec *)&call.arg_floats, &fp);
                 cinder_vec_push((CinderVec *)&block->instructions, &call);
             }
         }
@@ -150,10 +152,13 @@ int main(int argc, char **argv) {
     CinderType array = integer; array.kind = TYPE_ARRAY; array.size = 37U; array.align = 1U;
     CinderType aggregate = integer; aggregate.kind = TYPE_STRUCT; aggregate.size = 48U; aggregate.align = 16U;
     CinderType signature; memset(&signature, 0, sizeof(signature)); signature.kind = TYPE_FUNCTION; signature.return_type = &integer; signature.align = 1U; signature.complete = true;
+    CinderParam integer_parameter = {"value", &integer, 0U}, floating_parameter = {"value", &floating, 0U};
+    CinderType integer_call = signature, floating_call = signature;
+    integer_call.params = (CinderParamVec){&integer_parameter, 1U, 1U}; floating_call.params = (CinderParamVec){&floating_parameter, 1U, 1U};
     unsigned mutations = 0U;
     for (size_t test = 0U; test < count; ++test) {
         state = UINT64_C(0x62762dcf87102) + test * UINT64_C(0x9e3779b97f4a7c15);
-        CinderIRFunction function; create_graph(&function, &integer, &floating, (unsigned)(test % 7U));
+        CinderIRFunction function; create_graph(&function, &integer, &floating, &integer_call, &floating_call, (unsigned)(test % 7U));
         function.local_count = 2U;
         CinderType *first_type = test % 2U == 0U ? &integer : &array, *second_type = test % 3U == 0U ? &aggregate : &floating;
         cinder_vec_push((CinderVec *)&function.local_types, &first_type); cinder_vec_push((CinderVec *)&function.local_types, &second_type);

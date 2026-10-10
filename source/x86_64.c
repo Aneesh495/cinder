@@ -290,32 +290,21 @@ static void pack_eightbyte(CinderMachineObject *object, size_t offset, size_t si
     }
 }
 
-static int emit_call(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst, CinderDiagnostics *diags) {
-    CinderABIValue result;
-    if (!cinder_abi_classify(inst->callee_type->return_type, &result)) { cinder_diag(diags, CINDER_FATAL, inst->loc, "unsupported ABI return layout"); return 1; }
-    CinderABIState state = {result.memory ? 1U : 0U, 0U, 0U};
-    CinderABIArgument *arguments = cinder_alloc((inst->args.len == 0U ? 1U : inst->args.len) * sizeof(*arguments));
-    size_t *staging = cinder_alloc((inst->args.len == 0U ? 1U : inst->args.len) * sizeof(*staging));
-    for (size_t a = 0U; a < inst->args.len; ++a) {
-        const CinderType *type = inst->source_type != NULL ? inst->source_type->params.data[a].type : allocation->machine.values[inst->args.data[a]].type;
-        if (!cinder_abi_place(type, &state, &arguments[a])) { cinder_diag(diags, CINDER_FATAL, inst->loc, "unsupported ABI argument layout"); free(staging); free(arguments); return 1; }
-    }
-    size_t frame = state.stack;
-    for (size_t a = 0U; a < inst->args.len; ++a) {
-        if (arguments[a].stack_offset != SIZE_MAX) staging[a] = arguments[a].stack_offset;
-        else {
-            size_t bytes = (arguments[a].value.size + 7U) & ~(size_t)7U;
-            if (bytes > 64U * 1024U * 1024U - frame) { cinder_diag(diags, CINDER_FATAL, inst->loc, "ABI argument staging exceeds frame limit"); free(staging); free(arguments); return 1; }
-            staging[a] = frame; frame += bytes;
-        }
-    }
-    frame = (frame + 15U) & ~(size_t)15U;
+static int emit_call(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected, CinderDiagnostics *diags) {
+    const CinderIRInst *inst = &selected->operands;
+    const CinderMIRCallPlan *plan = selected->call;
+    if (plan == NULL || plan->argument_count != inst->args.len) { cinder_diag(diags, CINDER_FATAL, inst->loc, "call has no selected ABI plan"); return 1; }
+    CinderABIValue result = plan->result;
+    CinderABIState state = plan->state;
+    const CinderABIArgument *arguments = plan->arguments;
+    const size_t *staging = plan->staging;
+    size_t frame = plan->frame_size;
     stack_adjust(object, frame, true);
     /* Stage every argument before assigning registers, including arguments
      * currently held in XMM2-XMM7. Register exhaustion rolls back an entire
      * aggregate, leaving both register banks available to later arguments. */
     for (size_t a = 0U; a < inst->args.len; ++a) {
-        const CinderType *type = inst->source_type != NULL ? inst->source_type->params.data[a].type : allocation->machine.values[inst->args.data[a]].type;
+        const CinderType *type = plan->argument_types[a];
         if (aggregate_type(type)) {
             if (arguments[a].stack_offset != SIZE_MAX) {
                 load_value_alloc(object, function, allocation, inst->args.data[a]); emit_mov_reg_reg(object, 6U, 0U);
@@ -371,7 +360,6 @@ static int emit_call(CinderMachineObject *object, const CinderIRFunction *functi
             store_value_alloc(object, function, allocation, inst->dst);
         }
     }
-    free(staging); free(arguments);
     return 0;
 }
 
@@ -422,9 +410,10 @@ static void patch_here(CinderMachineObject *object, size_t offset) {
     cinder_bytes_patch32(&object->text, offset, (uint32_t)(object->text.len - offset - 4U));
 }
 
-static int emit_va_arg(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderIRInst *inst, CinderDiagnostics *diags) {
-    CinderABIValue value;
-    if (!cinder_abi_classify(inst->source_type, &value)) { cinder_diag(diags, CINDER_FATAL, inst->loc, "unsupported va_arg layout"); return 1; }
+static int emit_va_arg(CinderMachineObject *object, const CinderIRFunction *function, const CinderAllocation *allocation, const CinderMIRInst *selected, CinderDiagnostics *diags) {
+    const CinderIRInst *inst = &selected->operands;
+    if (selected->variadic_layout == NULL) { cinder_diag(diags, CINDER_FATAL, inst->loc, "va_arg has no selected layout"); return 1; }
+    CinderABIValue value = *selected->variadic_layout;
     bool aggregate = aggregate_type(inst->source_type);
     unsigned gpr = 0U, sse = 0U;
     for (unsigned p = 0U; p < value.count; ++p) {
@@ -677,13 +666,11 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
     (void)assembly; (void)asm_out;
     const CinderMIRFunction *machine = &allocation->machine;
     if (machine->source != function || cinder_verify_selected_mir(machine, diags) != 0) return 1;
-    CinderABIValue result;
-    if (!cinder_abi_classify(function->type->return_type, &result)) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "unsupported function ABI return layout"); return 1; }
-    CinderABIState state = {result.memory ? 1U : 0U, 0U, 0U};
-    CinderABIArgument *parameters = cinder_alloc((function->params.len == 0U ? 1U : function->params.len) * sizeof(*parameters));
-    for (size_t p = 0U; p < function->params.len; ++p) {
-        if (!cinder_abi_place(function->params.data[p]->type, &state, &parameters[p])) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "unsupported function ABI parameter layout"); free(parameters); return 1; }
-    }
+    const CinderMIRCallPlan *signature = machine->signature;
+    if (signature == NULL || signature->argument_count != function->params.len) { cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "function has no selected incoming ABI plan"); return 1; }
+    CinderABIValue result = signature->result;
+    CinderABIState state = signature->state;
+    const CinderABIArgument *parameters = signature->arguments;
     size_t frame = allocation->frame_size;
     size_t start = object->text.len;
     char *name = cinder_strndup(function->name, strlen(function->name));
@@ -752,7 +739,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                     copy_bytes(object, 24U); break;
                 case IR_VA_END: break;
                 case IR_VA_ARG:
-                    if (emit_va_arg(object, function, allocation, inst, diags) != 0) { free(parameters); free(labels); free(branches.data); return 1; }
+                    if (emit_va_arg(object, function, allocation, selected, diags) != 0) { free(labels); free(branches.data); return 1; }
                     break;
                 case IR_UNDEF:
                     if (cinder_ir_floating(inst->type)) {
@@ -839,9 +826,9 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 case IR_NEG: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD8U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_BIT_NOT: load_value_alloc(object, function, allocation, inst->left); emit8(object, 0x48U); emit8(object, 0xF7U); emit8(object, 0xD0U); store_value_alloc(object, function, allocation, inst->dst); break;
                 case IR_CALL:
-                    if (emit_call(object, function, allocation, inst, diags) != 0) { free(parameters); free(labels); free(branches.data); return 1; }
+                    if (emit_call(object, function, allocation, selected, diags) != 0) { free(labels); free(branches.data); return 1; }
                     break;
-                default: cinder_diag(diags, CINDER_FATAL, inst->loc, "unselected machine instruction"); free(parameters); free(labels); free(branches.data); return 1;
+                default: cinder_diag(diags, CINDER_FATAL, inst->loc, "unselected machine instruction"); free(labels); free(branches.data); return 1;
             }
         }
         switch (block->terminator.kind) {
@@ -857,7 +844,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
                 }
                 emit_epilogue(object); break;
             case TERM_JUMP:
-                if (emit_phi_transfers(object, function, allocation, (CinderBlockId)b, block->terminator.target, diags) != 0) { free(parameters); free(labels); free(branches.data); return 1; }
+                if (emit_phi_transfers(object, function, allocation, (CinderBlockId)b, block->terminator.target, diags) != 0) { free(labels); free(branches.data); return 1; }
                 emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup branch = {offset, block->terminator.target}; cinder_vec_push((CinderVec *)&branches, &branch); } break;
             case TERM_BRANCH:
                 load_value_alloc(object, function, allocation, block->terminator.condition); emit8(object, 0x48U); emit8(object, 0x83U); emit8(object, 0xF8U); emit8(object, 0U); emit8(object, 0x0FU); emit8(object, 0x85U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup yes = {offset, block->terminator.yes}; cinder_vec_push((CinderVec *)&branches, &yes); } emit8(object, 0xE9U); { size_t offset = object->text.len; emit32(object, 0U); BranchFixup no = {offset, block->terminator.no}; cinder_vec_push((CinderVec *)&branches, &no); } break;
@@ -865,7 +852,7 @@ int cinder_lower_x86(const CinderIRFunction *function, CinderAllocation *allocat
         }
     }
     for (size_t i = 0U; i < branches.len; ++i) { BranchFixup *branch = &branches.data[i]; if (branch->target >= function->blocks.len || labels[branch->target] == SIZE_MAX) continue; int64_t displacement = (int64_t)labels[branch->target] - (int64_t)(branch->offset + 4U); cinder_bytes_patch32(&object->text, branch->offset, (uint32_t)(int32_t)displacement); }
-    free(parameters); free(labels); free(branches.data);
+    free(labels); free(branches.data);
     size_t function_size = object->text.len - start;
     cinder_vec_push((CinderVec *)&object->symbol_sizes, &function_size);
     return 0;

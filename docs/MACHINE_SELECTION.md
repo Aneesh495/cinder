@@ -35,11 +35,17 @@ function's owned phi operands and the existing physical parallel-copy resolver.
 `--dump-mir` prints selected forms, byte templates, banks and masks, together
 with actual CFG analysis and optimizer counters.
 
-Memory, conversions, call-frame/aggregate handling and variadic operations
-still include typed target pseudo-operations expanded during encoding. Complete
-preselection of their ABI/frame/operand expansion and a separate typed HIR are
-remaining representation work. This increment does not claim that those
-boundaries or full acceptance are complete.
+Selection also owns incoming and outgoing ABI plans. These record INTEGER/SSE/
+MEMORY classification, hidden return storage, register assignment, stack
+offsets, argument staging and aligned outgoing frame size. Variadic retrieval
+owns its selected layout. The encoder consumes these plans without calling the
+ABI classifier or placing arguments again. The verifier recomputes and checks
+each plan against the verified function and actual call signatures. Calls with
+missing signatures are rejected before layout selection.
+
+Memory and conversion operations still include typed target pseudo-operations
+expanded during encoding. Their complete selection and a separate typed HIR
+remain open. Full acceptance is incomplete.
 
 `make test-mir` executes 43 independently specified typed integer/floating
 cases through the interpreter and original object path. It rejects seven
@@ -49,5 +55,12 @@ unordered floating comparisons. `make test-allocation`, `make test-ssa` and
 `make test-parallel-copy` exercise pressure, interference and physical cycles.
 The same metadata helpers are shared by these standalone native probes; they
 do not link the parser or AST lowerer.
+
+`make test-mir-abi` checks 64 authored aggregate, variadic and integer-address
+sources. It rejects 1,314 altered plans or missing signatures, restores each
+plan and requires byte identity with the normal compiler's original object.
+Linux x86-64 links and executes these same objects. The allocator pressure
+fixture now supplies real formal and actual signatures; the null-signature
+crash found during this work is retained in the private failure evidence.
 
 See [the editable selection diagram](diagrams/machine-selection.mmd).
