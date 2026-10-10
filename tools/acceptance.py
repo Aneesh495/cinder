@@ -74,6 +74,9 @@ def main():
         print('Incremental evidence inventoried; full acceptance remains incomplete.')
         return 0
     payload['status'] = 'incomplete'
+    (evidence / 'generation.json').write_text(json.dumps(dict(schema=1, command=sys.argv,
+        host=profile, source_revision=payload['source_revision'], source_sha256=payload['source_sha256'],
+        compiler_sha256=payload['compiler_sha256'], configuration_inputs=payload['configuration_inputs']), indent=2) + '\n')
     missing = sorted(set(GATES) - AUDITED_REPORT_READERS)
     payload['open_campaign_readers'] = missing
     if profile['system'] == 'Linux' and profile['machine'] == 'x86_64':

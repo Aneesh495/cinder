@@ -64,6 +64,8 @@ jobs:
         run: make test-optimizer
       - name: Ten-pass records, promotion guards and evidence tampering
         run: make test-passes
+      - name: Actual pass gate generation and incomplete acceptance rejection
+        run: python3 -B tests/test_acceptance_dispatch.py build/cindercc
       - name: Integer address round trips and object authority guards
         run: make test-pointer-words
       - name: Independent integer rewrite validation
@@ -139,6 +141,7 @@ jobs:
             .agent-local/dead-code
             .agent-local/loop-motion
             .agent-local/pass-pipeline
+            .agent-local/evidence
             .agent-local/promotion-guards
             .agent-local/pointer_words
             .agent-local/pointer-word-contracts
