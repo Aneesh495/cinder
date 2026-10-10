@@ -46,8 +46,6 @@ def inspect(path, strict=True):
         symbols.append(symbol)
     for symbol in symbols:
         if symbol['name'].startswith('.LCF'): assert symbol['binding'] == 0 and symbol['size'] == 8, (path, symbol)
-        if symbol['name'] == 'private_helper': assert symbol['binding'] == 0 and symbol['kind'] == 2, (path, symbol)
-        if symbol['name'] == 'narrow': assert symbol['binding'] == 0 and symbol['size'] == 2, (path, symbol)
     relocations = []
     for name, target, width, kinds in (('.rela.text', '.text', 4, (2, 4)), ('.rela.data', '.data', 8, (1,)), ('.rela.rodata', '.rodata', 8, (1,))):
         if name not in by_name: continue
@@ -60,6 +58,16 @@ def inspect(path, strict=True):
             symbol = symbols[info >> 32]
             relocations.append(dict(section=target, offset=offset, symbol=symbol['name'], symbol_index=info >> 32, symbol_section=symbol['section'], symbol_value=symbol['value'], symbol_binding=symbol['binding'], type=info & 0xffffffff, addend=addend))
     return dict(sha256=digest(path), sections={name: dict(size=value[5], alignment=value[8]) for name, value in by_name.items()}, symbols=symbols, relocations=relocations)
+
+
+def inspect_fixture(path, strict=True):
+    record = inspect(path, strict)
+    by_name = {symbol['name']: symbol for symbol in record['symbols']}
+    for name in ('private_helper', 'narrow'):
+        assert name in by_name and by_name[name]['binding'] == 0, (path, name)
+    assert by_name['private_helper']['kind'] == 2, (path, by_name['private_helper'])
+    assert by_name['narrow']['kind'] == 1 and by_name['narrow']['size'] == 2, (path, by_name['narrow'])
+    return record
 
 
 def run(command, expected=0):
@@ -105,10 +113,10 @@ def main():
                 asm = work / (source.stem + level + '.s')
                 oracle = work / (source.stem + level + '-asm.o')
                 record['execution'].append(run([compiler, level, '-fverify-each', '-c', str(source), '-o', str(obj)]))
-                record['objects'].append(dict(level=level, source=source.name, **inspect(obj)))
+                record['objects'].append(dict(level=level, source=source.name, **inspect_fixture(obj)))
                 record['execution'].append(run([compiler, level, '-S', str(source), '-o', str(asm)]))
                 record['execution'].append(run(['clang', '-target', 'x86_64-unknown-linux-gnu', '-c', str(asm), '-o', str(oracle)]))
-                record['objects'].append(dict(level=level, source=source.name + '-assembly', **inspect(oracle, strict=False)))
+                record['objects'].append(dict(level=level, source=source.name + '-assembly', **inspect_fixture(oracle, strict=False)))
                 objects.append(str(obj)); assemblies.append(str(oracle))
             if native:
                 for kind, paths in (('object', objects), ('assembly', assemblies)):

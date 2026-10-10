@@ -153,7 +153,7 @@ def main():
             for command in commands:
                 invoke([*command, cc], stage+'-authored', cwd=workspace, timeout=1800)
                 print(stage, command[-1], 'passed', flush=True)
-            for group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment', 'noreturn', 'block_storage', 'goto', 'switch', 'register', 'offset', 'flexible', 'anonymous', 'bitfields', 'qualifiers', 'pointer_words'):
+            for group in ('initializers', 'aggregates', 'aggregate_abi', 'variadic', 'compound_literals', 'static_assertions', 'generic', 'alignment', 'noreturn', 'block_storage', 'goto', 'switch', 'register', 'offset', 'flexible', 'anonymous', 'bitfields', 'qualifiers', 'pointer_words', 'machine_memory'):
                 invoke(['python3', 'tests/test_initializers.py', cc, group], stage+'-authored-group', cwd=workspace, timeout=1800)
                 print(stage, group, 'passed', flush=True)
             invoke(['python3', 'tests/test_runtime_headers.py', cc, 'flexible_allocated'], stage+'-allocated', cwd=workspace, timeout=300)

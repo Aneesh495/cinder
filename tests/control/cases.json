@@ -4842,5 +4842,53 @@
   {
     "source": "../pointer_words/qualified_choice.c",
     "exit": 97
+  },
+  {
+    "source": "../machine_memory/signed_byte.c",
+    "exit": 23
+  },
+  {
+    "source": "../machine_memory/unsigned_byte.c",
+    "exit": 24
+  },
+  {
+    "source": "../machine_memory/signed_short.c",
+    "exit": 25
+  },
+  {
+    "source": "../machine_memory/unsigned_short.c",
+    "exit": 26
+  },
+  {
+    "source": "../machine_memory/signed_int.c",
+    "exit": 27
+  },
+  {
+    "source": "../machine_memory/unsigned_int.c",
+    "exit": 28
+  },
+  {
+    "source": "../machine_memory/signed_long.c",
+    "exit": 29
+  },
+  {
+    "source": "../machine_memory/unsigned_long.c",
+    "exit": 30
+  },
+  {
+    "source": "../machine_memory/boolean.c",
+    "exit": 31
+  },
+  {
+    "source": "../machine_memory/float.c",
+    "exit": 32
+  },
+  {
+    "source": "../machine_memory/double.c",
+    "exit": 33
+  },
+  {
+    "source": "../machine_memory/pointer.c",
+    "exit": 34
   }
 ]

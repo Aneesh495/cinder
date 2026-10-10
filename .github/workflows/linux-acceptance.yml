@@ -66,6 +66,8 @@ jobs:
         run: make test-mir
       - name: Selected incoming, outgoing and variadic ABI plans
         run: make test-mir-abi
+      - name: Selected storage, conversion, bitfield and normalization plans
+        run: make test-mir-scalar
       - name: Ten-pass records, promotion guards and evidence tampering
         run: make test-passes
       - name: Actual pass gate generation and incomplete acceptance rejection
@@ -147,6 +149,8 @@ jobs:
             .agent-local/pass-pipeline
             .agent-local/selected-mir
             .agent-local/mir-abi
+            .agent-local/mir-scalar
+            .agent-local/machine_memory
             .agent-local/evidence
             .agent-local/promotion-guards
             .agent-local/pointer_words
