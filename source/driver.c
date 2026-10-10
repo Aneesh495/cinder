@@ -112,7 +112,18 @@ int cinder_driver_run(const CinderOptions *options) {
         }
         goto done_ir;
     }
-    if (options->dump_mir) { fprintf(stdout, "MIR boundary: %zu functions, target=x86_64-sysv folded=%u forwarded=%u dead=%u\n", module.functions.len, stats.constants_folded, stats.memory_forwarded, stats.dead_instructions_removed); for (size_t f = 0U; f < module.functions.len; ++f) { CinderCFGAnalysis cfg; cinder_cfg_init(&cfg); if (cinder_analyze_cfg(&module.functions.data[f], &cfg, &diags) == 0) cinder_dump_cfg(&module.functions.data[f], &cfg, stdout); cinder_cfg_destroy(&cfg); } }
+    if (options->dump_mir) {
+        fprintf(stdout, "selected machine pipeline: folded=%u forwarded=%u dead=%u\n", stats.constants_folded, stats.memory_forwarded, stats.dead_instructions_removed);
+        for (size_t f = 0U; f < module.functions.len; ++f) {
+            CinderMIRFunction selected; cinder_selected_mir_init(&selected);
+            int failed = cinder_select_mir(&module.functions.data[f], &selected, &diags);
+            if (!failed) cinder_dump_selected_mir(&selected, stdout);
+            cinder_selected_mir_destroy(&selected); if (failed) goto done_ir;
+            CinderCFGAnalysis cfg; cinder_cfg_init(&cfg);
+            if (cinder_analyze_cfg(&module.functions.data[f], &cfg, &diags) == 0) cinder_dump_cfg(&module.functions.data[f], &cfg, stdout);
+            cinder_cfg_destroy(&cfg);
+        }
+    }
     if (options->interpret) { CinderInterpResult interpretation = cinder_interpret(&module, "main", NULL, 0U, 1000000U, &diags); if (!interpretation.valid) goto done_ir; fprintf(stdout, "interpret main => %lld\n", (long long)interpretation.value); result = 0; if (options->explorer == NULL && !options->dump_regalloc) goto done_ir; }
     if (inspection_only && !options->dump_regalloc && options->explorer == NULL) { result = 0; goto done_ir; }
     cinder_machine_init(&machine);

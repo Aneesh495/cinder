@@ -2,6 +2,45 @@
 
 Updated: 2026-10-09
 
+## Selected machine representation
+
+Normal allocation and scalar encoding now consume an owned selected machine
+function. Integer forms carry original x86 byte templates, SSE arithmetic and
+comparisons carry selected opcode/precision/parity plans, and definition banks
+and clobber contracts reach allocation. Phi transfers read the owned machine
+operands. `--dump-mir` exposes those actual plans. Shared opcode/type metadata
+is separated from AST lowering for the standalone allocator/machine probes.
+See [MACHINE_SELECTION.md](MACHINE_SELECTION.md).
+
+Strict GCC/ASan builds passed 43 independently specified scalar forms, 301
+malformed-machine rejections, 10,000 allocation graphs with 1,000 mutations,
+parallel-copy checks, scalar/floating/ABI checks, aggregate/variadic source
+fixtures, the full ten-pass proof and promotion guards. Cinder compiled all
+53 implementation modules to original target objects. The complete regression
+passed 1,211 source cases and 2,422 CIR round trips with 36 rejection mutations.
+Every one of those 2,422 original objects is byte-identical to the preceding
+frozen compiler. The Linux VM independently executed all 43 scalar probe
+objects and 1,000 integer/float physical phi-cycle objects. Frozen source,
+object and executable bindings were independently audited.
+
+Evidence: `.agent-local/selected-mir/`, `.agent-local/allocation/`,
+`.agent-local/selected-mir-byte-preservation.json`,
+`.agent-local/linux-vm/share/mir-first/` and
+`.agent-local/linux-vm/share/mir-ssa-first/`. Native hosted checks run after
+publication. Memory/call-frame/conversion/variadic target pseudos and a
+separate typed HIR still require further representation work. Full acceptance
+is incomplete.
+
+The earlier `cb329bd` bootstrap and native validation completed successfully
+([bootstrap](https://github.com/Aneesh495/cinder/actions/runs/38010977389),
+[native validation](https://github.com/Aneesh495/cinder/actions/runs/38010888391)).
+The downloaded complete bootstrap was independently reread against that exact
+source archive: real stage objects/executables, 1,000 generated programs,
+8,000 native and 4,000 interpreter outcomes, full authored stage commands and
+20 corruption rejections passed. The acceptance-dispatch integration at
+`2d0842d` also passed
+[native CI](https://github.com/Aneesh495/cinder/actions/runs/38011643225).
+
 ## Acceptance reader dispatch
 
 The nonvacuous-pass gate now calls the independently exercised raw-artifact

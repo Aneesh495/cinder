@@ -31,6 +31,7 @@ set(CINDER_SOURCES
   source/sema.c
   source/control.c
   source/ir.c
+  source/ir_ops.c
   source/ir_verify.c
   source/ir_text.c
   source/analysis.c
@@ -48,6 +49,7 @@ set(CINDER_SOURCES
   source/opt_memory.c
   source/opt_loop.c
   source/mir.c
+  source/mir_select.c
   source/regalloc.c
   source/stack_layout.c
   source/liveness.c
@@ -88,6 +90,10 @@ endif()
 add_executable(cinder_ssa_probe EXCLUDE_FROM_ALL tests/ssa_probe.c)
 cinder_target_profile(cinder_ssa_probe)
 target_link_libraries(cinder_ssa_probe PRIVATE cinder_core)
+
+add_executable(cinder_mir_probe EXCLUDE_FROM_ALL tests/mir_probe.c)
+cinder_target_profile(cinder_mir_probe)
+target_link_libraries(cinder_mir_probe PRIVATE cinder_core)
 
 add_executable(cinderir source/ir_main.c)
 cinder_target_profile(cinderir)

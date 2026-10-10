@@ -45,6 +45,10 @@ invalidation records and CPU timing. See [`docs/PASS_PIPELINE.md`](docs/PASS_PIP
 for trace output and isolated pass inspection. `make test-passes` checks real
 positive/negative transformations and rejects altered proof artifacts.
 
+Selected integer/SSE forms and register/clobber contracts now feed allocation
+and the scalar encoder. [`docs/MACHINE_SELECTION.md`](docs/MACHINE_SELECTION.md)
+describes the owned machine representation and the remaining target pseudos.
+
 `-E`, `-S`, and `-c` use Cinder's own preprocessing and backend. Linking is deliberately an explicit boundary: on a declared Linux host the driver may pass Cinder-created objects and system libraries to the platform linker, but it never passes user C source to a host compiler.
 
 ## Language and target contract

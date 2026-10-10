@@ -9,11 +9,12 @@ static const char *register_name(CinderRegister reg) {
 }
 
 void cinder_alloc_init(CinderAllocation *allocation, CinderIRFunction *function) {
+    cinder_selected_mir_init(&allocation->machine);
     allocation->ir = function; allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; allocation->frame_size = 0U; allocation->spills = 0U; allocation->spill_slots = 0U; allocation->saved_gpr_mask = 0U;
     allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; allocation->local_bytes = 0U;
 }
 
-void cinder_alloc_destroy(CinderAllocation *allocation) { free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; free(allocation->local_offsets.data); allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; }
+void cinder_alloc_destroy(CinderAllocation *allocation) { cinder_selected_mir_destroy(&allocation->machine); free(allocation->intervals.data); allocation->intervals.data = NULL; allocation->intervals.len = 0U; allocation->intervals.cap = 0U; free(allocation->local_offsets.data); allocation->local_offsets.data = NULL; allocation->local_offsets.len = 0U; allocation->local_offsets.cap = 0U; }
 
 static void touch(CinderInterval *intervals, size_t count, CinderValueId value, size_t position) {
     if ((size_t)value >= count) return;
@@ -27,20 +28,12 @@ static int interval_order(const void *left, const void *right) {
     return a->value < b->value ? -1 : a->value != b->value;
 }
 
-static bool floating_value(const CinderIRFunction *function, CinderValueId value) {
-    for (size_t b = 0U; b < function->blocks.len; ++b)
-        for (size_t i = 0U; i < function->blocks.data[b].instructions.len; ++i) {
-            const CinderIRInst *inst = &function->blocks.data[b].instructions.data[i];
-            if (inst->dst == value) return inst->type != NULL && (inst->type->kind == TYPE_FLOAT || inst->type->kind == TYPE_DOUBLE);
-        }
-    return false;
-}
-
 int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
     const CinderIRFunction *function = allocation->ir;
     if (function == NULL || function->type == NULL || function->type->kind != TYPE_FUNCTION) {
         cinder_diag(diags, CINDER_FATAL, (CinderLoc){0}, "allocation requires a function signature"); return 1;
     }
+    if (cinder_select_mir(function, &allocation->machine, diags) != 0) return 1;
     if (cinder_layout_stack(allocation, diags) != 0) return 1;
     CinderLiveness live;
     if (cinder_liveness_build(function, &live, diags) != 0) return 1;
@@ -61,7 +54,8 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
             const CinderIRInst *inst = &block->instructions.data[i];
             size_t position = live.begin[b] + i;
             touch(intervals, count, inst->dst, position);
-            if (inst->op == IR_CALL) cinder_vec_push((CinderVec *)&calls, &position);
+            if ((allocation->machine.blocks.data[b].instructions.data[i].clobbers & UINT64_C(0x00fc0000)) != 0U)
+                cinder_vec_push((CinderVec *)&calls, &position);
             if (inst->op == IR_PHI) {
                 for (size_t p = 0U; p < inst->args.len && p < inst->phi_blocks.len; ++p)
                     if (inst->phi_blocks.data[p] < live.blocks) touch(intervals, count, inst->args.data[p], live.end[inst->phi_blocks.data[p]]);
@@ -83,7 +77,7 @@ int cinder_allocate(CinderAllocation *allocation, CinderDiagnostics *diags) {
             if (allocation->intervals.data[active[a]].end < current->start) active[a] = active[--active_count];
             else ++a;
         }
-        bool floating = floating_value(function, current->value);
+        bool floating = allocation->machine.values[current->value].bank == MIR_BANK_SSE;
         bool crossing_call = false;
         for (size_t c = 0U; c < calls.len; ++c) if (current->start < calls.data[c] && current->end > calls.data[c]) crossing_call = true;
         if (floating && crossing_call) continue;

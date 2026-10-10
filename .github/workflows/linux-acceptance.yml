@@ -62,6 +62,8 @@ jobs:
         run: make test-qualifiers
       - name: Optimizer semantic and transformation boundaries
         run: make test-optimizer
+      - name: Selected machine forms, verifier rejection and native execution
+        run: make test-mir
       - name: Ten-pass records, promotion guards and evidence tampering
         run: make test-passes
       - name: Actual pass gate generation and incomplete acceptance rejection
@@ -141,6 +143,7 @@ jobs:
             .agent-local/dead-code
             .agent-local/loop-motion
             .agent-local/pass-pipeline
+            .agent-local/selected-mir
             .agent-local/evidence
             .agent-local/promotion-guards
             .agent-local/pointer_words
