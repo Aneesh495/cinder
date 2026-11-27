@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/native-tools
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: cinder-release-seed
           path: ${{ runner.temp }}/seed
@@ -103,12 +103,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/native-tools
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: cinder-release-seed
           path: ${{ runner.temp }}/seed
       - run: tar -xzf "$RUNNER_TEMP/seed/cinder-seed.tar.gz"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: cinder-gate-*
           path: ${{ runner.temp }}/campaigns
