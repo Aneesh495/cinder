@@ -132,7 +132,7 @@ jobs:
           fi
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cinder-linux-acceptance
           path: ${{ runner.temp }}/cinder-linux-acceptance.tar.gz

@@ -23,7 +23,7 @@ jobs:
           make build
           cmake --build build --parallel 4 --target cinder_ir_campaign cinder_unwind_probe cinder_debug_line_probe cinder_debug_type_probe cinder_source_buffer_probe
           tar -czf "$RUNNER_TEMP/cinder-seed.tar.gz" build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cinder-release-seed
           path: ${{ runner.temp }}/cinder-seed.tar.gz
@@ -88,7 +88,7 @@ jobs:
           if test -d .agent-local/evidence; then
             tar -czf "$RUNNER_TEMP/cinder-gate.tar.gz" .agent-local/evidence
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: cinder-gate-${{ matrix.gate }}
@@ -133,7 +133,7 @@ jobs:
           if test -d .agent-local/evidence; then
             tar -czf "$RUNNER_TEMP/cinder-complete-acceptance.tar.gz" .agent-local/evidence build
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: cinder-complete-acceptance
